@@ -1,8 +1,9 @@
 // Skill coin games — Candy Crush (match-3, 30 moves), Tetris (lines),
 // Trivia (server questions + grading, 15s each), Snake (entry 5,
 // 100+→10 / 200+→20 / 300+→40 coins), 2048 (entry 5, 256→10 / 512→20 /
-// 1024→50 coins). Candy/Tetris payout tiers are the v48-style ladders
-// under the ×10 contract cap (see report).
+// 1024→50 coins). Candy/Tetris payout tiers are the v48 export's exact
+// tables: Candy ≥500 ×1, ≥1000 ×2, ≥1500 ×3; Tetris ≥800 ×1, ≥1500 ×2,
+// ≥2500 ×3 (max ×3).
 
 "use client";
 
@@ -14,7 +15,7 @@ import { RoomShell, StakeChips, useGameRoom } from "./shared";
 // ---------------- Candy Crush ----------------
 const CANDY_TYPES = ["●", "◆", "▲", "■", "★", "♥"];
 const CANDY_COLORS = ["#E5322D", "#2DD4BF", "#FFD964", "#3ED97E", "#F2C230", "#E879C6"];
-function candyTier(score: number) { return score >= 1500 ? 10 : score >= 1000 ? 7 : score >= 600 ? 4 : score >= 300 ? 2 : 0; }
+function candyTier(score: number) { return score >= 1500 ? 3 : score >= 1000 ? 2 : score >= 500 ? 1 : 0; }
 export function CandyRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(5);
@@ -23,7 +24,7 @@ export function CandyRoom({ game }: { game: GameDef }) {
   const [moves, setMoves] = useState(30);
   const [score, setScore] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [msg, setMsg] = useState("Swap adjacent candies to match 3+. 30 moves — 300 pts ×2, 600 ×4, 1000 ×7, 1500 ×10.");
+  const [msg, setMsg] = useState("Swap adjacent candies to match 3+. 30 moves — 500 pts ×1, 1000 ×2, 1500 ×3.");
   const scoreRef = useRef(0);
 
   const genBoard = () => {
@@ -79,12 +80,12 @@ export function CandyRoom({ game }: { game: GameDef }) {
       setPlaying(false);
       const mult = candyTier(scoreRef.current);
       const payout = Math.round(stake * mult);
-      setMsg(mult > 0 ? `Out of moves — ${scoreRef.current} pts, ×${mult}! ${fmtCoins(payout)} coins` : `Out of moves — ${scoreRef.current} pts, under 300. No payout.`);
+      setMsg(mult > 0 ? `Out of moves — ${scoreRef.current} pts, ×${mult}! ${fmtCoins(payout)} coins` : `Out of moves — ${scoreRef.current} pts, under 500. No payout.`);
       await room.settle(stake, payout, { score: scoreRef.current, mult });
     }
   };
   return (
-    <RoomShell game={game} subtitle="Swap adjacent candies to match 3+. 30 moves — 300 pts ×2, 600 ×4, 1000 ×7, 1500 ×10." stats={room.stats} history={room.history}>
+    <RoomShell game={game} subtitle="Swap adjacent candies to match 3+. 30 moves — 500 pts ×1, 1000 ×2, 1500 ×3." stats={room.stats} history={room.history}>
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
         <div className="cc-hud"><span>SCORE <b>{score}</b></span><span>MOVES <b>{moves}</b></span><span>TIER <b>×{candyTier(score)}</b></span></div>
@@ -105,7 +106,7 @@ const SHAPES: number[][][] = [
   [[1, 1, 1, 1]], [[1, 1], [1, 1]], [[0, 1, 0], [1, 1, 1]],
   [[1, 0, 0], [1, 1, 1]], [[0, 0, 1], [1, 1, 1]], [[1, 1, 0], [0, 1, 1]], [[0, 1, 1], [1, 1, 0]],
 ];
-function tetrisTier(score: number) { return score >= 3000 ? 10 : score >= 1500 ? 5 : score >= 500 ? 2 : 0; }
+function tetrisTier(score: number) { return score >= 2500 ? 3 : score >= 1500 ? 2 : score >= 800 ? 1 : 0; }
 export function TetrisRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(5);
@@ -114,7 +115,7 @@ export function TetrisRoom({ game }: { game: GameDef }) {
   const [score, setScore] = useState(0);
   const [lines, setLines] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [msg, setMsg] = useState("Clear lines — 500 pts ×2, 1500 ×5, 3000 ×10. One Rotate button + drag to move.");
+  const [msg, setMsg] = useState("Clear lines — 800 pts ×1, 1500 ×2, 2500 ×3. One Rotate button + drag to move.");
   const scoreRef = useRef(0);
   const stateRef = useRef({ board, cur, playing });
   stateRef.current = { board, cur, playing };
@@ -151,7 +152,7 @@ export function TetrisRoom({ game }: { game: GameDef }) {
       setCur(null);
       const mult = tetrisTier(scoreRef.current);
       const payout = Math.round(stake * mult);
-      setMsg(mult > 0 ? `Game over — ${scoreRef.current} pts, ${lines + cleared} lines, ×${mult}! ${fmtCoins(payout)} coins` : `Game over — ${scoreRef.current} pts, under 500. No payout.`);
+      setMsg(mult > 0 ? `Game over — ${scoreRef.current} pts, ${lines + cleared} lines, ×${mult}! ${fmtCoins(payout)} coins` : `Game over — ${scoreRef.current} pts, under 800. No payout.`);
       await room.settle(stake, payout, { score: scoreRef.current, lines: lines + cleared, mult });
       return;
     }
@@ -196,7 +197,7 @@ export function TetrisRoom({ game }: { game: GameDef }) {
   if (cur) cur.shape.forEach((row, r) => row.forEach((v, c) => { if (v && cur.y + r >= 0 && cur.y + r < 20) display[cur.y + r][cur.x + c] = cur.color; }));
 
   return (
-    <RoomShell game={game} subtitle="Clear lines — 500 pts ×2, 1500 ×5, 3000 ×10. One Rotate button + drag to move." stats={room.stats} history={room.history}>
+    <RoomShell game={game} subtitle="Clear lines — 800 pts ×1, 1500 ×2, 2500 ×3." stats={room.stats} history={room.history}>
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
         <div className="tt-hud"><span>SCORE <b>{score}</b></span><span>LINES <b>{lines}</b></span><span>TIER <b>×{tetrisTier(score)}</b></span></div>

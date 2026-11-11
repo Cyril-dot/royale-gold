@@ -8,10 +8,30 @@
 import Link from "next/link";
 import { TileGame } from "../lib/tiles";
 
-export default function GameTile({ g, extra }: { g: TileGame; extra?: boolean }) {
+export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: boolean; simple?: boolean }) {
   const m = g.meta;
   const sizeCls = m.size === "hero" ? " g-hero" : m.size === "wide" ? " g-wide" : m.size === "tall" ? " g-tall" : " g-cell";
   const cur = g.currency === "coins" ? "coin" : "cash";
+
+  // Games page: the export's simpler gp-card — art + name + currency +
+  // Play now, none of the rich homepage tile's players/mult/RTP furniture.
+  if (simple) {
+    return (
+      <article className="gp-card" data-cats={m.tag}>
+        <div className="gp-art">
+          {m.cover ? <img className="cov" src={m.cover} alt="" /> : <div className="g-glyph" aria-hidden="true">{m.glyph}</div>}
+        </div>
+        <div className="gp-info">
+          <h3>{g.name}</h3>
+          <span className={`gp-cur ${cur}`}>{cur === "coin" ? "◉ COINS" : "GH₵ CASH"}</span>
+          <Link className="gp-play" href={`/games/${g.slug}`}>
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="13" height="13"><path fill="currentColor" d="M8 5v14l11-7z" /></svg>
+            Play now
+          </Link>
+        </div>
+      </article>
+    );
+  }
 
   if (m.fullArt && m.cover) {
     return (

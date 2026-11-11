@@ -81,6 +81,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const setWallet = useCallback((w: Wallet) => setWalletState({ cash: w.cash, coins: w.coins, sim: w.sim }), []);
 
   const refresh = useCallback(async () => {
+    // Signed-out loads must not hit /api/auth/me or /api/wallet at all:
+    // both 401 and the failed-resource noise that comes with them. The
+    // session cookie is httpOnly (invisible to JS), so login/register set
+    // a localStorage flag instead; logout and any 401 clear it. A stale
+    // flag costs at most one 401, which self-heals by clearing the flag.
+    const hasSession = typeof window !== "undefined" && window.localStorage.getItem("rg-session") === "1";
+    if (!hasSession) {
+      setUser(null);
+      setWalletState(null);
+      return;
+    }
     try {
       const me = await api<{ user: User }>("/api/auth/me");
       setUser(me.user);
@@ -88,12 +99,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setSimSession((prev) => (prev === null ? me.user.sim : prev));
     } catch {
       setUser(null);
-      try {
-        const w = await api<Wallet>("/api/wallet");
-        setWalletState(w);
-      } catch {
-        setWalletState(null);
-      }
+      setWalletState(null);
+      try { window.localStorage.removeItem("rg-session"); } catch { /* ignore */ }
     }
   }, []);
 
@@ -134,6 +141,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (emailOrPhone: string, password: string) => {
     const r = await api<{ user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify({ emailOrPhone, password }) });
+    try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
     setUser(r.user);
     setWalletState({ cash: r.user.cash, coins: r.user.coins, sim: r.user.sim });
     return r.user;
@@ -144,6 +152,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       body: JSON.stringify({ name, emailOrPhone, password, refCode: refCode || undefined }),
     });
+    try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
     setUser(r.user);
     setWalletState({ cash: r.user.cash, coins: r.user.coins, sim: r.user.sim });
     return r;
@@ -155,6 +164,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
+    try { window.localStorage.removeItem("rg-session"); } catch { /* ignore */ }
     setUser(null);
     await refresh();
   }, [refresh]);

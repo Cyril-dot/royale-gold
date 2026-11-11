@@ -8,8 +8,11 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { fmtCash } from "../lib/api";
+import { useJackpot } from "../lib/jackpot";
 import { useStore } from "../lib/store";
 import { playSfx } from "../lib/store";
+import { LIVE_WINS } from "../lib/tiles";
 
 const SYMBOLS = ["7", "♠", "♥", "♦", "♣", "★"];
 const PAYOUTS: Record<string, number> = {};
@@ -24,7 +27,9 @@ void PAYOUTS;
 
 export default function Hero() {
   const { toast, muted } = useStore();
+  const { jackpotText, onlineText } = useJackpot();
   const [reels, setReels] = useState(["7", "♠", "♥"]);
+  const [spun, setSpun] = useState(false);
   const [spinning, setSpinning] = useState(false);
   const [msg, setMsg] = useState("");
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -32,6 +37,7 @@ export default function Hero() {
   const spin = useCallback(() => {
     if (spinning) return;
     setSpinning(true);
+    setSpun(true);
     setMsg("");
     playSfx("tick", muted);
     let ticks = 0;
@@ -63,11 +69,18 @@ export default function Hero() {
         <h1 className="headline">Play
           <span className="slot-frame" id="slotStage" role="group" aria-label="Slot machine — press spin to play">
             <span className="slot-view">
-              <span className="slot-reels" aria-hidden="true">
-                {reels.map((r, i) => (
-                  <span key={i} className="slot-reel">{r}</span>
-                ))}
-              </span>
+              {!spun ? (
+                <span className="slot-fallback" aria-hidden="true">
+                  <span className="fb-coin"><svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12 2C9 7 4 9 4 13a8 8 0 0 0 16 0c0-4-5-6-8-11z" /></svg></span>
+                  <span>3D SLOT</span>
+                </span>
+              ) : (
+                <span className="slot-reels" aria-hidden="true">
+                  {reels.map((r, i) => (
+                    <span key={i} className="slot-reel">{r}</span>
+                  ))}
+                </span>
+              )}
             </span>
             <button className="slot-spin" id="slotSpin" aria-label="Spin the slot" onClick={spin} disabled={spinning}>{spinning ? "…" : "SPIN"}</button>
           </span>
@@ -100,7 +113,30 @@ export default function Hero() {
           </div>
           <div className="stage" id="stage">
             <img className="fox" src="/covers/hero-fox.webp" alt="Royale Gold fox mascot" />
+            <div className="jackpot">
+              <small><i /> MEGA JACKPOT · DROPS BEFORE GH₵ 500K</small>
+              <strong className="jp-val">{jackpotText}</strong>
+              <span>Demo counter · climbs with every spin</span>
+            </div>
+            <div className="online-chip"><i /><span>{onlineText}</span>&nbsp;playing now · demo</div>
+            <div className="stage-caption">
+              <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C9 7 4 9 4 13a8 8 0 0 0 16 0c0-4-5-6-8-11z" /></svg>
+              Your croupier deals a fresh hand every few seconds
+            </div>
+            <button className="btn btn-gold stage-spin" type="button" onClick={spin} disabled={spinning}>Spin the 3D slot · GH₵ 5</button>
           </div>
+        </div>
+      </div>
+      <div className="marquee" aria-label="Latest wins">
+        <div className="marquee-track" id="winsTrack">
+          <span className="mq-item mq-live"><i />LIVE WINS · DEMO FEED</span>
+          {LIVE_WINS.map((w) => (
+            <span key={w.name + w.amount} className="mq-item"><span className="mq-dot" />{w.name} won <b>{fmtCash(w.amount)}</b> on {w.game}</span>
+          ))}
+          <span className="mq-item mq-live"><i />LIVE WINS · DEMO FEED</span>
+          {LIVE_WINS.map((w) => (
+            <span key={w.name + w.amount + "-dup"} className="mq-item"><span className="mq-dot" />{w.name} won <b>{fmtCash(w.amount)}</b> on {w.game}</span>
+          ))}
         </div>
       </div>
     </section>

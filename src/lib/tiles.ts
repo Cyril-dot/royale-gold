@@ -20,6 +20,7 @@ export interface TileMeta {
   badge: "hot" | "new" | "live" | null;
   mult: string;
   tag: string; // filter category: crash | slots | table | arcade | live
+  slots?: boolean; // in the export's "slots" filter (data-cats includes slots)
   hideMobile?: boolean;
   beginner?: boolean;
 }
@@ -47,11 +48,11 @@ const T: Record<string, TileMeta> = {
   "blackjack-vip": { glyph: "♠ 21", rtp: "99.4%", min: "GH₵ 5", players: 932, size: "cell", badge: "live", mult: "Blackjack pays 3:2", tag: "live", hideMobile: true },
   "royale-roulette": { cover: "/covers/game-roulette.webp", rtp: "97.3%", min: "GH₵ 2", players: 1874, size: "cell", badge: "live", mult: "Straight-up ×36", tag: "live", hideMobile: true },
   "fruit-ninja": { cover: "/covers/cover-fruit.jpg", rtp: "95%", min: "5 coins", players: 2640, size: "cell", badge: "new", mult: "Score 400 · ×4", tag: "arcade", beginner: true },
-  "candy-crush": { cover: "/covers/cover-candy.jpg", rtp: "95%", min: "5 coins", players: 2510, size: "cell", badge: "new", mult: "Match-3 cascades", tag: "arcade", beginner: true },
-  tetris: { cover: "/covers/cover-tetris.jpg", rtp: "95%", min: "5 coins", players: 2380, size: "cell", badge: "new", mult: "Clear lines · ×10", tag: "arcade", beginner: true },
+  "candy-crush": { cover: "/covers/cover-candy.jpg", rtp: "95%", min: "5 coins", players: 2510, size: "cell", badge: "new", mult: "500 pts ×1 · 1500 ×3", tag: "arcade", slots: true, beginner: true },
+  tetris: { cover: "/covers/cover-tetris.jpg", rtp: "95%", min: "5 coins", players: 2380, size: "cell", badge: "new", mult: "Clear lines · ×3", tag: "arcade", beginner: true },
   "whack-a-mole": { cover: "/covers/cover-mole.jpg", rtp: "95%", min: "5 coins", players: 2407, size: "cell", badge: "new", mult: "Golden moles · up to ×2", tag: "arcade", beginner: true },
   "memory-match": { glyph: "◆◆", rtp: "95%", min: "5 coins", players: 2270, size: "cell", badge: "new", mult: "Clear in ≤5 · ×2", tag: "arcade", beginner: true },
-  "scratch-card": { glyph: "✦", rtp: "95%", min: "5 coins", players: 2544, size: "cell", badge: "new", mult: "Match 3 · up to ×10", tag: "arcade", beginner: true },
+  "scratch-card": { glyph: "✦", rtp: "95%", min: "5 coins", players: 2544, size: "cell", badge: "new", mult: "Match 3 · up to ×10", tag: "arcade", slots: true, beginner: true },
   keno: { cover: "/covers/cover-keno.jpg", rtp: "95%", min: "5 coins", players: 2133, size: "cell", badge: "new", mult: "Match 3 · ×6.5", tag: "arcade", beginner: true },
   trivia: { glyph: "?", rtp: "Skill", min: "5 coins", players: 3120, size: "cell", badge: "new", mult: "10/10 pays 25 coins", tag: "arcade", beginner: true },
   snake: { glyph: "≈", rtp: "Skill", min: "5 coins", players: 2985, size: "cell", badge: "new", mult: "300+ pts pays 40 coins", tag: "arcade", beginner: true },
@@ -63,6 +64,21 @@ export interface TileGame extends GameDef {
 }
 
 export const TILE_GAMES: TileGame[] = ALL_GAMES.map((g) => ({ ...g, meta: T[g.slug] }));
+
+// Games-page order = the v48 export's gp-card order (29 games), with the
+// two port-only live-table games (Blackjack VIP, Royale Roulette) appended.
+const GAMES_PAGE_ORDER = [
+  "car-crash", "jet-fly", "penalty-shoot-out", "rocket-shooter",
+  "fruit-ninja", "candy-crush", "tetris", "lucky-wheel", "spin-da-bottle",
+  "mines", "plinko", "aviator-gold", "texas-poker-room", "dice-roll",
+  "coin-flip", "hi-lo", "rock-paper-scissors", "limbo", "red-or-black",
+  "war", "pick-a-box", "keno", "memory-match", "whack-a-mole",
+  "scratch-card", "mini-roulette", "trivia", "snake", "2048",
+  "blackjack-vip", "royale-roulette",
+];
+export const GAMES_PAGE_GAMES: TileGame[] = GAMES_PAGE_ORDER.map(
+  (slug) => TILE_GAMES.find((g) => g.slug === slug)!,
+).filter(Boolean);
 
 export const TOP_PLAYERS = [
   { name: "Kwame A.", amount: 12480, game: "Aviator Gold" },

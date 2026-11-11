@@ -81,7 +81,9 @@ export default function MinesRoom({ game }: { game: GameDef }) {
         <div className="mn-board" role="grid" aria-label="Mines board, 5 by 5">
           {tiles.map((t, i) => (
             <button key={i} type="button" className={`mn-tile${t === "gem" ? " gem" : t === "mine" ? " mine" : t === "revealed-mine" ? " boom" : ""}`} onClick={() => void reveal(i)} disabled={!playing} aria-label={`Tile ${i + 1}`}>
-              {t === "gem" ? "◆" : t === "mine" || t === "revealed-mine" ? "●" : ""}
+              {t === "gem" ? "◆" : t === "mine" || t === "revealed-mine" ? "●" : (
+                <svg className="mn-ico-idle" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 3.5h11.6L21 9.2 12 20.5 3 9.2z" fill="none" stroke="#FFF6D8" strokeWidth="1.4" /></svg>
+              )}
             </button>
           ))}
         </div>

@@ -12,6 +12,10 @@ import crypto from "node:crypto";
 
 export const CLIENT_SEED = "royale-gold-v48";
 
+/** Multiplier growth curve shared by the crash rooms (v48):
+ *  mult(elapsedMs) = exp(0.00006 * elapsedMs). */
+export const CRASH_GROWTH = 0.00006;
+
 export function crashPointFromSeeds(serverSeed: string, clientSeed: string, nonce: number): number {
   const hmacHex = crypto.createHmac("sha256", serverSeed).update(`${clientSeed}:${nonce}`).digest("hex");
   const h = parseInt(hmacHex.substring(0, 13), 16);
@@ -64,4 +68,20 @@ export function issueCrashRound(): CrashRound {
 
 export function getCrashRound(roundId: string): CrashRound | undefined {
   return rounds.get(roundId);
+}
+
+/**
+ * The instant (epoch ms) the round's multiplier reaches its crash point
+ * on the shared growth curve: startsAt + ln(crashPoint) / 0.00006.
+ * A round is FINISHED once that instant has passed — only then may the
+ * server seed be revealed. The client never learns the point early: it
+ * animates the same curve and polls the reveal endpoint, which stays
+ * shut until this instant.
+ */
+export function crashEndsAt(round: CrashRound): number {
+  return round.startsAt + Math.log(Math.max(1, round.crashPoint)) / CRASH_GROWTH;
+}
+
+export function isCrashRoundFinished(round: CrashRound, now = Date.now()): boolean {
+  return now >= crashEndsAt(round);
 }

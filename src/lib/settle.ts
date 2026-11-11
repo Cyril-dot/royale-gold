@@ -2,12 +2,21 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { getGame } from "./games";
 import { dec, round2, toDecimal } from "./money";
+import { getCrashRound } from "./crash";
+
+/** Slugs that settle against a server-issued crash round. */
+export const CRASH_GAME_SLUGS = new Set(["aviator-gold", "jet-fly", "car-crash"]);
 
 /**
  * The single server-side settlement path. Every balance change for a game
  * goes through here, inside one Prisma transaction. The client NEVER sends
  * balances — only game, currency, stake and payout, all re-validated here.
  * Coins are integers and are never converted to cash.
+ *
+ * Crash cash-outs: when a roundId is supplied, the round must exist and
+ * the cash-out multiplier (payout / stake) must never exceed the server's
+ * stored crash point for that round — a client can never cash out above
+ * the point the server committed to.
  */
 export async function settleGame(
   userId: string,
@@ -16,6 +25,7 @@ export async function settleGame(
   stake: number,
   payout: number,
   result?: Record<string, unknown> | null,
+  opts?: { roundId?: string },
 ) {
   const game = getGame(gameSlug);
   if (!game) throw new Error(`Unknown game: ${gameSlug}`);
@@ -26,6 +36,18 @@ export async function settleGame(
   if (!Number.isFinite(payout) || payout < 0) throw new Error("Payout must be >= 0");
   if (payout > round2(stake * game.maxMultiplier) + 1e-9) {
     throw new Error(`Payout exceeds ${game.name} max multiplier ×${game.maxMultiplier}`);
+  }
+  if (opts?.roundId) {
+    if (!CRASH_GAME_SLUGS.has(gameSlug)) {
+      throw new Error("roundId is only valid for crash games");
+    }
+    const round = getCrashRound(opts.roundId);
+    if (!round) throw new Error("Unknown crash round");
+    // Cash-out multiplier must never exceed the server's crash point.
+    // (Losses settle payout 0 and always pass.)
+    if (payout > 0 && payout / stake > round.crashPoint + 1e-9) {
+      throw new Error(`Cash-out above the round's crash point ×${round.crashPoint}`);
+    }
   }
   if (currency === "coins" && (!Number.isInteger(stake) || !Number.isInteger(payout))) {
     throw new Error("Coin stakes and payouts must be whole coins");

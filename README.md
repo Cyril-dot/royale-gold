@@ -116,6 +116,12 @@ file. Highlights:
   currency match, stake > 0, payout ≤ stake × per-game max multiplier.
 - `POST /api/games/crash/round` — provably-fair crash point, HMAC-SHA256,
   exactly as the v48 artifact (verified byte-identical on test seeds).
+  `GET /api/games/crash/reveal?roundId=` returns the server seed, nonce
+  and crash point for a FINISHED round only (live rounds get 403), so the
+  hash issued at round start can be checked; the client animates the
+  shared curve and polls the reveal — it never draws its own point.
+  Cash-outs pass `roundId` and the server re-checks the multiplier
+  against the stored crash point.
 - `GET/POST /api/games/trivia/*` — 10 random questions, server-side grading,
   7→10 / 9→15 / 10→25 coins.
 - `GET /api/admin/*`, `GET/PATCH /api/owner/*` — commission summaries,

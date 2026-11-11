@@ -34,6 +34,7 @@ export async function POST(req: Request) {
       stake,
       payout,
       { ...(body.result ?? {}), ...(body.roundId ? { roundId: body.roundId } : {}) },
+      body.roundId ? { roundId: body.roundId } : undefined,
     );
     return ok({
       game: body.game,

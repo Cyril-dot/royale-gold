@@ -1,12 +1,17 @@
 // Crash engine — shared by Aviator Gold and Jet Fly.
 // Round comes from POST /api/games/crash/round (server-issued, hash
-// commitment). Growth = exp(0.00006 * elapsedMs); display/cash-out cap
-// ×50 while crash detection uses the raw curve (v48).
-// CONTRACT GAP (see report): there is no reveal endpoint, so the client
-// cannot learn the server's crash point. The visual crash point is drawn
-// client-side from the SAME distribution (1/33 instant 1.00x, same curve
-// family) and cash-outs settle through /api/games/settle with the stopped
-// multiplier. A GET reveal endpoint would make this truly provably fair.
+// commitment). Growth = exp(0.00006 * elapsedMs) since the server's
+// startsAt; display/cash-out cap ×50. The crash point is the SERVER's:
+// the client never draws one. While the round flies it polls
+// GET /api/games/crash/reveal?roundId= — the server refuses (403) until
+// the curve has reached the point, then returns the server seed, nonce
+// and point, and the round crashes at exactly that point. The clients
+// long-poll the reveal (?waitMs=25000) so a flying round costs a couple
+// of 200s, never a 403 in the console. The reveal panel shows the seed
+// so SHA-256(serverSeed) can be checked against the hash issued at
+// round start. Cash-outs settle through
+// /api/games/settle with the stopped multiplier; the server re-checks
+// it against the stored crash point (see src/lib/settle.ts).
 
 "use client";
 
@@ -19,23 +24,13 @@ import { RoomShell, StakeChips, useGameRoom } from "./shared";
 const GROWTH = 0.00006;
 const DISPLAY_CAP = 50;
 
-function drawCrashPoint(): number {
-  // Same distribution as crashPointFromSeeds: 1/33 instant 1.00x, else
-  // the house curve sampled from a uniform 52-bit value.
-  const buf = new Uint32Array(2);
-  crypto.getRandomValues(buf);
-  const h = (buf[0] * 0x100000000 + buf[1]) % 0x10000000000000; // 52-bit-ish
-  if (h % 33 === 0) return 1.0;
-  const e = Math.pow(2, 52);
-  const raw = Math.floor((100 * e - h) / (e - h)) / 100;
-  return Math.max(1.0, Math.min(raw, 1_000_000));
-}
-
 function multAt(elapsedMs: number) {
   return Math.exp(GROWTH * elapsedMs);
 }
 
 interface Bet { stake: number; auto: number | null; cashed: boolean; payout: number }
+
+interface Reveal { serverSeed: string; clientSeed: string; nonce: number; crashPoint: number; hash: string }
 
 const FAKE_NAMES = ["Kwame", "Ama", "Kofi", "Efua", "Yaw", "Adwoa", "Selasi", "Nana", "Akosua", "Mensah"];
 
@@ -50,44 +45,75 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
   const [crashPoint, setCrashPoint] = useState<number | null>(null);
   const [roundId, setRoundId] = useState<string | null>(null);
   const [hash, setHash] = useState("");
+  const [reveal, setReveal] = useState<Reveal | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
   const [feed, setFeed] = useState<{ name: string; stake: number; mult: number; won: boolean }[]>([]);
   const [history, setHistory] = useState<number[]>([]);
   const [msg, setMsg] = useState("Place your bet — the next round starts soon.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
-  const startRef = useRef(0);
-  const pointRef = useRef(1);
+  const startRef = useRef(0); // server startsAt (epoch ms) — the curve anchor
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const betsRef = useRef(bets);
   betsRef.current = bets;
+  const roundIdRef = useRef<string | null>(null);
+  roundIdRef.current = roundId;
+  const revealRef = useRef<Reveal | null>(null);
+  revealRef.current = reveal;
+
+  const doCrash = useCallback(async (rv: Reveal) => {
+    if (phaseRef.current === "crashed") return;
+    setReveal(rv);
+    setCrashPoint(rv.crashPoint);
+    setMult(rv.crashPoint);
+    setPhase("crashed");
+    setHistory((h) => [Math.round(rv.crashPoint * 100) / 100, ...h].slice(0, 12));
+    setMsg(`Crashed at ×${rv.crashPoint.toFixed(2)} — server seed revealed below.`);
+    const losers = betsRef.current.filter((b) => !b.cashed);
+    if (losers.length) {
+      void Promise.all(losers.map((b) => room.settle(b.stake, 0, { crash: rv.crashPoint }, roundIdRef.current || undefined)));
+    }
+    setBets([]);
+    setTimeout(() => void newRound(), 5000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room]);
+
+  // Poll the reveal endpoint with a long-poll (?waitMs=25000): the
+  // server holds the request until the round finishes, so a flying
+  // round costs a couple of 200s instead of a 403 every few hundred ms.
+  // A plain GET (no waitMs) still 403s a live round — see the route.
+  const pollReveal = useCallback(async (): Promise<Reveal | null> => {
+    const id = roundIdRef.current;
+    if (!id) return null;
+    try {
+      const res = await fetch(`/api/games/crash/reveal?roundId=${encodeURIComponent(id)}&waitMs=25000`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.finished === false) return null;
+      return data as Reveal;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const newRound = useCallback(async () => {
-    if (!user) return;
+    if (!user) { setMsg("Log in to play crash."); return; }
     try {
       const r = await api<{ roundId: string; hash: string; startsAt: number }>("/api/games/crash/round", { method: "POST" });
       setRoundId(r.roundId);
       setHash(r.hash.slice(0, 16) + "…");
-      const point = drawCrashPoint();
-      pointRef.current = point;
-      setCrashPoint(point);
+      setCrashPoint(null);
+      setReveal(null);
       setPhase("waiting");
       setMult(1);
       setBets([]);
       setMsg("Betting open — round takes off soon.");
       const waitMs = Math.max(500, r.startsAt - Date.now());
       setCountdown(Math.ceil(waitMs / 1000));
-      startRef.current = Date.now() + waitMs;
+      startRef.current = r.startsAt;
     } catch {
-      // Offline/demo fallback: still run a local round so the room plays.
-      const point = drawCrashPoint();
-      pointRef.current = point;
-      setCrashPoint(point);
-      setPhase("waiting");
-      setCountdown(5);
-      startRef.current = Date.now() + 5000;
-      setMsg("Betting open — round takes off soon.");
+      setMsg("Could not start a server round — check your connection and try again.");
     }
   }, [user]);
 
@@ -98,43 +124,52 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
       if (phaseRef.current === "waiting") {
         const left = Math.max(0, Math.ceil((startRef.current - Date.now()) / 1000));
         setCountdown(left);
-        if (left <= 0) {
-          setPhase("running");
-          startRef.current = Date.now();
-        }
+        if (left <= 0) setPhase("running");
       }
     }, 100);
     return () => clearInterval(iv);
   }, [phase]);
 
+  // Flying: animate the shared curve; the round ends when the server
+  // reveal succeeds — that instant IS the server's crash point. The
+  // reveal is long-polled sequentially (one request at a time).
   useEffect(() => {
     if (phase !== "running") return;
+    let stopped = false;
+    (async () => {
+      while (!stopped && phaseRef.current === "running") {
+        const rv = await pollReveal();
+        if (rv) { void doCrash(rv); return; }
+      }
+    })();
     const loop = () => {
+      if (phaseRef.current !== "running") return;
       const elapsed = Date.now() - startRef.current;
       const m = multAt(elapsed);
       setMult(m);
       // Auto cash-out
       const active = betsRef.current.find((b) => !b.cashed);
       if (active && active.auto && m >= active.auto) void cashOut(active);
-      if (m >= pointRef.current) {
-        setPhase("crashed");
-        setHistory((h) => [Math.round(pointRef.current * 100) / 100, ...h].slice(0, 12));
-        setMsg(`Crashed at ×${pointRef.current.toFixed(2)}`);
-        // Uncashed bets lose
-        const losers = betsRef.current.filter((b) => !b.cashed);
-        if (losers.length) {
-          void Promise.all(losers.map((b) => room.settle(b.stake, 0, { crash: pointRef.current })));
-        }
-        setBets([]);
-        setTimeout(() => void newRound(), 2800);
-        return;
-      }
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => { stopped = true; cancelAnimationFrame(rafRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
+
+  // If a crash was detected but the reveal had not landed yet (clock
+  // skew), keep long-polling until the seed + point arrive.
+  useEffect(() => {
+    if (phase !== "crashed" || reveal) return;
+    let stopped = false;
+    (async () => {
+      while (!stopped) {
+        const rv = await pollReveal();
+        if (rv) { setReveal(rv); setCrashPoint(rv.crashPoint); setMult(rv.crashPoint); return; }
+      }
+    })();
+    return () => { stopped = true; };
+  }, [phase, reveal, pollReveal]);
 
   // Fake live-bets feed per round (v48 genFakes behaviour)
   useEffect(() => {
@@ -184,10 +219,12 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
   };
 
   const cashOut = useCallback(async (bet: Bet) => {
+    // Never above the server's crash point: while the round is live the
+    // curve is below it, and the server re-checks on settle anyway.
     const m = Math.min(multAt(Date.now() - startRef.current), DISPLAY_CAP);
     const payout = Math.round(bet.stake * m * 100) / 100;
     setBets((bs) => bs.map((b) => (b === bet ? { ...b, cashed: true, payout } : b)));
-    await room.settle(bet.stake, payout, { cashout: m, crash: pointRef.current }, roundId || undefined);
+    await room.settle(bet.stake, payout, { cashout: m }, roundId || undefined);
     setMsg(`Cashed out at ×${m.toFixed(2)} — ${fmtCash(payout)}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, roundId]);
@@ -223,6 +260,24 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
         <p className="xg-msg">{msg}</p>
         {bets.length > 0 && <p className="xg-msg">Active bets: {bets.map((b) => `${fmtCash(b.stake)}${b.cashed ? ` → cashed ${fmtCash(b.payout)}` : b.auto ? ` (auto ×${b.auto})` : ""}`).join(" · ")}</p>}
       </div>
+      {phase === "crashed" && (
+        <div className="cr-reveal" aria-label="Provably fair reveal">
+          <h4>Provably fair — round revealed</h4>
+          {reveal ? (
+            <>
+              <p>Crashed at <b>×{reveal.crashPoint.toFixed(2)}</b>. Check it: SHA-256 of the server seed below must equal the hash shown when the round started.</p>
+              <dl>
+                <div><dt>Server seed</dt><dd><code>{reveal.serverSeed}</code></dd></div>
+                <div><dt>Client seed</dt><dd><code>{reveal.clientSeed}</code></dd></div>
+                <div><dt>Nonce</dt><dd><code>{reveal.nonce}</code></dd></div>
+                <div><dt>Crash point</dt><dd><code>×{reveal.crashPoint.toFixed(2)}</code></dd></div>
+              </dl>
+            </>
+          ) : (
+            <p>Fetching the server seed…</p>
+          )}
+        </div>
+      )}
       {skin === "jet" && (
         <>
           <div className="jf-feed" aria-label="Live bets feed">

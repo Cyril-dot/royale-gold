@@ -9,10 +9,15 @@ export async function GET(req: Request) {
     if (!code) return fail("code query param is required");
     const row = await prisma.referralCode.findUnique({
       where: { code: normalizeCode(code) },
-      include: { admin: { select: { name: true } } },
+      include: { admin: { select: { name: true, commissionPct: true } } },
     });
     if (!row || !row.active) return ok({ valid: false, code: normalizeCode(code) });
-    return ok({ valid: true, code: row.code, adminName: row.admin.name });
+    return ok({
+      valid: true,
+      code: row.code,
+      adminName: row.admin.name,
+      commissionPct: row.admin.commissionPct === null ? null : Number(row.admin.commissionPct.toString()),
+    });
   } catch (err) {
     return toErrorResponse(err);
   }

@@ -107,7 +107,7 @@ export default function RewardsStrip() {
               <article key={a.key} className={`rw-card ach ${a.unlocked ? "on" : ""}`}>
                 <div className="rw-ico">{a.unlocked ? "★" : "☆"}</div>
                 <h4>{a.name}</h4>
-                <p>{a.unlocked ? "Unlocked" : `${a.progress} / ${a.target}`}</p>
+                <p>{a.progress} / {a.target}</p>
                 <div className="rw-prog"><i style={{ width: `${Math.min(100, (a.progress / a.target) * 100)}%` }} /></div>
                 <div className="rw-state">{a.unlocked ? "UNLOCKED · GOLD" : "LOCKED"}</div>
               </article>

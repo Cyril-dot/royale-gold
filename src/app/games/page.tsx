@@ -1,28 +1,39 @@
-// Games page — all 31 games, count says 31, Coins/Cash filter chips,
-// search. (v48 games page, as a real route.)
+// Games page — all 31 games in the v48 export's gp-card order, simple
+// tiles (name + currency + Play now), Coins/Cash/Slots filter chips,
+// search (also reads ?q= from the header search). (v48 games page, as
+// a real route.)
 
 "use client";
 
 import Link from "next/link";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import GameTile from "../../components/GameTile";
-import { TILE_GAMES } from "../../lib/tiles";
+import { GAMES_PAGE_GAMES, TILE_GAMES } from "../../lib/tiles";
 import { useStore } from "../../lib/store";
 import { fmtCash, fmtCoins } from "../../lib/api";
 
-type Filter = "all" | "cash" | "coins" | "crash" | "table" | "arcade" | "live" | "beginner";
+type Filter = "all" | "cash" | "coins" | "crash" | "table" | "arcade" | "live" | "beginner" | "slots";
 
 function GamesInner() {
   const params = useSearchParams();
   const initial = (params.get("filter") as Filter) || "all";
-  const [filter, setFilter] = useState<Filter>(["all", "cash", "coins", "crash", "table", "arcade", "live", "beginner"].includes(initial) ? initial : "all");
-  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<Filter>(["all", "cash", "coins", "crash", "table", "arcade", "live", "beginner", "slots"].includes(initial) ? initial : "all");
+  const [q, setQ] = useState(params.get("q") || "");
+  // Header nav / search navigate client-side to the same route with a
+  // new ?filter= / ?q= — pick those up (the initial useState above only
+  // runs on first mount, so a client-side nav would otherwise be ignored).
+  useEffect(() => {
+    const f = (params.get("filter") as Filter) || "all";
+    if (["all", "cash", "coins", "crash", "table", "arcade", "live", "beginner", "slots"].includes(f)) setFilter(f);
+    setQ(params.get("q") || "");
+  }, [params]);
   const { user, wallet } = useStore();
 
   const list = useMemo(() => {
-    return TILE_GAMES.filter((g) => {
+    return GAMES_PAGE_GAMES.filter((g) => {
       if (filter === "cash" || filter === "coins") { if (g.currency !== filter) return false; }
+      else if (filter === "slots") { if (!g.meta.slots) return false; }
       else if (filter === "crash" || filter === "table" || filter === "arcade" || filter === "live") { if (g.meta.tag !== filter) return false; }
       else if (filter === "beginner") { if (!g.meta.beginner) return false; }
       if (q && !g.name.toLowerCase().includes(q.toLowerCase())) return false;
@@ -46,9 +57,9 @@ function GamesInner() {
         </div>
         <div className="wrap">
           <div className="gp-filters" role="group" aria-label="Filter games page">
-            {(["all", "beginner", "crash", "table", "arcade", "live", "coins", "cash"] as Filter[]).map((f) => (
+            {(["all", "beginner", "slots", "crash", "table", "arcade", "live", "coins", "cash"] as Filter[]).map((f) => (
               <button key={f} type="button" className="fchip" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-                {f === "all" ? "All games" : f === "beginner" ? "Beginner" : f === "crash" ? "Crash" : f === "table" ? "Table" : f === "arcade" ? "Arcade" : f === "live" ? "Live casino" : f === "coins" ? "Coins" : "Cash"}
+                {f === "all" ? "All games" : f === "beginner" ? "Beginner" : f === "slots" ? "Slots" : f === "crash" ? "Crash" : f === "table" ? "Table" : f === "arcade" ? "Arcade" : f === "live" ? "Live casino" : f === "coins" ? "Coins" : "Cash"}
               </button>
             ))}
           </div>
@@ -61,7 +72,7 @@ function GamesInner() {
       <div className="wrap">
         <div className="games gp-grid">
           {list.map((g) => (
-            <GameTile key={g.slug} g={g} />
+            <GameTile key={g.slug} g={g} simple />
           ))}
         </div>
         {list.length === 0 && <p className="gp-empty">No games match that search.</p>}

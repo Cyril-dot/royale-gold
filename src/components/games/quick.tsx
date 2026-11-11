@@ -3,7 +3,7 @@
 // Coin Flip ×2 · Dice exactly 7 ×5 · Lucky Wheel 12 segments (1×4, 2×2,
 // 3×1, 1×0.5, 5 LOSE) · Hi-Lo chain ×1.9 · RPS ×2 · Limbo target×0.97
 // (max ×19.4) · Red or Black chain to ×8 · War ×2 · Pick-a-Box ×1.8 ·
-// Mini Roulette straight-up ×36 · Spin Da Bottle UP/DOWN ×2.
+// Mini Roulette red/black ×2, green zero ×36 · Spin Da Bottle UP/DOWN ×2.
 
 "use client";
 
@@ -380,9 +380,13 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
 }
 
 // ---------------- Mini Roulette ----------------
+// v48 export: European wheel (0–36). Bet red or black (pays ×2) or green
+// zero (pays ×36). No straight-up number betting.
+const MR_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+type MrBet = "red" | "black" | "green";
 export function MiniRouletteRoom({ game }: { game: GameDef }) {
-  const { room, stake, setStake, msg, setMsg } = useSimple(game, "Pick a number 0–36 — a straight hit pays ×36.");
-  const [pick, setPick] = useState(7);
+  const { room, stake, setStake, msg, setMsg } = useSimple(game, "European wheel, 0–36. Red or black pays ×2, green zero pays ×36.");
+  const [bet, setBet] = useState<MrBet>("red");
   const [spun, setSpun] = useState<number | null>(null);
   const [spinning, setSpinning] = useState(false);
   const spin = async () => {
@@ -392,22 +396,28 @@ export function MiniRouletteRoom({ game }: { game: GameDef }) {
     setTimeout(async () => {
       setSpun(out);
       setSpinning(false);
-      const won = out === pick;
-      setMsg(won ? `Number ${out} — straight hit! ×36 = ${fmtCash(stake * 36)}` : `Landed ${out} — not ${pick}.`);
-      await room.settle(stake, won ? stake * 36 : 0, { pick, out });
+      const colour = out === 0 ? "green" : MR_RED.has(out) ? "red" : "black";
+      const mult = (bet === "red" && colour === "red") || (bet === "black" && colour === "black") ? 2 : bet === "green" && colour === "green" ? 36 : 0;
+      const payout = Math.round(stake * mult * 100) / 100;
+      setMsg(mult > 0 ? `Landed ${out} ${colour} — ×${mult}! ${fmtCash(payout)}` : `Landed ${out} ${colour} — your ${bet} bet loses.`);
+      await room.settle(stake, payout, { bet, out, colour });
     }, 900);
   };
+  const landedColour = spun === null ? null : spun === 0 ? "green" : MR_RED.has(spun) ? "red" : "black";
   return (
-    <Shell game={game} subtitle="Pick a number 0–36 — a straight hit pays ×36." stake={stake} setStake={setStake} msg={msg}>
+    <Shell game={game} subtitle="European wheel, 0–36. Red or black pays ×2, green zero pays ×36." stake={stake} setStake={setStake} msg={msg}>
       <div className="mr-stage">
-        <div className="mr-wheel">{spun !== null ? spun : spinning ? "…" : "?"}</div>
-        <div className="mr-nums">
-          {Array.from({ length: 37 }, (_, n) => (
-            <button key={n} type="button" className={pick === n ? "on" : ""} onClick={() => setPick(n)}>{n}</button>
+        <div className={`mr-wheel${landedColour ? ` ${landedColour}` : ""}`}>{spun !== null ? spun : spinning ? "…" : "?"}</div>
+        <div className="mr-bets" role="group" aria-label="Bet on red, black or green">
+          {(["red", "black", "green"] as MrBet[]).map((b) => (
+            <button key={b} type="button" className={`xg-pick mr-bet-${b}`} aria-pressed={bet === b} onClick={() => setBet(b)}>
+              {b === "red" ? "Red ×2" : b === "black" ? "Black ×2" : "Green 0 ×36"}
+            </button>
           ))}
         </div>
+        {spun !== null && <p className="xg-msg">Last spin: {spun} {landedColour}</p>}
       </div>
-      <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin on ${pick} · ${fmtCash(stake)}`}</button>
+      <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin on ${bet} · ${fmtCash(stake)}`}</button>
     </Shell>
   );
 }

@@ -39,7 +39,7 @@ export const CASH_GAMES: GameDef[] = [
   { slug: "red-or-black", name: "Red or Black", currency: "cash", maxMultiplier: 8, note: "Chain doubles to ×8" },
   { slug: "war", name: "War", currency: "cash", maxMultiplier: 2, note: "Higher card ×2" },
   { slug: "pick-a-box", name: "Pick-a-Box", currency: "cash", maxMultiplier: 1.8, note: "Find the gold ×1.8" },
-  { slug: "mini-roulette", name: "Mini Roulette", currency: "cash", maxMultiplier: 36, note: "Green zero ×36" },
+  { slug: "mini-roulette", name: "Mini Roulette", currency: "cash", maxMultiplier: 36, note: "European wheel: red/black ×2, green zero ×36 (v48 export)" },
   { slug: "texas-poker-room", name: "Texas Poker Room", currency: "cash", maxMultiplier: 20, note: "Best hand wins; v1 ceiling ×20" },
   { slug: "spin-da-bottle", name: "Spin Da Bottle", currency: "cash", maxMultiplier: 2, note: "v1 ceiling ×2" },
   { slug: "blackjack-vip", name: "Blackjack VIP", currency: "cash", maxMultiplier: 2.5, note: "Blackjack 3:2" },
@@ -48,12 +48,12 @@ export const CASH_GAMES: GameDef[] = [
 
 export const COIN_GAMES: GameDef[] = [
   { slug: "fruit-ninja", name: "Fruit Ninja", currency: "coins", maxMultiplier: 10, note: "v1 ceiling ×10" },
-  { slug: "candy-crush", name: "Candy Crush", currency: "coins", maxMultiplier: 10, note: "v1 ceiling ×10" },
-  { slug: "tetris", name: "Tetris", currency: "coins", maxMultiplier: 10, note: "v1 ceiling ×10" },
-  { slug: "whack-a-mole", name: "Whack-a-Mole", currency: "coins", maxMultiplier: 2, note: "Golden moles up to ×2" },
+  { slug: "candy-crush", name: "Candy Crush", currency: "coins", maxMultiplier: 3, note: "≥500 pts ×1, ≥1000 ×2, ≥1500 ×3 (v48 export)" },
+  { slug: "tetris", name: "Tetris", currency: "coins", maxMultiplier: 3, note: "≥800 pts ×1, ≥1500 ×2, ≥2500 ×3, max ×3 (v48 export)" },
+  { slug: "whack-a-mole", name: "Whack-a-Mole", currency: "coins", maxMultiplier: 2, note: "Multiplier = points / 110, capped ×2 (v48 export)" },
   { slug: "memory-match", name: "Memory Match", currency: "coins", maxMultiplier: 2, note: "Clear in ≤5 · ×2" },
-  { slug: "scratch-card", name: "Scratch Card", currency: "coins", maxMultiplier: 10, note: "Match 3 · up to ×10" },
-  { slug: "keno", name: "Keno", currency: "coins", maxMultiplier: 6.5, note: "Match 3 · ×6.5" },
+  { slug: "scratch-card", name: "Scratch Card", currency: "coins", maxMultiplier: 10, note: "Decide-first: ×10 2%, ×5 6%, ×2 22.5%, blank 69.5% (v48 export)" },
+  { slug: "keno", name: "Keno", currency: "coins", maxMultiplier: 6.5, note: "Pick 3 of 1–10, draw 5; 2 matches ×1, 3 matches ×6.5 (v48 export)" },
   // Trivia / Snake / 2048 use flat coin payouts, not multipliers.
   // Their ceilings here are max flat payout / 5-coin entry.
   { slug: "trivia", name: "Trivia", currency: "coins", maxMultiplier: 5, note: "Entry 5; 7→10, 9→15, 10→25 coins (max ×5)" },

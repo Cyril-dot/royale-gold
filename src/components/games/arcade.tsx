@@ -12,6 +12,15 @@ import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
 // ---------------- Car Crash ----------------
+// Top-down driving on a server-issued crash round: the run's odds grow
+// on the shared crash curve (exp(0.00006 * elapsed) + coin/near-miss
+// bonuses, cap ×50) and the run ends when the SERVER's round crashes —
+// the client polls GET /api/games/crash/reveal, which stays shut until
+// the curve reaches the server's point, then reveals seed + point.
+// A collision ends the run early (stake lost) and the reveal is still
+// fetched afterwards. Cash-outs settle with the roundId so the server
+// re-checks the multiplier against the stored crash point.
+interface CarReveal { serverSeed: string; clientSeed: string; nonce: number; crashPoint: number; hash: string }
 export function CarCrashRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(10);
@@ -19,10 +28,37 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
   const [msg, setMsg] = useState("Drive! Dodge the traffic, grab coins (+0.10x), near-miss a truck (+0.05x). Cash out before you crash.");
   const [odds, setOdds] = useState(1);
   const [coins, setCoins] = useState(0);
+  const [roundId, setRoundId] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<CarReveal | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef<{ x: number; speed: number; obstacles: { x: number; y: number; w: number; h: number; kind: string }[]; coins: { x: number; y: number }[]; dist: number; bonus: number; crashed: boolean; t0: number; crashAt: number } | null>(null);
+  const stateRef = useRef<{ x: number; speed: number; obstacles: { x: number; y: number; w: number; h: number; kind: string }[]; coins: { x: number; y: number }[]; dist: number; bonus: number; crashed: boolean; t0: number } | null>(null);
   const rafRef = useRef(0);
   const keysRef = useRef<{ l: boolean; r: boolean }>({ l: false, r: false });
+  const roundIdRef = useRef<string | null>(null);
+  roundIdRef.current = roundId;
+
+  const fetchReveal = useCallback(async (waitMs = 0): Promise<CarReveal | null> => {
+    const id = roundIdRef.current;
+    if (!id) return null;
+    try {
+      const res = await fetch(`/api/games/crash/reveal?roundId=${encodeURIComponent(id)}${waitMs ? `&waitMs=${waitMs}` : ""}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.finished === false) return null;
+      return data as CarReveal;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // After a run ends, keep asking until the server seed + point land.
+  const revealAfterEnd = useCallback(async () => {
+    for (let i = 0; i < 10; i++) {
+      const rv = await fetchReveal(25000);
+      if (rv) { setReveal(rv); return rv; }
+    }
+    return null;
+  }, [fetchReveal]);
 
   const cashOut = useCallback(async () => {
     const st = stateRef.current;
@@ -31,34 +67,42 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     setPlaying(false);
     const payout = Math.round(stake * odds * 100) / 100;
     setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtCash(payout)}!`);
-    await room.settle(stake, payout, { odds, coins, dist: Math.round(st.dist) });
+    await room.settle(stake, payout, { odds, coins, dist: Math.round(st.dist) }, roundIdRef.current || undefined);
+    void revealAfterEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, odds, stake, coins, room]);
+  }, [playing, odds, stake, coins, room, revealAfterEnd]);
 
-  const crash = useCallback(async () => {
+  const crash = useCallback(async (rv?: CarReveal) => {
     const st = stateRef.current;
     if (!st) return;
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
-    setMsg(`CRASH at ×${odds.toFixed(2)} — the stake is gone.`);
-    await room.settle(stake, 0, { odds, coins, dist: Math.round(st.dist), crashed: true });
+    if (rv !== undefined) {
+      setReveal(rv);
+      setOdds(rv.crashPoint);
+      setMsg(`CRASH at ×${rv.crashPoint.toFixed(2)} — the server round crashed. The stake is gone.`);
+    } else {
+      setMsg(`CRASH at ×${odds.toFixed(2)} — the stake is gone.`);
+    }
+    await room.settle(stake, 0, { odds: rv?.crashPoint ?? odds, coins, dist: Math.round(st.dist), crashed: true }, roundIdRef.current || undefined);
+    if (!rv) void revealAfterEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [odds, stake, coins, room]);
+  }, [odds, stake, coins, room, revealAfterEnd]);
 
   const start = async () => {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
-    // Server round for the crash ceiling (same engine as Aviator).
-    let crashAt = 50;
+    // Server round: the run's crash point lives on the server.
+    let startsAt = Date.now();
     try {
-      const r = await api<{ roundId: string }>("/api/games/crash/round", { method: "POST" });
-      void r;
-      // The server point is not revealed; the run's own ceiling is the
-      // obstacle field + a drawn point from the same distribution.
-      const buf = new Uint32Array(1);
-      crypto.getRandomValues(buf);
-      crashAt = buf[0] % 33 === 0 ? 1 : Math.min(50, 1 + (buf[0] % 4000) / 100);
-    } catch { /* local fallback */ }
-    stateRef.current = { x: 150, speed: 3, obstacles: [], coins: [], dist: 0, bonus: 0, crashed: false, t0: Date.now(), crashAt };
+      const r = await api<{ roundId: string; startsAt: number }>("/api/games/crash/round", { method: "POST" });
+      setRoundId(r.roundId);
+      startsAt = r.startsAt;
+    } catch {
+      setMsg("Could not start a server round — log in and check your connection, then try again.");
+      return;
+    }
+    setReveal(null);
+    stateRef.current = { x: 150, speed: 3, obstacles: [], coins: [], dist: 0, bonus: 0, crashed: false, t0: startsAt };
     setOdds(1); setCoins(0); setPlaying(true);
     setMsg("Drive! Steer with ← → or drag.");
   };
@@ -90,9 +134,10 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
       st.coins.forEach((c) => { c.y += st.speed + 1.5; });
       st.obstacles = st.obstacles.filter((o) => o.y < H + 80);
       st.coins = st.coins.filter((c) => c.y < H + 20);
-      // live odds: distance growth + bonuses
-      const elapsed = (Date.now() - st.t0) / 1000;
-      const o = Math.min(50, 1 + elapsed * 0.12 + st.bonus);
+      // live odds: shared crash curve since the server's startsAt,
+      // plus coin / near-miss bonuses, cap ×50.
+      const elapsedMs = Date.now() - st.t0;
+      const o = Math.min(50, Math.exp(0.00006 * elapsedMs) + st.bonus);
       setOdds(Math.round(o * 100) / 100);
       // collisions
       const carY = H - 90;
@@ -110,7 +155,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
           st.coins = st.coins.filter((x) => x !== c);
         }
       }
-      if (o >= st.crashAt) { void crash(); return; }
+      if (o >= 50) { void crash(); return; }
       // draw
       ctx.fillStyle = "#0C2B22";
       ctx.fillRect(0, 0, W, H);
@@ -134,6 +179,22 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     rafRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafRef.current);
   }, [playing, crash]);
+
+  // Server crash: long-poll the reveal while driving — when it answers,
+  // the server's round has crashed at its point and so does this run.
+  // One request at a time, all 200s (no 403 console noise).
+  useEffect(() => {
+    if (!playing) return;
+    let stopped = false;
+    (async () => {
+      while (!stopped) {
+        const rv = await fetchReveal(20000);
+        if (stopped) return;
+        if (rv) { void crash(rv); return; }
+      }
+    })();
+    return () => { stopped = true; };
+  }, [playing, fetchReveal, crash]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -169,6 +230,18 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Start driving · {fmtCash(stake)}</button>}
         {playing && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()}>CASH OUT · {fmtCash(Math.round(stake * odds * 100) / 100)}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
+        {reveal && (
+          <div className="cr-reveal" aria-label="Provably fair reveal">
+            <h4>Provably fair — round revealed</h4>
+            <p>Server round crashed at <b>×{reveal.crashPoint.toFixed(2)}</b>. SHA-256 of the server seed must equal the hash issued at round start.</p>
+            <dl>
+              <div><dt>Server seed</dt><dd><code>{reveal.serverSeed}</code></dd></div>
+              <div><dt>Client seed</dt><dd><code>{reveal.clientSeed}</code></dd></div>
+              <div><dt>Nonce</dt><dd><code>{reveal.nonce}</code></dd></div>
+              <div><dt>Crash point</dt><dd><code>×{reveal.crashPoint.toFixed(2)}</code></dd></div>
+            </dl>
+          </div>
+        )}
       </div>
     </RoomShell>
   );

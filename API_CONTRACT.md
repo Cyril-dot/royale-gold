@@ -102,18 +102,18 @@ stored on the deposit event. Later % changes never rewrite it.
 | red-or-black | cash | 8 | Chain doubles to ×8 |
 | war | cash | 2 | Higher card ×2 |
 | pick-a-box | cash | 1.8 | Find the gold ×1.8 |
-| mini-roulette | cash | 36 | Green zero ×36 |
+| mini-roulette | cash | 36 | European wheel: red/black ×2, green zero ×36 |
 | texas-poker-room | cash | 20 | Best hand wins; v1 ceiling ×20 |
 | spin-da-bottle | cash | 2 | v1 ceiling ×2 |
 | blackjack-vip | cash | 2.5 | Blackjack 3:2 |
 | royale-roulette | cash | 36 | Straight-up ×36 |
 | fruit-ninja | coins | 10 | v1 ceiling ×10 |
-| candy-crush | coins | 10 | v1 ceiling ×10 |
-| tetris | coins | 10 | v1 ceiling ×10 |
-| whack-a-mole | coins | 2 | Golden moles up to ×2 |
+| candy-crush | coins | 3 | ≥500 pts ×1, ≥1000 ×2, ≥1500 ×3 (v48 export) |
+| tetris | coins | 3 | ≥800 pts ×1, ≥1500 ×2, ≥2500 ×3, max ×3 (v48 export) |
+| whack-a-mole | coins | 2 | Multiplier = points / 110, capped ×2 (v48 export) |
 | memory-match | coins | 2 | Clear in ≤5 · ×2 |
-| scratch-card | coins | 10 | Match 3 · up to ×10 |
-| keno | coins | 6.5 | Match 3 · ×6.5 |
+| scratch-card | coins | 10 | Decide-first: ×10 2%, ×5 6%, ×2 22.5%, blank 69.5% (v48 export) |
+| keno | coins | 6.5 | Pick 3 of 1–10, draw 5; 2 matches ×1, 3 matches ×6.5 (v48 export) |
 | trivia | coins | 5 | Entry 5; 7→10, 9→15, 10→25 coins (max ×5) |
 | snake | coins | 8 | Entry 5; 100+→10, 200+→20, 300+→40 coins |
 | 2048 | coins | 10 | Entry 5; 256→10, 512→20, 1024→50 coins |
@@ -129,6 +129,9 @@ amounts** per the table — settle them with those exact payouts.
   "result": { "shots": 5 }, "roundId": "<crash roundId, optional>" }
 // validation: stake > 0; payout >= 0; payout <= stake × maxMultiplier;
 // insufficient balance -> 400. Coin stakes/payouts must be whole coins.
+// Crash games: when roundId is supplied it must be a real issued round
+// (aviator-gold / jet-fly / car-crash only) and payout / stake must never
+// exceed that round's server crash point (400 otherwise).
 // response 200
 { "game": "penalty-shoot-out", "currency": "cash", "stake": 10, "payout": 15.6,
   "cash": 355.6, "coins": 15, "sim": 1000, "xp": 2, "level": 1,
@@ -148,7 +151,26 @@ Crash point (server, HMAC-SHA256, exactly as v48):
 `h = first 13 hex chars as a 52-bit int`; `h % 33 == 0 → 1.00x`;
 else `floor((100·2^52 − h) / (2^52 − h)) / 100`, capped at 1,000,000.
 Cash-out goes through `POST /api/games/settle` with the multiplier the
-player stopped at (settle cap ×50). Rounds live in server memory (v1).
+player stopped at (settle cap ×50), passing `roundId` so the server
+re-checks the multiplier against the stored crash point. The client
+animates the same curve (`exp(0.00006 × ms since startsAt)`) and polls
+the reveal endpoint below — it never draws its own crash point.
+Rounds live in server memory (v1).
+
+### GET /api/games/crash/reveal?roundId=...
+```json
+// response 200 — FINISHED rounds only (curve has reached the point)
+// { "roundId": "...", "serverSeed": "<64 hex>", "clientSeed": "royale-gold-v48",
+//   "nonce": 587372, "crashPoint": 2.41, "hash": "<sha256(serverSeed)>" }
+// live round: 403 { "error": "Round is still live — ..." }
+// unknown round: 404. Missing roundId: 400.
+// Optional ?waitMs=<n> (max 25000) long-polls: holds until the round
+// finishes or the wait elapses, then returns the reveal — or 200
+// { "finished": false } if still live. The crash clients long-poll so a
+// flying round costs a couple of 200s instead of a 403 every poll.
+// Verify: SHA-256(serverSeed) must equal the hash issued with the round,
+// and the crash-point formula above must reproduce crashPoint.
+```
 
 ### GET /api/games/trivia/questions
 ```json
@@ -187,10 +209,12 @@ Payout rule: 7→10, 9→15, 10→25 coins; fewer than 7 → 0.
 
 ### GET /api/referral/validate?code=RG-DEMO1 (public)
 ```json
-{ "valid": true, "code": "RG-DEMO1", "adminName": "Royale Admin" }
+{ "valid": true, "code": "RG-DEMO1", "adminName": "Royale Admin", "commissionPct": 10 }
 // invalid/inactive:
 { "valid": false, "code": "RG-FAKE" }
 ```
+`commissionPct` is the owning admin's current % (null if none on file);
+the deposit modal shows it, or hides the commission sentence when null.
 
 ### POST /api/account/redeem
 ```json

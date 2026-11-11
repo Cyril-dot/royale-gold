@@ -37,7 +37,7 @@ export default function Home() {
                 {f === "all" ? "All games" : f === "cash" ? "Cash · GH₵" : f === "coins" ? "Coins" : "Crash"}
               </button>
             ))}
-            <Link className="fchip fchip-link" href="/games">Open all 29 →</Link>
+            <Link className="fchip fchip-link" href="/games">Open all {TILE_GAMES.length} →</Link>
           </div>
           <div className={`games${expanded ? " expanded" : ""}`}>
             {shown.map((g, i) => (

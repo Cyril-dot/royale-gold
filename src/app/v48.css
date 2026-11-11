@@ -166,7 +166,7 @@ header.site::after{
 .chipnav{position:relative;display:flex;gap:2px;margin-inline:auto;background:rgba(4,10,8,.45);border:1px solid rgba(255,246,216,.12);border-radius:999px;padding:4px}
 .chipnav a{position:relative;z-index:1;text-decoration:none;font-weight:700;font-size:14px;color:var(--muted);padding:9px 15px;border-radius:999px;min-height:44px;display:inline-flex;align-items:center;transition:color .25s ease}
 .chipnav a:hover{color:var(--ink)}
-.chipnav a.active{color:#231600}
+.chipnav a.active{color:#231600;background:radial-gradient(circle at 32% 28%,#FFE89A,var(--gold) 60%,#D9A41C);border:2px dashed rgba(35,22,0,.4);box-shadow:0 4px 12px rgba(242,194,48,.4), inset 0 0 0 2px rgba(255,246,216,.35)}
 #chipInd{
   position:absolute;top:4px;left:0;height:calc(100% - 8px);border-radius:999px;z-index:0;
   background:radial-gradient(circle at 32% 28%,#FFE89A,var(--gold) 60%,#D9A41C);
@@ -1209,7 +1209,7 @@ body.room-open #gamesPage{display:none}
 .xg-title{font-family:var(--disp);font-weight:400;text-transform:uppercase;letter-spacing:.01em;font-size:clamp(14px,3.9vw,22px);line-height:1;margin:0;color:var(--ink);white-space:nowrap}
 .xg-title em{font-style:normal;color:var(--gold)}
 .xgame .xg-head .xg-mode{margin-left:auto;width:auto;flex:none;flex-wrap:nowrap;justify-content:flex-end}
-.xg-sub{order:3;flex:1 1 100%;min-width:0;margin:0;color:var(--muted);font-size:10.5px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xg-sub{order:3;flex:1 1 100%;min-width:0;margin:0;color:var(--muted);font-size:10.5px;font-weight:600;line-height:1.45;white-space:normal}
 /* Spin Da Bottle lives on the homepage, not in an overlay: its balance
    row rides beside its section title, description after it */
 .bottle-sec .sec-head .bt-mode{margin:0 0 0 auto;justify-content:flex-end;flex-wrap:nowrap}
@@ -2015,7 +2015,7 @@ table.rg48-t tr.rg48-click:hover td{background:rgba(255,176,0,.05)}
 .rg48-inline input{flex:1;min-width:150px}
 .rg48-inline .btn{flex:0 0 auto}
 /* rewards showcase */
-.rewards-sec{position:relative;padding:26px 0 6px}
+.rewards-sec{position:relative;padding:26px 0 6px;overflow-x:clip}
 .rw-head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
 .rw-head .rw-lab{font-size:12px;font-weight:900;letter-spacing:.22em;color:var(--muted)}
 .rw-head h2{font-family:var(--disp);font-size:clamp(24px,4.6vw,36px);margin:0}
@@ -2025,7 +2025,7 @@ table.rg48-t tr.rg48-click:hover td{background:rgba(255,176,0,.05)}
 .rw-arrow svg{width:18px;height:18px}
 .rw-arrow:hover{border-color:var(--gold);color:var(--gold-2)}
 .rw-arrow.flip svg{transform:rotate(180deg)}
-@media (max-width:640px){.rw-arrows{display:none}}
+@media (max-width:640px){.rw-arrows{display:flex}.rw-arrow{width:40px;height:40px}}
 .rw-fadewrap{position:relative}
 .rw-fadewrap::before,.rw-fadewrap::after{content:"";position:absolute;top:0;bottom:10px;width:44px;z-index:3;pointer-events:none}
 .rw-fadewrap::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
