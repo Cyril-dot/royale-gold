@@ -1,0 +1,16 @@
+import { requireRole } from "@/lib/auth";
+import { fail, ok, toErrorResponse } from "@/lib/http";
+import { depositsForAdminOn } from "@/lib/commission";
+import { todayStr } from "@/lib/money";
+
+/** Day detail: every deposit that day + day totals. ?date=YYYY-MM-DD (default today). */
+export async function GET(req: Request) {
+  try {
+    const admin = await requireRole("admin");
+    const date = new URL(req.url).searchParams.get("date") ?? todayStr();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("date must be YYYY-MM-DD");
+    return ok(await depositsForAdminOn(admin.id, date));
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+}

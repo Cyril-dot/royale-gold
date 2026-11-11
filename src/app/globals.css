@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* Royale Gold tokens — from the v48 artifact. */
+@theme {
+  --color-midnight: #070812;
+  --color-felt: #0c2b22;
+  --color-gold: #f2c230;
+  --color-cream: #fff6d8;
+  --color-live: #e5322d;
+  --color-steel: #141828;
+  --font-display: var(--font-display), "Anton", sans-serif;
+  --font-body: var(--font-body), "Outfit", sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-midnight);
+  color: var(--color-cream);
+  font-family: var(--font-body);
+}
