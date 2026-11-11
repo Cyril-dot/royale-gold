@@ -13,7 +13,7 @@ const outfit = Outfit({ subsets: ["latin"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "Royale Gold",
-  description: "Royale Gold — 29 games. Cash in GH₵, coins for play.",
+  description: "Royale Gold — 31 games. Cash in GH₵, coins for play.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

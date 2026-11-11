@@ -1,5 +1,5 @@
 // Homepage — v48: hero, rewards showcase directly under the hero,
-// games grid (29 games, 6 shown + "Show all games" on phone), Top Players
+// games grid (31 games, 6 shown + "Show all games" on phone), Top Players
 // podium + live wins feed, how-it-works, promotions, footer.
 
 "use client";
@@ -29,7 +29,7 @@ export default function Home() {
           <div className="sec-head">
             <span className="sec-tag">The floor</span>
             <h2>All the <em>games</em></h2>
-            <p className="sec-sub">29 games · every one playable · cash in GH₵, coins for play</p>
+            <p className="sec-sub">{TILE_GAMES.length} games · every one playable · cash in GH₵, coins for play</p>
           </div>
           <div className="gp-filters" role="group" aria-label="Filter games">
             {(["all", "cash", "coins", "crash"] as const).map((f) => (

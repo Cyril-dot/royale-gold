@@ -241,13 +241,13 @@ export function RpsRoom({ game }: { game: GameDef }) {
     else if (beats[pick] === c) { setMsg(`${pick} beats ${c} — ×2, ${fmtCash(stake * 2)}!`); await room.settle(stake, stake * 2, { pick, cpu: c }); }
     else { setMsg(`${c} beats ${pick} — stake gone.`); await room.settle(stake, 0, { pick, cpu: c }); }
   };
-  const glyph = (h: string) => (h === "rock" ? "✊" : h === "paper" ? "✋" : h === "scissors" ? "✌" : "?");
+  const glyph = (h: string) => (h === "rock" ? "ROCK" : h === "paper" ? "PAPER" : h === "scissors" ? "SCISSORS" : "?");
   return (
     <Shell game={game} subtitle="Win the throw, ×2. A draw returns your stake." stake={stake} setStake={setStake} msg={msg}>
       <div className="rps-stage"><span className="rps-hand">{glyph(you)}</span><span className="rps-versus">VS</span><span className="rps-hand">{glyph(cpu)}</span></div>
       <div className="rps-btns">
         {(["rock", "paper", "scissors"] as const).map((p) => (
-          <button key={p} type="button" className="btn btn-gold" onClick={() => void throwHand(p)}>{glyph(p)} {p}</button>
+          <button key={p} type="button" className="btn btn-gold" onClick={() => void throwHand(p)}>{p}</button>
         ))}
       </div>
     </Shell>

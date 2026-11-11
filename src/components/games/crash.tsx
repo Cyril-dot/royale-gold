@@ -167,7 +167,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
     ctx.stroke();
     // craft
     ctx.font = "34px serif";
-    ctx.fillText(skin === "jet" ? "✈" : "▲", x - 12, y - 8);
+    ctx.fillText(skin === "jet" ? "➤" : "▲", x - 12, y - 8);
     if (phase === "crashed") {
       ctx.font = "bold 22px sans-serif";
       ctx.fillStyle = "#E5322D";

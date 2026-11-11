@@ -1,4 +1,4 @@
-// Games page — all 29 games, count says 29, Coins/Cash filter chips,
+// Games page — all 31 games, count says 31, Coins/Cash filter chips,
 // search. (v48 games page, as a real route.)
 
 "use client";
@@ -39,7 +39,7 @@ function GamesInner() {
         <div className="gp-bar">
           <div className="wrap gp-bar-in">
             <Link className="gp-back" href="/" aria-label="Back to homepage"><span className="gp-back-coin">←</span></Link>
-            <div className="gp-title"><h2>All <em>games</em></h2><small>29 games · every one playable</small></div>
+            <div className="gp-title"><h2>All <em>games</em></h2><small>{TILE_GAMES.length} games · every one playable</small></div>
             <span className="gp-bal">{fmtCash(cash)} · {fmtCoins(coins)} coins</span>
           </div>
           <span className="xg-ver" aria-hidden="true">v48</span>
@@ -55,7 +55,7 @@ function GamesInner() {
           <div className="gp-search">
             <input type="search" placeholder="Search games…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search games" />
           </div>
-          <p className="gp-count">{list.length} of 29 games</p>
+          <p className="gp-count">{list.length} of {TILE_GAMES.length} games</p>
         </div>
       </div>
       <div className="wrap">
