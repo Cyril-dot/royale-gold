@@ -114,7 +114,7 @@ export default function AdminPanel({ previewAdminId, previewName }: { previewAdm
   if (err) {
     return (
       <main className="rg48-page-main">
-        <div className="wrap"><h2>Admin <em>panel</em></h2><p className="rg48-err">{err}</p><p>Only admins and the owner can open this panel.</p></div>
+        <div className="wrap"><h2>Admin <em>panel</em></h2><p className="rg48-err">{err}</p><p>Only admins can open this panel. The owner previews any admin from the Owner panel.</p></div>
       </main>
     );
   }

@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       });
       const data =
         type === "sim"
-          ? { simBalance: toDecimal(dec(user.simBalance) + 100), xp: { increment: 10 } }
+          ? { simBalance: round2(dec(user.simBalance) + 100), xp: { increment: 10 } }
           : { coins: { increment: 5 }, xp: { increment: 10 } };
       const u = await tx.user.update({ where: { id: user.id }, data });
       const level = 1 + Math.floor(u.xp / 100);

@@ -41,16 +41,16 @@ export async function POST(req: Request) {
 
       const updated = await tx.user.update({
         where: { id: user.id },
-        data: { cashBalance: toDecimal(dec(fresh.cashBalance) + amount) },
+        data: { cashBalance: round2(dec(fresh.cashBalance) + amount) },
       });
       const event = await tx.depositEvent.create({
         data: {
           userId: user.id,
           adminId,
-          amount: toDecimal(amount),
+          amount: round2(amount),
           method,
-          pctInForce: toDecimal(pctInForce),
-          commission: toDecimal(commission),
+          pctInForce: round2(pctInForce),
+          commission: round2(commission),
         },
       });
       return { updated, event, commission };

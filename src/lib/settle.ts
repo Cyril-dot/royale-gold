@@ -48,7 +48,7 @@ export async function settleGame(
         ? await tx.user.update({
             where: { id: userId },
             data: {
-              cashBalance: toDecimal(dec(user.cashBalance) - stake + payout),
+              cashBalance: round2(dec(user.cashBalance) - stake + payout),
               xp: { increment: 2 },
             },
           })

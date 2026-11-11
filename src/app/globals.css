@@ -236,3 +236,31 @@ body {
   .acct-chip .ac-bals{display:flex}
 }
 
+
+/* Phone header — v48's phone rules assume the header is only logo +
+   balance + Deposit, so the extra controls this build carries (REAL/SIM
+   toggle, mute, coin pill, Log in + Register, account chip) overflowed
+   by ~195px. Fix: the right cluster takes its own full-width row and
+   wraps; Register stays visible and the account name stays visible
+   (the v48 phone-header defect fix). Higher specificity than v48.css
+   (imported after this file) so these rules win. */
+@media (max-width:640px){
+  header.site .hdr-main{flex-wrap:wrap}
+  header.site .chipnav{order:3;width:100%;justify-content:center;overflow-x:auto;scrollbar-width:none}
+  header.site .chipnav::-webkit-scrollbar{display:none}
+  header.site .hdr-right{flex:1 1 100%;max-width:100%;flex-wrap:wrap;justify-content:flex-end;row-gap:6px}
+  header.site .mode-toggle button{padding:6px 8px;font-size:11px;min-height:34px}
+  header.site .icon-btn{width:36px;height:36px;flex:none}
+  header.site .btn-dep,header.site .btn-acct{min-height:40px;font-size:13px;padding:0 12px}
+  /* account chip: name + role stay visible on phone (v48 hid them) */
+  header.site .acct-chip{padding:5px 10px 5px 5px;gap:8px}
+  header.site .acct-chip .ac-id{display:block}
+  header.site .acct-chip .ac-name{display:block;max-width:96px}
+  header.site .acct-chip .ac-bals{display:none}
+}
+
+/* html-level clip so the rewards snap-strip's scrollable width (and any
+   other intentional in-page scroller) never inflates the document's
+   scrollWidth at phone widths. `clip` (not hidden) keeps position:sticky
+   working. body already has overflow-x:hidden from v48.css. */
+html{overflow-x:clip}
