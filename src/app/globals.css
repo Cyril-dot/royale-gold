@@ -37,8 +37,10 @@ body {
 .acct-menu a:hover,.acct-menu button:hover{background:rgba(242,194,48,.12)}
 
 /* hero slot reels (2D replacement for the export's WebGL slot) */
-.slot-reels{display:flex;gap:6px;align-items:center;justify-content:center;height:100%}
-.slot-reel{flex:1;display:grid;place-items:center;font-size:clamp(28px,4vw,44px);font-weight:900;color:#231600;background:linear-gradient(180deg,#FFFDF4,#E7DFC6);border-radius:10px;height:82%}
+.slot-view{width:clamp(248px,31vw,392px);height:clamp(104px,12.5vw,148px)}
+@media (max-width:480px){.slot-view{width:min(248px,58vw);height:104px}}
+.slot-reels{display:flex;gap:6px;align-items:center;justify-content:center;height:100%;padding:10px;box-sizing:border-box}
+.slot-reel{flex:1;display:grid;place-items:center;font-size:clamp(28px,4vw,44px);font-weight:900;color:#231600;background:linear-gradient(180deg,#FFFDF4,#E7DFC6);border-radius:10px;height:100%}
 
 /* game tile glyph fallback (games with no supplied cover) */
 .g-glyph{display:grid;place-items:center;width:100%;height:100%;font-family:var(--font-display,Anton,sans-serif);font-size:44px;color:var(--gold-2,#FFD964);background:radial-gradient(120% 140% at 50% 0%,#17503C,#0C2B22 60%,#081F18);letter-spacing:.02em}
