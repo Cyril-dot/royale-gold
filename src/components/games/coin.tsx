@@ -1,0 +1,244 @@
+// Coin games (play-only coins, never withdrawable) — v48 rules.
+// Keno: pick 5, draw 20 of 80; 3 matches ×2, 4 ×4, 5 ×6.5 (tile headline
+// "Match 3 · ×6.5"; the 3/4 tiers are the standard ladder under that cap).
+// Memory Match: 4 pairs; ≤5 moves ×2, 6 ×1.15, 7 ×0.6, 8 ×0.3 (v48 exact).
+// Whack-a-Mole: 30s; golden moles worth more; 20+ pts ×2, 12+ ×1.2.
+// Scratch Card: 3×3, scratch to reveal; match 3 gold ×10, silver ×5,
+// bronze ×2.
+
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { fmtCoins } from "../../lib/api";
+import { GameDef } from "../../lib/games";
+import { RoomShell, StakeChips, useGameRoom } from "./shared";
+
+function useCoin(game: GameDef, subtitle: string) {
+  const room = useGameRoom(game);
+  const [stake, setStake] = useState(5);
+  const [msg, setMsg] = useState(subtitle);
+  return { room, stake, setStake, msg, setMsg };
+}
+
+// ---------------- Keno ----------------
+export function KenoRoom({ game }: { game: GameDef }) {
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Pick 5 numbers — the draw picks 20. Match 3 or more to win, up to ×6.5.");
+  const [picked, setPicked] = useState<number[]>([]);
+  const [drawn, setDrawn] = useState<number[]>([]);
+  const [done, setDone] = useState(false);
+  const toggle = (n: number) => {
+    if (done) return;
+    setPicked((p) => (p.includes(n) ? p.filter((x) => x !== n) : p.length < 5 ? [...p, n] : p));
+  };
+  const draw = async () => {
+    if (picked.length !== 5) { setMsg("Pick 5 numbers first."); return; }
+    const pool = Array.from({ length: 80 }, (_, i) => i + 1);
+    const d: number[] = [];
+    while (d.length < 20) { const n = pool.splice(Math.floor(Math.random() * pool.length), 1)[0]; d.push(n); }
+    setDrawn(d);
+    setDone(true);
+    const hits = picked.filter((n) => d.includes(n)).length;
+    const mult = hits === 5 ? 6.5 : hits === 4 ? 4 : hits === 3 ? 2 : 0;
+    const payout = Math.round(stake * mult);
+    setMsg(hits >= 3 ? `${hits} matches — ×${mult}! ${fmtCoins(payout)} coins` : `${hits} matches — no win this draw.`);
+    await room.settle(stake, payout, { picked, drawn: d, hits });
+  };
+  const reset = () => { setPicked([]); setDrawn([]); setDone(false); };
+  return (
+    <RoomShell game={game} subtitle="Pick 5 numbers — the draw picks 20. Match 3 or more to win, up to ×6.5." stats={room.stats} history={room.history}>
+      <div className="xg-controls">
+        <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={done} />
+        <div className="keno-grid" role="group" aria-label="Pick 5 numbers">
+          {Array.from({ length: 80 }, (_, i) => i + 1).map((n) => (
+            <button key={n} type="button" className={`keno-num${picked.includes(n) ? " picked" : ""}${drawn.includes(n) ? " drawn" : ""}`} aria-pressed={picked.includes(n)} onClick={() => toggle(n)} disabled={done}>{n}</button>
+          ))}
+        </div>
+        {!done && <button className="btn btn-gold xg-action" type="button" onClick={() => void draw()} disabled={picked.length !== 5}>Draw · {stake} coins</button>}
+        {done && <button className="btn btn-ghost xg-action" type="button" onClick={reset}>Play again</button>}
+        <p className="bottle-msg xg-msg">{msg}</p>
+        {done && <p className="xg-msg">Your picks: {picked.join(", ")} · Hits: {picked.filter((n) => drawn.includes(n)).length}</p>}
+      </div>
+    </RoomShell>
+  );
+}
+
+// ---------------- Memory Match ----------------
+const MEM_SYMBOLS = ["♠", "♥", "♦", "♣", "★", "◆", "●", "▲"];
+function memTier(moves: number) { return moves <= 5 ? 2 : moves === 6 ? 1.15 : moves === 7 ? 0.6 : moves === 8 ? 0.3 : 0; }
+export function MemoryRoom({ game }: { game: GameDef }) {
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Find all 4 pairs — clear in 5 moves for ×2.");
+  const [deck, setDeck] = useState<string[]>([]);
+  const [flipped, setFlipped] = useState<number[]>([]);
+  const [matched, setMatched] = useState<number[]>([]);
+  const [moves, setMoves] = useState(0);
+  const [started, setStarted] = useState(false);
+  const [over, setOver] = useState(false);
+  const start = () => {
+    const d = [...MEM_SYMBOLS.slice(0, 4), ...MEM_SYMBOLS.slice(0, 4)].sort(() => Math.random() - 0.5);
+    setDeck(d); setFlipped([]); setMatched([]); setMoves(0); setStarted(true); setOver(false);
+    setMsg("Tap two cards to find a pair.");
+  };
+  const flip = (i: number) => {
+    if (!started || over || flipped.includes(i) || matched.includes(i) || flipped.length === 2) return;
+    const f = [...flipped, i];
+    setFlipped(f);
+    if (f.length === 2) {
+      const m = moves + 1;
+      setMoves(m);
+      if (deck[f[0]] === deck[f[1]]) {
+        const nm = [...matched, ...f];
+        setMatched(nm);
+        setFlipped([]);
+        if (nm.length === 8) {
+          const mult = memTier(m);
+          const payout = Math.round(stake * mult);
+          setOver(true);
+          setMsg(mult > 1 ? `All 4 pairs in ${m} moves — ×${mult}! ${fmtCoins(payout)} coins` : mult > 0 ? `All 4 pairs in ${m} moves — ×${mult}, ${fmtCoins(payout)} coins back` : `All 4 pairs, but ${m} moves is past the last paying tier (8). Nothing back.`);
+          void room.settle(stake, payout, { moves: m, mult });
+        } else setMsg(`Pair found — ${nm.length / 2} of 4.`);
+      } else {
+        setTimeout(() => setFlipped([]), 700);
+      }
+    }
+  };
+  return (
+    <RoomShell game={game} subtitle="Find all 4 pairs — clear in 5 moves for ×2." stats={room.stats} history={room.history}>
+      <div className="xg-controls">
+        <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={started && !over} />
+        <div className="mem-grid">
+          {deck.map((s, i) => (
+            <button key={i} type="button" className={`mem-card${flipped.includes(i) || matched.includes(i) ? " up" : ""}`} onClick={() => flip(i)} disabled={!started || over}>
+              {flipped.includes(i) || matched.includes(i) ? s : "?"}
+            </button>
+          ))}
+        </div>
+        <div className="mem-hud">Moves: {moves} · Pairs: {matched.length / 2}/4</div>
+        {(!started || over) && <button className="btn btn-gold xg-action" type="button" onClick={start}>{over ? "Play again" : `Start · ${stake} coins`}</button>}
+        <p className="bottle-msg xg-msg">{msg}</p>
+      </div>
+    </RoomShell>
+  );
+}
+
+// ---------------- Whack-a-Mole ----------------
+export function WhackRoom({ game }: { game: GameDef }) {
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "30 seconds — whack the moles. Golden moles are worth 3. 20+ points pays ×2.");
+  const [playing, setPlaying] = useState(false);
+  const [score, setScore] = useState(0);
+  const [time, setTime] = useState(30);
+  const [active, setActive] = useState<{ hole: number; golden: boolean } | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const spawnRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scoreRef = useRef(0);
+
+  const end = async (finalScore: number) => {
+    setPlaying(false);
+    setActive(null);
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (spawnRef.current) clearInterval(spawnRef.current);
+    const mult = finalScore >= 20 ? 2 : finalScore >= 12 ? 1.2 : 0;
+    const payout = Math.round(stake * mult);
+    setMsg(finalScore >= 12 ? `${finalScore} points — ×${mult}! ${fmtCoins(payout)} coins` : `${finalScore} points — not enough for a payout this time.`);
+    await room.settle(stake, payout, { score: finalScore, mult });
+  };
+
+  const start = () => {
+    setScore(0); scoreRef.current = 0; setTime(30); setPlaying(true);
+    setMsg("Whack!");
+    timerRef.current = setInterval(() => {
+      setTime((t) => {
+        if (t <= 1) { void end(scoreRef.current); return 0; }
+        return t - 1;
+      });
+    }, 1000);
+    spawnRef.current = setInterval(() => {
+      setActive({ hole: Math.floor(Math.random() * 9), golden: Math.random() < 0.2 });
+      setTimeout(() => setActive((a) => (a ? null : a)), 750);
+    }, 850);
+  };
+
+  const whack = (hole: number) => {
+    if (!playing || !active || active.hole !== hole) return;
+    const pts = active.golden ? 3 : 1;
+    scoreRef.current += pts;
+    setScore(scoreRef.current);
+    setActive(null);
+  };
+
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); if (spawnRef.current) clearInterval(spawnRef.current); }, []);
+
+  return (
+    <RoomShell game={game} subtitle="30 seconds — whack the moles. Golden moles are worth 3. 20+ points pays ×2." stats={room.stats} history={room.history}>
+      <div className="xg-controls">
+        <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
+        <div className="wm-hud">Time: {time}s · Points: {score}</div>
+        <div className="wm-grid">
+          {Array.from({ length: 9 }, (_, i) => (
+            <button key={i} type="button" className={`wm-hole${active?.hole === i ? (active.golden ? " golden" : " up") : ""}`} onClick={() => whack(i)} disabled={!playing} aria-label={`Hole ${i + 1}`}>
+              {active?.hole === i ? (active.golden ? "★" : "●") : ""}
+            </button>
+          ))}
+        </div>
+        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start · {stake} coins</button>}
+        <p className="bottle-msg xg-msg">{msg}</p>
+      </div>
+    </RoomShell>
+  );
+}
+
+// ---------------- Scratch Card ----------------
+const SC_PRIZES: Record<string, number> = { gold: 10, silver: 5, bronze: 2 };
+export function ScratchRoom({ game }: { game: GameDef }) {
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Scratch all 9 — match 3 of a kind. Three gold pays ×10.");
+  const [cells, setCells] = useState<string[]>([]);
+  const [revealed, setRevealed] = useState<boolean[]>(Array(9).fill(false));
+  const [done, setDone] = useState(false);
+  const start = () => {
+    // Build a board: either a winning line (weighted) or a spread.
+    const syms = ["gold", "silver", "bronze", "star", "coin"];
+    const board = Array.from({ length: 9 }, () => syms[Math.floor(Math.random() * syms.length)]);
+    const roll = Math.random();
+    if (roll < 0.12) { const s = roll < 0.04 ? "gold" : roll < 0.08 ? "silver" : "bronze"; board[0] = board[1] = board[2] = s; }
+    setCells(board);
+    setRevealed(Array(9).fill(false));
+    setDone(false);
+    setMsg("Tap each square to scratch it off.");
+  };
+  const scratch = (i: number) => {
+    if (done || revealed[i] || cells.length === 0) return;
+    const r = [...revealed];
+    r[i] = true;
+    setRevealed(r);
+    if (r.every(Boolean)) {
+      const lines = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+      let best = 0;
+      let bestSym = "";
+      for (const [a, b, c] of lines) {
+        if (cells[a] === cells[b] && cells[b] === cells[c] && SC_PRIZES[cells[a]]) {
+          if (SC_PRIZES[cells[a]] > best) { best = SC_PRIZES[cells[a]]; bestSym = cells[a]; }
+        }
+      }
+      const payout = Math.round(stake * best);
+      setDone(true);
+      setMsg(best > 0 ? `Three ${bestSym}! ×${best} — ${fmtCoins(payout)} coins` : "No match of three — better luck next card.");
+      void room.settle(stake, payout, { best, bestSym });
+    }
+  };
+  const glyph = (s: string) => (s === "gold" ? "★" : s === "silver" ? "◆" : s === "bronze" ? "●" : s === "star" ? "✦" : "◉");
+  return (
+    <RoomShell game={game} subtitle="Scratch all 9 — match 3 of a kind. Three gold pays ×10." stats={room.stats} history={room.history}>
+      <div className="xg-controls">
+        <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={cells.length > 0 && !done} />
+        <div className="sc-grid">
+          {cells.map((s, i) => (
+            <button key={i} type="button" className={`sc-cell${revealed[i] ? " open" : ""}`} onClick={() => scratch(i)}>
+              {revealed[i] ? glyph(s) : "✦"}
+            </button>
+          ))}
+        </div>
+        {(cells.length === 0 || done) && <button className="btn btn-gold xg-action" type="button" onClick={start}>{done ? "New card" : `Buy card · ${stake} coins`}</button>}
+        <p className="bottle-msg xg-msg">{msg}</p>
+      </div>
+    </RoomShell>
+  );
+}

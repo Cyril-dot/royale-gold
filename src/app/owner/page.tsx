@@ -1,13 +1,206 @@
-/**
- * STUB — the UI agent ports the real v48 Owner panel here
- * (add/edit/deactivate admins, rollup, preview any admin).
- * Data comes from /api/owner/* — see API_CONTRACT.md.
- */
+// Owner panel — add/edit/deactivate admins, set %, all admins with
+// codes / referral counts / coins given / daily commission per admin per
+// day with date picker, overall totals, per-day per-admin table,
+// all-admins rollup, preview any admin's panel.
+
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { api, fmtCash } from "../../lib/api";
+import { useStore } from "../../lib/store";
+import AdminPanel, { todayStr } from "../../components/AdminPanel";
+
+interface AdminRow {
+  id: string; name: string; email: string; role: string; commissionPct: number | null; active: boolean;
+  codes: { id: string; code: string; active: boolean }[];
+  referralCount: number; coinsGiven: number; commissionAllTime: number; createdAt: string;
+}
+interface RollupDay { date: string; adminId: string; adminName: string; deposits: number; totalAmount: number; totalCommission: number }
+interface OwnerDayAdmin { admin: { id: string; name: string }; deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; pctInForce: number; commission: number; time: string }[]; totalAmount: number; totalCommission: number }
+
 export default function OwnerPage() {
+  const { user, openAuth, toast } = useStore();
+  const [admins, setAdmins] = useState<AdminRow[]>([]);
+  const [rollup, setRollup] = useState<{ days: RollupDay[]; totals: { deposits: number; totalAmount: number; totalCommission: number } } | null>(null);
+  const [err, setErr] = useState("");
+  const [date, setDate] = useState("");
+  useEffect(() => { setDate(todayStr()); }, []);
+  const [dayAdmins, setDayAdmins] = useState<OwnerDayAdmin[] | null>(null);
+  const [dayTotals, setDayTotals] = useState<{ deposits: number; totalAmount: number; totalCommission: number } | null>(null);
+  const [preview, setPreview] = useState<AdminRow | null>(null);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [pct, setPct] = useState(10);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Record<string, number>>({});
+
+  const load = useCallback(async () => {
+    try {
+      const a = await api<{ admins: AdminRow[] }>("/api/owner/admins");
+      setAdmins(a.admins);
+      setRollup(await api<{ days: RollupDay[]; totals: { deposits: number; totalAmount: number; totalCommission: number } }>("/api/owner/rollup"));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load owner panel.");
+    }
+  }, []);
+
+  const loadDay = useCallback(async (d: string) => {
+    try {
+      const r = await api<{ date: string; admins: OwnerDayAdmin[]; totals: { deposits: number; totalAmount: number; totalCommission: number } }>(`/api/owner/commission?date=${d}`);
+      setDayAdmins(r.admins);
+      setDayTotals(r.totals);
+    } catch {
+      setDayAdmins(null);
+      setDayTotals(null);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (date) void loadDay(date); }, [date, loadDay]);
+
+  if (!user) {
+    return (
+      <main className="rg48-page-main"><div className="wrap">
+        <h2>Owner <em>panel</em></h2>
+        <p>Log in as the owner to see this panel.</p>
+        <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>Log in</button>
+      </div></main>
+    );
+  }
+  if (err) {
+    return (
+      <main className="rg48-page-main"><div className="wrap">
+        <h2>Owner <em>panel</em></h2>
+        <p className="rg48-err">{err}</p>
+        <p>Only the owner can open this panel.</p>
+      </div></main>
+    );
+  }
+
+  const addAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api("/api/owner/admins", { method: "POST", body: JSON.stringify({ name: name.trim(), email: email.trim(), password, commissionPct: pct }) });
+      setName(""); setEmail(""); setPassword(""); setPct(10);
+      toast("Admin added", "win");
+      await load();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not add admin", "lose");
+    } finally { setBusy(false); }
+  };
+
+  const savePct = async (id: string) => {
+    const v = editing[id];
+    if (v === undefined) return;
+    try {
+      await api(`/api/owner/admins/${id}`, { method: "PATCH", body: JSON.stringify({ commissionPct: v }) });
+      toast("Commission % updated — future deposits only", "win");
+      await load();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Update failed", "lose");
+    }
+  };
+  const toggleActive = async (a: AdminRow) => {
+    try {
+      await api(`/api/owner/admins/${a.id}`, { method: "PATCH", body: JSON.stringify({ active: !a.active }) });
+      toast(a.active ? "Admin deactivated" : "Admin reactivated", "win");
+      await load();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Update failed", "lose");
+    }
+  };
+
+  if (preview) {
+    return (
+      <>
+        <div className="wrap" style={{ paddingTop: 16 }}>
+          <button className="btn btn-ghost" type="button" onClick={() => setPreview(null)}>← Back to owner panel</button>
+        </div>
+        <AdminPanel previewAdminId={preview.id} previewName={preview.name} />
+      </>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-midnight px-6 py-10 text-cream">
-      <h1 className="font-display text-4xl text-gold">OWNER PANEL</h1>
-      <p className="mt-3 text-cream/80">Stub — owner panel (admins, commission rollup, previews) lands here from the v48 port.</p>
+    <main className="rg48-page-main">
+      <div className="wrap">
+        <div className="rg48-hbar-in">
+          <Link className="gp-back" href="/" aria-label="Back"><span className="gp-back-coin">←</span></Link>
+          <h2>Owner <em>panel</em></h2>
+        </div>
+
+        <section className="admin-sec">
+          <h3>Overall totals</h3>
+          {rollup && <p>{rollup.totals.deposits} deposits · {fmtCash(rollup.totals.totalAmount)} deposited · {fmtCash(rollup.totals.totalCommission)} commission across all admins</p>}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Add admin</h3>
+          <form className="owner-add" onSubmit={addAdmin}>
+            <input type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+            <label>Commission % <input type="number" min={0} max={100} value={pct} onChange={(e) => setPct(Number(e.target.value))} /></label>
+            <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Adding…" : "Add admin"}</button>
+          </form>
+        </section>
+
+        <section className="admin-sec">
+          <h3>All admins ({admins.length})</h3>
+          {admins.map((a) => (
+            <div key={a.id} className="admin-row">
+              <div>
+                <b>{a.name}</b> <span>{a.email}</span> <span className={a.active ? "ok" : "bad"}>{a.active ? "Active" : "Deactivated"}</span>
+                <div className="admin-meta">Codes: {a.codes.map((c) => c.code).join(", ") || "—"} · Referrals: {a.referralCount} · Coins given: {a.coinsGiven} · Commission all-time: {fmtCash(a.commissionAllTime)}</div>
+              </div>
+              <div className="admin-edit">
+                <label>% <input type="number" min={0} max={100} defaultValue={a.commissionPct ?? 0} onChange={(e) => setEditing((ed) => ({ ...ed, [a.id]: Number(e.target.value) }))} /></label>
+                <button className="btn btn-ghost btn-sm" type="button" onClick={() => void savePct(a.id)}>Save %</button>
+                <button className="btn btn-ghost btn-sm" type="button" onClick={() => void toggleActive(a)}>{a.active ? "Deactivate" : "Reactivate"}</button>
+                <button className="btn btn-gold btn-sm" type="button" onClick={() => setPreview(a)}>Preview panel</button>
+              </div>
+            </div>
+          ))}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Per-day per-admin commission</h3>
+          <label className="date-pick">Pick a day <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} /></label>
+          {dayTotals && <p>{dayTotals.deposits} deposits · {fmtCash(dayTotals.totalAmount)} deposited · {fmtCash(dayTotals.totalCommission)} commission on {date}</p>}
+          {dayAdmins && dayAdmins.length === 0 && <p className="bh-empty">No deposits that day.</p>}
+          {dayAdmins?.map((da) => (
+            <div key={da.admin.id} className="day-admin">
+              <h4>{da.admin.name} — {fmtCash(da.totalAmount)} · {fmtCash(da.totalCommission)} commission</h4>
+              <table className="dep-table">
+                <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th></tr></thead>
+                <tbody>
+                  {da.deposits.map((d) => (
+                    <tr key={d.id}><td>{d.userName}</td><td>{d.userContact}</td><td>{fmtCash(d.amount)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtCash(d.commission)} ({d.pctInForce}%)</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </section>
+
+        <section className="admin-sec">
+          <h3>All-admins rollup — every active day</h3>
+          {!rollup || rollup.days.length === 0 ? <p>No commission days yet.</p> : (
+            <table className="dep-table">
+              <thead><tr><th>Date</th><th>Admin</th><th>Deposits</th><th>Total deposited</th><th>Commission</th></tr></thead>
+              <tbody>
+                {rollup.days.map((d, i) => (
+                  <tr key={`${d.date}-${d.adminId}-${i}`}><td>{d.date}</td><td>{d.adminName}</td><td>{d.deposits}</td><td>{fmtCash(d.totalAmount)}</td><td>{fmtCash(d.totalCommission)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </div>
     </main>
   );
 }
