@@ -89,7 +89,7 @@ export function useGameRoom(game: GameDef) {
 }
 
 export function StakeChips({ stake, setStake, currency, disabled }: { stake: number; setStake: (n: number) => void; currency: "cash" | "coins"; disabled?: boolean }) {
-  const chips = currency === "coins" ? [1, 5, 10] : [1, 5, 10, 25, 50, 100];
+  const chips = currency === "coins" ? [1, 5, 10] : [5, 10, 25];
   return (
     <div className="stake-row" role="group" aria-label="Stake">
       <span className="stake-lab">Stake {currency === "coins" ? "coins" : "GH₵"}</span>

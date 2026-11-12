@@ -2,8 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Anton, Outfit } from "next/font/google";
 import "./globals.css";
 import "./v48.css";
+import "./hdr-menu.css";
 import { StoreProvider } from "../lib/store";
 import Header from "../components/Header";
+import Dock from "../components/Dock";
 import AuthModal from "../components/AuthModal";
 import DepositModal from "../components/DepositModal";
 import Toasts from "../components/Toasts";
@@ -35,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Header />
           <Toasts />
           {children}
+          <Dock />
           <AuthModal />
           <DepositModal />
         </StoreProvider>

@@ -1,0 +1,40 @@
+/* ============ Phone header submenu (round 4) — MOBILE-FIRST ============
+   The header no longer shows all 9 controls on phone. The tools row
+   (search, REAL/SIM, sound, LV) moves into a submenu; the header is
+   2 short rows: money (balance + coins + Deposit) and auth (brand coin
+   + Log in/Register or account chip + menu button). Nothing deleted —
+   every control stays reachable, visible or one tap away in the menu.
+   All rules live here (inline <style>): CSS Modules do not work in
+   this repo and globals.css belongs to round 3. Overrides use the
+   #siteHdr id so they beat the v48.css rules that load after
+   globals.css. */
+@media (max-width:640px){
+  /* tools row retires — its controls live in the submenu now */
+  header#siteHdr .hdr-main .hdr-row-1{display:none}
+  /* line 1: money row, full width */
+  header#siteHdr .hdr-main .hdr-row-2{order:1;flex:1 1 100%}
+  /* line 2: brand coin + auth row share the line */
+  header#siteHdr .hdr-main .brand{order:2;align-self:center}
+  header#siteHdr .hdr-main .hdr-row-3{order:2;flex:1 1 auto}
+  header#siteHdr .hdr-main{column-gap:7px}
+  /* menu trigger: 36px, thumb row */
+  header#siteHdr .hdr-menu-btn{flex:0 0 auto;width:36px;height:36px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  header#siteHdr .hdr-menu-btn:active{transform:scale(.96)}
+  /* submenu panel: felt card, gold edge, hangs below the header */
+  .hdr-zone .hdr-tools-menu{position:absolute;top:calc(100% + 8px);right:12px;width:min(300px,calc(100vw - 24px));background:#0C2B22;border:1px solid rgba(242,194,48,.38);border-radius:14px;box-shadow:0 18px 44px rgba(0,0,0,.6);padding:6px;z-index:70;animation:hdrMenuIn 160ms ease-out}
+  @keyframes hdrMenuIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+  .hdr-zone .hdr-tools-menu .htm-row{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 10px;border-radius:10px;color:#FFF6D8;font-size:14px;font-weight:600;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  .hdr-zone .hdr-tools-menu .htm-row + .htm-row{border-top:1px solid rgba(255,246,216,.09)}
+  .hdr-zone .hdr-tools-menu button.htm-row{width:100%;background:none;border:0;cursor:pointer;text-align:left}
+  .hdr-zone .hdr-tools-menu button.htm-row:active{background:rgba(242,194,48,.13);transform:scale(.99)}
+  .hdr-zone .hdr-tools-menu .htm-lab{flex:1 1 auto}
+  .hdr-zone .hdr-tools-menu .htm-ctl{flex:0 0 auto;display:flex;align-items:center;gap:8px}
+  .hdr-zone .hdr-tools-menu .htm-ctl .icon-btn{width:32px;height:32px}
+}
+@media (min-width:641px){
+  header#siteHdr .hdr-menu-btn,.hdr-zone .hdr-tools-menu{display:none!important}
+}
+@media (prefers-reduced-motion: reduce){
+  .hdr-zone .hdr-tools-menu{animation:none}
+}
+      

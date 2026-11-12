@@ -9,7 +9,6 @@ import { useState } from "react";
 import Hero from "../components/Hero";
 import GameTile from "../components/GameTile";
 import VerbTilt from "../components/VerbTilt";
-import Dock from "../components/Dock";
 import { LIVE_WINS, TILE_GAMES, TOP_PLAYERS } from "../lib/tiles";
 import { fmtCash } from "../lib/api";
 
@@ -161,8 +160,6 @@ export default function Home() {
           <p className="foot-legal">All balances, jackpots, player counts and winnings shown on this page are demo figures for the design sample.</p>
         </div>
       </footer>
-
-      <Dock />
     </main>
   );
 }

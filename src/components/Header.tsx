@@ -7,7 +7,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { fmtCash, fmtCoins } from "../lib/api";
 import { useJackpot } from "../lib/jackpot";
@@ -16,23 +16,59 @@ import { useStore } from "../lib/store";
 export default function Header() {
   const { user, wallet, mode, setMode, muted, toggleMute, openAuth, logout, setDepositOpen } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsBtnRef = useRef<HTMLButtonElement | null>(null);
+  const toolsPanelRef = useRef<HTMLDivElement | null>(null);
   const [hidden, setHidden] = useState(false);
   const [balHidden, setBalHidden] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const lastY = useRef(0);
   const router = useRouter();
+  const pathname = usePathname();
   const { jackpotText } = useJackpot();
 
   useEffect(() => {
     const onScroll = () => {
       const y = window.scrollY;
-      setHidden(y > 140 && y > lastY.current);
+      const hiding = y > 140 && y > lastY.current;
+      setHidden(hiding);
+      if (hiding) setToolsOpen(false);
       lastY.current = y;
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Tools submenu: close on route change.
+  useEffect(() => { setToolsOpen(false); }, [pathname]);
+
+  // Tools submenu: close on outside tap / Esc, focus the first row on open.
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const panel = toolsPanelRef.current;
+    panel?.querySelector<HTMLElement>("button")?.focus();
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (toolsPanelRef.current?.contains(t)) return;
+      if (toolsBtnRef.current?.contains(t)) return;
+      setToolsOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setToolsOpen(false);
+        toolsBtnRef.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown, { passive: true });
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [toolsOpen]);
 
   const cash = wallet?.cash ?? user?.cash ?? 0;
   const coins = wallet?.coins ?? user?.coins ?? 0;
@@ -127,7 +163,7 @@ export default function Header() {
                 </>
               ) : (
                 <div className="acct-wrap">
-                  <button className="acct-chip" type="button" aria-haspopup="true" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
+                  <button className="acct-chip" type="button" aria-haspopup="true" aria-expanded={menuOpen} onClick={() => { setToolsOpen(false); setMenuOpen((v) => !v); }}>
                     <span className="ac-av">{user.name.trim().charAt(0).toUpperCase()}</span>
                     <span className="ac-id">
                       <span className="ac-name">{user.name.split(" ")[0]}</span>
@@ -149,6 +185,13 @@ export default function Header() {
                 </div>
               )}
             </div>
+            <button ref={toolsBtnRef} className="icon-btn hdr-menu-btn" type="button" aria-label="More options" aria-haspopup="true" aria-expanded={toolsOpen} aria-controls="hdrToolsMenu" onClick={() => { setMenuOpen(false); setToolsOpen((v) => !v); }}>
+              {toolsOpen ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" /></svg>
+              )}
+            </button>
           </div>
         </div>
         <div className="hdr-ticker" aria-label="Jackpot ticker">
@@ -168,6 +211,44 @@ export default function Header() {
         </div>
         <div className="ver-strip"><span className="xg-ver hdr-ver" aria-hidden="true">v48</span></div>
       </header>
+      {toolsOpen && (
+        <div ref={toolsPanelRef} className="hdr-tools-menu" id="hdrToolsMenu" role="menu" aria-label="More options">
+          <button type="button" className="htm-row" role="menuitem" onClick={() => { setToolsOpen(false); setSearchOpen(true); }}>
+            <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z" /></svg>
+            <span className="htm-lab">Search games</span>
+          </button>
+          <div className="htm-row" role="menuitem">
+            <span className="htm-lab">Cash mode</span>
+            <span className="htm-ctl">
+              <span className="mode-toggle" role="group" aria-label="Real or demo cash">
+                <button type="button" className={mode === "REAL" ? "on" : ""} onClick={() => setMode("REAL")} aria-pressed={mode === "REAL"}>REAL</button>
+                <button type="button" className={mode === "SIM" ? "on" : ""} onClick={() => setMode("SIM")} aria-pressed={mode === "SIM"}>SIM</button>
+              </span>
+            </span>
+          </div>
+          <div className="htm-row" role="menuitem">
+            <span className="htm-lab">Sound {muted ? "off" : "on"}</span>
+            <span className="htm-ctl">
+              <button className="icon-btn" type="button" aria-label={muted ? "Unmute sound" : "Mute sound"} onClick={toggleMute}>
+                {muted ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z" /><path stroke="#E5322D" strokeWidth="2.4" strokeLinecap="round" d="M16.5 9.5l5 5M21.5 9.5l-5 5" /></svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z" /><path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M16 9.5a3.4 3.4 0 0 1 0 5M18.4 7a6.6 6.6 0 0 1 0 10" /></svg>
+                )}
+              </button>
+            </span>
+          </div>
+          <div className="htm-row" role="menuitem">
+            <span className="htm-lab">Level</span>
+            <span className="htm-ctl">
+              <span className="xp-chip" aria-label="Experience level">
+                <span className="xp-lvl">LV <b>{user?.level ?? 1}</b></span>
+                <span className="xp-bar"><i style={{ width: `${(user?.xp ?? 0) % 100}%` }} /></span>
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

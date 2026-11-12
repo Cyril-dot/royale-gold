@@ -60,7 +60,7 @@ export default function DepositModal() {
             <div className="rg48-f"><label>Method</label>
               <div className="dep-methods">
                 {METHODS.map((m) => (
-                  <button key={m} type="button" className={method === m ? "on" : ""} onClick={() => setMethod(m)} aria-pressed={method === m}>{m === "card" ? "Card" : m === "AirtelTigo" ? "AirtelTigo" : m}</button>
+                  <button key={m} type="button" className={method === m ? "on" : ""} onClick={() => setMethod(m)} aria-pressed={method === m}>{m === "card" ? "Bank card" : m === "AirtelTigo" ? "AirtelTigo" : m}</button>
                 ))}
               </div>
             </div>
