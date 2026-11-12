@@ -84,7 +84,7 @@ export default function AccountPage() {
         </section>
         <section className="admin-sec">
           <h3>Daily bonus</h3>
-          <p>Claim your daily +5 coins (and +100 SIM from the rewards strip on the homepage).</p>
+          <p>Claim your daily +5 coins.</p>
           <button className="btn btn-gold" type="button" onClick={() => void claimCoins()} disabled={claimBusy}>{claimBusy ? "Claiming…" : "Claim daily +5 coins"}</button>
         </section>
         <section className="admin-sec">

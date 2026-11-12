@@ -2026,51 +2026,6 @@ table.rg48-t tr.rg48-click:hover td{background:rgba(255,176,0,.05)}
 .rg48-inline input{flex:1;min-width:150px}
 .rg48-inline .btn{flex:0 0 auto}
 /* rewards showcase */
-.rewards-sec{position:relative;padding:26px 0 6px;overflow-x:clip}
-.rw-head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
-.rw-head .rw-lab{font-size:12px;font-weight:900;letter-spacing:.22em;color:var(--muted)}
-.rw-head h2{font-family:var(--disp);font-size:clamp(24px,4.6vw,36px);margin:0}
-.rw-head h2 em{color:var(--gold);font-style:normal}
-.rw-arrows{margin-left:auto;display:flex;gap:8px}
-.rw-arrow{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--steel);color:var(--ink);cursor:pointer;display:grid;place-items:center}
-.rw-arrow svg{width:18px;height:18px}
-.rw-arrow:hover{border-color:var(--gold);color:var(--gold-2)}
-.rw-arrow.flip svg{transform:rotate(180deg)}
-@media (max-width:640px){.rw-arrows{display:flex}.rw-arrow{width:40px;height:40px}}
-.rw-fadewrap{position:relative}
-.rw-fadewrap::before,.rw-fadewrap::after{content:"";position:absolute;top:0;bottom:10px;width:44px;z-index:3;pointer-events:none}
-.rw-fadewrap::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
-.rw-fadewrap::after{right:0;background:linear-gradient(-90deg,var(--bg),transparent)}
-.rw-strip{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:6px 2px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch;cursor:grab}
-.rw-strip::-webkit-scrollbar{display:none}
-.rw-strip.dragging{cursor:grabbing;scroll-snap-type:none}
-.rw-card{scroll-snap-align:start;flex:0 0 auto;width:238px;background:#0D101F;border:1px solid var(--line);border-radius:18px;padding:18px;position:relative;overflow:hidden;transition:transform .25s ease,border-color .25s ease}
-.rw-card:hover{transform:translateY(-4px);border-color:rgba(242,194,48,.5)}
-.rw-card .rw-ico{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:rgba(242,194,48,.1);color:var(--gold-2);margin-bottom:12px}
-.rw-card .rw-ico svg{width:24px;height:24px}
-.rw-card h4{margin:0 0 5px;font-size:16.5px}
-.rw-card p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
-.rw-card .rw-state{margin-top:12px;font-size:11px;font-weight:900;letter-spacing:.1em}
-.rw-prog{height:8px;border-radius:99px;background:rgba(255,246,216,.1);overflow:hidden;margin-top:13px}
-.rw-prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--gold-deep),var(--gold-2));transition:width .4s ease}
-.rw-prog-lab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:6px;font-weight:700}
-.rw-card.locked{opacity:.62}
-.rw-card.locked .rw-ico{background:rgba(255,246,216,.06);color:var(--faint)}
-.rw-card.unlocked{border-color:rgba(242,194,48,.65);box-shadow:0 0 24px rgba(242,194,48,.14),inset 0 0 22px rgba(242,194,48,.05)}
-.rw-card.unlocked .rw-state{color:var(--gold-2)}
-.rw-card.locked .rw-state{color:var(--faint)}
-.rw-hero-card{width:min(330px,84vw);background:linear-gradient(150deg,#2A2004,#141007 55%,#0D101F);border-color:rgba(242,194,48,.55)}
-.rw-hero-card h4{font-family:var(--disp);font-size:21px}
-.rw-claims{display:grid;gap:9px;margin-top:14px}
-.rw-claim{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:rgba(242,194,48,.09);border:1px solid rgba(242,194,48,.4);color:var(--ink);border-radius:12px;padding:11px 13px;font:inherit;cursor:pointer}
-.rw-claim b{font-size:14.5px}
-.rw-claim small{display:block;color:var(--muted);font-size:11.5px;font-weight:600}
-.rw-claim .rw-claim-amt{margin-left:auto;font-weight:900;color:var(--gold-2);white-space:nowrap}
-.rw-claim:disabled{opacity:.55;cursor:default}
-.rw-claim:not(:disabled):hover{background:rgba(242,194,48,.16)}
-.rw-streakline{display:flex;align-items:center;gap:8px;margin-top:13px;font-size:13px;font-weight:800;color:var(--gold-2)}
-.rw-count{font-size:12.5px;color:var(--muted);margin-top:11px;font-weight:600}
-.rw-flame-num{font-family:var(--disp);font-size:40px;color:#FF9E2C;line-height:1}
 /* trivia / snake / 2048 stages */
 .tv-q{font-size:clamp(18px,3.4vw,23px);font-weight:800;line-height:1.35;margin:4px 0 14px}
 .tv-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}

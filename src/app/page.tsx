@@ -1,13 +1,12 @@
-// Homepage — v48: hero, rewards showcase directly under the hero,
-// games grid (31 games, 6 shown + "Show all games" on phone), Top Players
-// podium + live wins feed, how-it-works, promotions, footer.
+// Homepage — v48: hero, games grid (31 games, 6 shown + "Show all games"
+// on phone), Top Players podium + live wins feed, how-it-works,
+// promotions, footer.
 
 "use client";
 
 import Link from "next/link";
 import { useState } from "react";
 import Hero from "../components/Hero";
-import RewardsStrip from "../components/RewardsStrip";
 import GameTile from "../components/GameTile";
 import { LIVE_WINS, TILE_GAMES, TOP_PLAYERS } from "../lib/tiles";
 import { fmtCash } from "../lib/api";
@@ -22,7 +21,6 @@ export default function Home() {
   return (
     <main id="top">
       <Hero />
-      <RewardsStrip />
 
       <section className="block" id="games">
         <div className="wrap">
