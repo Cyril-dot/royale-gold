@@ -4,9 +4,8 @@ Next.js 16 (App Router) + TypeScript + Tailwind CSS 4. Postgres via Prisma 7.
 Accounts, referrals (5 coins), admin/owner commission, cash/coin game split,
 rewards, trivia — with all money logic server-side in transactions.
 
-> **Status:** scaffold + database + auth + API (this is the backend agent's
-> deliverable). Pages under `src/app/` are **stubs** — the UI agent ports the
-> real v48 UI from `~/workspace/your_files/casino-homepage/casino-homepage.html`.
+> **Status:** full-stack — backend + the real v48 UI ported (no stubs).
+> Accounts, referrals, commission, cash/coin games, rewards, trivia.
 > No pushes, no deploys from here; the coordinator merges and pushes.
 
 ## Quick start (local)
@@ -131,13 +130,44 @@ file. Highlights:
 
 ## Vercel deploy (Chuks deploys himself — no Vercel tools used here)
 
-1. Push this repo to GitHub, import into Vercel (Next.js preset).
-2. Set env vars in the Vercel project: `DATABASE_URL` (Neon Postgres),
-   `JWT_SECRET` (long random string).
-3. Run once against the production DB (locally with the prod URL, or via
-   Vercel's build step if wired): `npx prisma db push` then `npx tsx prisma/seed.ts`.
+Do it in this order — env vars FIRST, then deploy:
+
+1. Create a Postgres database (Neon free tier works) and copy its
+   connection string. It must be reachable from the internet and use
+   `sslmode=require` (Neon URLs already include it).
+2. Push this repo to GitHub, import into Vercel (Next.js preset).
+   No `vercel.json` needed — Vercel auto-detects Next.js and runs
+   `npm run build`. `postinstall` runs `prisma generate`, so the
+   Prisma Client is always generated during install; it does not
+   need a live database.
+3. In the Vercel project → Settings → Environment Variables, set for
+   the Production environment (and Preview if you want previews):
+   - `DATABASE_URL` — the Neon Postgres connection string.
+   - `JWT_SECRET` — a long random string (`openssl rand -base64 32`).
+4. Create the tables and seed the demo accounts — run once against
+   the production DB from your own machine (do NOT paste the prod URL
+   into the repo or into chat):
+   ```bash
+   set -a; source .env; set +a   # with the PROD database url in .env
+   npx prisma db push
+   npx tsx prisma/seed.ts
+   ```
    (Seed is idempotent — owner/admin upsert, trivia only if the bank is empty.)
-4. No other build configuration needed: `next build` is the build command.
+   Or wire these two commands into Vercel's build step if you prefer.
+5. Deploy. No other build configuration needed: `next build` is the
+   build command, `next start` serves it.
+
+What the build does and does not need: `next build` never touches the
+database — no page queries Prisma at build time (game rooms are
+prerendered from the static catalogue in `src/lib/games.ts`, all data
+loads through `/api/*` at runtime). So the build succeeds even before
+step 4 runs. But the deployed site cannot serve real requests until
+steps 3–4 are done: without `DATABASE_URL` every API call fails, and
+without `db push` the tables do not exist yet.
+
+Demo accounts after seeding: owner `owner@royale.gold` / `owner123`,
+admin `admin@royale.gold` / `admin123` (10% commission, code `RG-DEMO1`).
+Change these passwords before going live.
 
 ## Repo layout
 
@@ -149,7 +179,7 @@ prisma.config.ts            Prisma 7 config (datasource URL, seed command)
 src/lib/                    prisma client, auth, money, games catalogue,
                             crash engine, settle, commission, rewards, trivia
 src/app/api/                all route handlers
-src/app/                    stub pages: /, /games, /admin, /owner, /account
+src/app/                    pages: /, /games, /games/[slug], /admin, /owner, /account
 API_CONTRACT.md             endpoint contract for the UI agent
 ```
 
