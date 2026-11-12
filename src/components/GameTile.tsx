@@ -36,8 +36,9 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
   const demo = () => toast(`${g.name} demo — free play-money mode, same game, no risk.`, "info");
 
   // Games page: the export's simpler gp-card — art + name + Play now,
-  // with the TOP ×n and 1 TAP pills on beginner art. No currency pill
-  // (the artifact's gp-card has none).
+  // with the TOP ×n and 1 TAP pills on beginner art. Currency is an
+  // icon only (top-right corner, below 1 TAP on beginner cards) —
+  // no "GH₵ CASH" / "COINS" text anywhere.
   if (simple) {
     return (
       <article className="gp-card" data-cats={m.tag} data-beginner={m.beginner || undefined}>
@@ -51,6 +52,9 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
           )}
           {m.beginner && m.top && <span className="gp-win">TOP {m.top}</span>}
           {m.beginner && <span className="gp-1tap">1 TAP</span>}
+          <span className={`g-cur-ico ${cur}${m.beginner ? " below-1tap" : ""}`} role="img" aria-label={cur === "coin" ? "Coin game" : "Cash game"}>
+            {cur === "coin" ? COIN_ICON : CASH_ICON}
+          </span>
         </div>
         <div className="gp-info">
           <h3>{g.name}</h3>
@@ -67,6 +71,9 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
     return (
       <Link href={`/games/${g.slug}`} className={`game g-fullart${sizeCls}${extra ? " g-extra" : ""}`} aria-label={g.name}>
         <img src={m.cover} alt={g.name} />
+        <span className={`g-cur-ico ${cur}`} role="img" aria-label={cur === "coin" ? "Coin game" : "Cash game"}>
+          {cur === "coin" ? COIN_ICON : CASH_ICON}
+        </span>
       </Link>
     );
   }
@@ -89,9 +96,8 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
       {m.beginner && m.top && <span className="g-topwin">TOP {m.top}</span>}
       <span className="g-players"><i />{m.players.toLocaleString("en-GH")}</span>
       <span className="g-mult">{m.mult}</span>
-      <span className={`g-cur ${cur}`}>
+      <span className={`g-cur-ico ${cur}`} role="img" aria-label={cur === "coin" ? "Coin game" : "Cash game"}>
         {cur === "coin" ? COIN_ICON : CASH_ICON}
-        {cur === "coin" ? "COINS" : "GH₵ CASH"}
       </span>
       <div className="g-info">
         <div className="g-txt">

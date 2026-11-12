@@ -1,0 +1,19 @@
+/* Round 5 — currency indicator: icon-only, top-right corner of the card.
+   Replaces the "GH₵ CASH" / "COINS" text pill (removed at the user's
+   order). Cash = green banknote glyph, coin = gold coin glyph. Loaded
+   after v48.css (see layout.tsx) so these rules win at equal
+   specificity. No inline <style> (React #418) and no CSS Modules
+   (broken in this repo) — same pattern as hdr-menu.css. */
+.g-cur-ico{position:absolute;top:10px;right:10px;z-index:5;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(4,6,13,.82);border:1px solid var(--line);pointer-events:none}
+.g-cur-ico svg{width:14px;height:14px}
+.g-cur-ico.cash{color:#3ED97E;border-color:rgba(62,217,126,.45)}
+.g-cur-ico.coin{color:var(--gold-2);border-color:rgba(242,194,48,.55)}
+/* Games page: the 1 TAP chip already sits top-right on beginner cards,
+   so the icon drops just below it there. */
+.gp-art .g-cur-ico.below-1tap{top:44px}
+/* Desktop: the players pill shares the top-right corner — shift it left
+   so it sits beside the icon instead of under it. (Phone hides the
+   players pill, so the icon stands alone in the corner.) */
+@media (min-width:641px){
+  .game .g-players{right:52px}
+}

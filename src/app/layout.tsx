@@ -3,6 +3,7 @@ import { Anton, Outfit } from "next/font/google";
 import "./globals.css";
 import "./v48.css";
 import "./hdr-menu.css";
+import "./cards-v5.css";
 import { StoreProvider } from "../lib/store";
 import Header from "../components/Header";
 import Dock from "../components/Dock";
