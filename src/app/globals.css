@@ -131,7 +131,7 @@ body {
 .die i{position:absolute;width:11px;height:11px;border-radius:50%;background:#14213D;transform:translate(-50%,-50%)}
 .die i:nth-child(3){background:#C22828}
 .dice-stage{display:flex;justify-content:center}
-.wheel-canvas{width:min(340px,86vw);height:auto;display:block;margin:0 auto}
+.wheel-canvas{width:min(340px,100%);height:auto;display:block;margin:0 auto}
 .hl-card{width:92px;height:128px;margin:0 auto;background:linear-gradient(145deg,#FFFDF4,#E7DFC6);border-radius:12px;color:#14213D;font-size:44px;font-weight:900;display:grid;place-items:center}
 .hl-mult,.rb-mult{text-align:center;font-weight:800;margin-top:10px;color:var(--gold-2,#FFD964)}
 .hl-btns,.rb-btns,.rps-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:12px 0}
@@ -285,3 +285,64 @@ body {
    scrollWidth at phone widths. `clip` (not hidden) keeps position:sticky
    working. body already has overflow-x:hidden from v48.css. */
 html{overflow-x:clip}
+
+/* ============ Mobile-first overflow fixes (12 Nov 2026, measured with
+   Playwright at 360/375/390/412/430px on every page, logged-out + owner) ============
+   Root causes, all the same shape: an element's min-content width forced
+   its parent wider than the phone, and body/html overflow-x clip hid the
+   page scroll — so the content was CUT OFF at the right edge instead of
+   scrolling. scrollWidth == innerWidth everywhere, yet players 2–3, the
+   roulette chips and half the wheel were invisible. Fixes are mobile-first
+   (base styles fit the smallest width) and keep every component, colour
+   and the v48 look — nothing removed, desktop untouched. */
+
+/* --- 1. Top Players podium: the 3-column .podium grid holds horizontal
+   .pod-step rows (rank + name + amount + game, ~200px min-content each).
+   Below ~700px the tracks shrink under that, so steps 2–3 were pushed
+   28–286px past the right edge. On phone the steps stack to one column —
+   the same full-width row language as the .pod-rest rows below them. --- */
+.podium .pod-step{min-width:0}
+.pod-step b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod-step span,.pod-step small{flex:none;white-space:nowrap}
+.pod-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod-row span,.pod-row small{flex:none;white-space:nowrap}
+.feed-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:700px){
+  /* .pod-wrap prefix: v48.css is imported AFTER globals.css, so a bare
+     .podium rule here would lose to its 3-column rule at equal specificity */
+  .pod-wrap .podium{grid-template-columns:1fr;gap:0}
+}
+
+/* --- 2. Mini Roulette grid blowout: .xg-controls is a single auto-column
+   grid; the 520x520 wheel canvas's intrinsic size sized that column to
+   436px in a 332px wrap, so the stake chips, wheel, bet buttons and Spin
+   button all ran 65–107px past the edge. Grid children must be allowed to
+   shrink below their min-content. (Same guard protects every other room.) --- */
+.xg-controls > *{min-width:0}
+.mr-wheel-box{min-width:0}
+
+/* --- 2b. Texas Poker board: v48.css sizes .pk-card small (58px, board
+   52px) but the port's PlayingCard never carries the class, so the 5-card
+   board rendered at the 118px base size and ran up to 125px past each
+   edge on phones. Scope the small sizes to the poker stage instead —
+   Blackjack shares PlayingCard and keeps its 118px cards. --- */
+.pk-stage .pk-cards .pcard{width:58px;height:80px;border-radius:10px;flex:none}
+.pk-stage .pk-cards .pcard .rk{font-size:22px}
+.pk-stage .pk-cards .pcard .st{font-size:18px}
+.pk-stage .pk-board .pcard{width:52px;height:72px}
+@media (max-width:400px){
+  .pk-stage .pk-cards .pcard{width:52px;height:74px}
+  .pk-stage .pk-board .pcard{width:46px;height:64px}
+}
+
+/* --- 3. mobile-native baseline (mobile-native skill §§2,4,5,7) ---
+   viewport-fit=cover + theme-color live in the layout.tsx viewport
+   export; the tap-highlight / touch-action baseline already exists in
+   v48.css (lines 745-746). What v48 missed: the 15px modal/jet-fly
+   inputs sit under iOS Safari's 16px zoom threshold — tapping the
+   login/deposit field zooms the page and it never zooms back out. --- */
+@media (pointer:coarse){
+  /* doubled class: v48.css is imported after globals.css, so these need
+     higher specificity than its 15px rules to win */
+  .rg48-f.rg48-f input,.rg48-f.rg48-f select,.jf-autorow.jf-autorow input{font-size:16px}
+}

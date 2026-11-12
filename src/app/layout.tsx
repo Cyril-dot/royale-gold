@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Anton, Outfit } from "next/font/google";
 import "./globals.css";
 import "./v48.css";
@@ -14,6 +14,17 @@ const outfit = Outfit({ subsets: ["latin"], variable: "--font-body" });
 export const metadata: Metadata = {
   title: "Royale Gold",
   description: "Royale Gold — 31 games. Cash in GH₵, coins for play.",
+};
+
+// Mobile-native baseline (mobile-native skill §§7,10): viewport-fit=cover
+// lets env(safe-area-inset-*) work so the felt header paints under the
+// notch; theme-color matches the midnight top of the page. Never
+// maximum-scale / user-scalable=no — zoom stays available.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#070812",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

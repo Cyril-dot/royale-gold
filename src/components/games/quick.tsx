@@ -202,7 +202,7 @@ export function WheelRoom({ game }: { game: GameDef }) {
   };
   return (
     <Shell game={game} subtitle="One ×4, two ×2, three ×1 stake-back, one ×0.5 half-back, five LOSE." stake={stake} setStake={setStake} msg={msg}>
-      <div className="wheel-wrap"><canvas ref={canvasRef} width={340} height={340} className="wheel-canvas" /><div className="lw-result">{result ? `Landed ${result}` : "Place your stake and spin"}</div></div>
+      <div className="lw-stage"><canvas ref={canvasRef} width={340} height={340} className="wheel-canvas" /><div className="lw-result">{result ? `Landed ${result}` : "Place your stake and spin"}</div></div>
       <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin · ${fmtCash(stake)}`}</button>
     </Shell>
   );
