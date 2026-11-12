@@ -250,7 +250,6 @@ body {
 .dep-methods button.on{background:linear-gradient(180deg,#FFD964,#D9A41C);color:#231600}
 
 @media (max-width:640px){
-  .hdr-right{flex-wrap:wrap}
   .user-row{grid-template-columns:1fr auto;gap:6px}
   .keno-grid{grid-template-columns:repeat(8,1fr)}
   .dep-table{font-size:12px}
@@ -261,15 +260,14 @@ body {
 /* Phone header — v48's phone rules assume the header is only logo +
    balance + Deposit, so the extra controls this build carries (REAL/SIM
    toggle, mute, coin pill, Log in + Register, account chip) overflowed
-   by ~195px. Fix: the right cluster takes its own full-width row and
-   wraps; Register stays visible and the account name stays visible
-   (the v48 phone-header defect fix). Higher specificity than v48.css
-   (imported after this file) so these rules win. */
+   by ~195px. Fix (ea83376, superseded by the round-2 row rebuild below —
+   kept for the account-chip visibility rules): the account name stays
+   visible on phone (the v48 phone-header defect fix). Higher specificity
+   than v48.css (imported after this file) so these rules win. */
 @media (max-width:640px){
   header.site .hdr-main{flex-wrap:wrap}
   header.site .chipnav{order:3;width:100%;justify-content:center;overflow-x:auto;scrollbar-width:none}
   header.site .chipnav::-webkit-scrollbar{display:none}
-  header.site .hdr-right{flex:1 1 100%;max-width:100%;flex-wrap:wrap;justify-content:flex-end;row-gap:6px}
   header.site .mode-toggle button{padding:6px 8px;font-size:11px;min-height:34px}
   header.site .icon-btn{width:36px;height:36px;flex:none}
   header.site .btn-dep,header.site .btn-acct{min-height:40px;font-size:13px;padding:0 12px}
@@ -346,3 +344,79 @@ html{overflow-x:clip}
      higher specificity than its 15px rules to win */
   .rg48-f.rg48-f input,.rg48-f.rg48-f select,.jf-autorow.jf-autorow input{font-size:16px}
 }
+
+/* ============ Phone header rebuild + top-section fixes (12 Nov 2026, round 2)
+   The 288d092 audit proved zero horizontal overflow at 320–430px — what the
+   user still saw was STYLING, not overflow: the phone header wrapped into
+   3 accidental rows (258px at 320px) with a lone coin on row 1, the v48 dev
+   pills dangled on their own lines, the games subtitle truncated, the
+   homepage games filters sat ~112px under the subtitle, and the hero
+   kicker/CTA wrapped mid-word. Fixes are mobile-first, keep every control
+   and the v48 look — nothing deleted except dev version labels on phone.
+   NOTE on specificity: v48.css is imported AFTER this file, so every
+   override below uses a higher-specificity selector than the v48 rule
+   it beats (the 288d092 trap: equal-specificity rules silently lose). */
+
+/* --- Header rows (Header.tsx now carries .hdr-row-1/2/3) ---
+   Desktop: the rows are display:contents, so all controls lay out in the
+   single .hdr-main flex row exactly as before (searchBtn carries the
+   margin-left:auto the old .hdr-right had). Phone: three deliberate rows —
+   row 1 brand + mode/sound (no more lone-coin row), row 2 balances +
+   Deposit, row 3 account actions. --- */
+@media (min-width:641px){
+  header.site .hdr-row{display:contents}
+  header.site #searchBtn{margin-left:auto}
+}
+@media (max-width:640px){
+  header.site .hdr-main{padding:8px 0 6px;row-gap:6px}
+  /* brand wordmark back on phone (v48 hid it, leaving a lone coin on its
+     own row); small caps tagline stays hidden to save width */
+  header.site .brand .brand-text{display:block}
+  header.site .brand-name{font-size:18px}
+  header.site .brand small{display:none}
+  header.site .coin-mark{width:36px;height:36px}
+  header.site .hdr-row-1{display:flex;align-items:center;gap:7px;margin-left:auto}
+  header.site .hdr-row-2{display:flex;align-items:center;gap:7px;flex:1 1 100%}
+  header.site .hdr-row-3{display:flex;align-items:center;gap:8px;flex:1 1 100%}
+  /* logged-out: Log in + Register share the row evenly, full width */
+  header.site .hdr-row-3 .btn-acct{flex:1}
+  /* logged-in: the box spans the row, the chip itself sits right */
+  header.site .hdr-row-3 .acct-box{flex:1}
+  header.site .hdr-row-3 .acct-wrap{margin-left:auto}
+  /* balance/coin pills must never force a row to wrap: shrink + ellipsis
+     guards (7-figure balances, long coin counts) */
+  header.site .bal-pill{min-width:0}
+  header.site .bal-pill>div{min-width:0}
+  header.site .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  header.site .coin-pill{min-width:0}
+  header.site .coin-pill b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* v48 pills are dev version labels (aria-hidden, pointer-events:none),
+     not controls: hide on phone, keep on desktop. Their 42px bar padding
+     goes with them. */
+  header.site .ver-strip{display:none}
+  .gpage .gp-bar .xg-ver,.xgame-room .xg-bar .xg-ver{display:none}
+  .gpage .gp-bar-in,.xgame-room .xg-bar-in{padding-bottom:14px}
+  /* games page subtitle: let it wrap to two lines instead of truncating
+     ("31 games · every one play…") */
+  .gpage .gp-bar .gp-title small{white-space:normal}
+  /* hero kicker + CTAs: one line each, no mid-word wrap */
+  section.hero .hero-kicker{white-space:nowrap}
+  section.hero .hero-cta .btn{white-space:nowrap}
+}
+@media (max-width:380px){
+  /* kicker: measured 325px wide at 11px/.1em — 19px past a 320px viewport.
+     10px/.06em + tighter padding brings it to ~280px (fits 292px). */
+  section.hero .hero-kicker{font-size:10px;letter-spacing:.06em;padding:8px 12px}
+  section.hero .hero-cta .btn{font-size:15px;padding:0 12px}
+  /* brand + row-1 measured 150+135+gap = 292px at 320px — sub-pixel wrap
+     pushed row-1 to its own line (header 196px). 17px buys ~6px back. */
+  header.site .brand-name{font-size:17px}
+}
+
+/* --- Homepage games gap: .gp-filters carries the /games-page sticky-bar
+   margin (clamp 40–72px) but on the homepage it sits under a .sec-head,
+   so the subtitle and the filter buttons were ~112px apart on desktop
+   (72px margin + 24px sec-head margin + 16px padding). The sec-head's own
+   margin is the only separation the homepage needs. Scoped to #games so
+   the /games page sticky bar keeps its own margin. --- */
+#games .gp-filters{margin-top:0}

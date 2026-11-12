@@ -78,7 +78,7 @@ export default function Header() {
             <Link href="/games?filter=live">Live</Link>
             <Link href="/#promos">Promotions</Link>
           </nav>
-          <div className="hdr-right">
+          <div className="hdr-row hdr-row-1">
             <button className="icon-btn" id="searchBtn" type="button" aria-label="Search games" aria-expanded={searchOpen} onClick={() => setSearchOpen((v) => !v)}>
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z" /></svg>
             </button>
@@ -97,6 +97,8 @@ export default function Header() {
               <span className="xp-lvl">LV <b>{user?.level ?? 1}</b></span>
               <span className="xp-bar"><i style={{ width: `${(user?.xp ?? 0) % 100}%` }} /></span>
             </div>
+          </div>
+          <div className="hdr-row hdr-row-2">
             <div className="bal-pill" aria-label="Wallet balance">
               <span className="bal-coin" aria-hidden="true">₵</span>
               <div>
@@ -115,6 +117,8 @@ export default function Header() {
               </span>
             </div>
             <button className="btn btn-gold btn-dep" type="button" onClick={() => (user ? setDepositOpen(true) : openAuth("login"))}>Deposit</button>
+          </div>
+          <div className="hdr-row hdr-row-3">
             <div className="acct-box">
               {!user ? (
                 <>
