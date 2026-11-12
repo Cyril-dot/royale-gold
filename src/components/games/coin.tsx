@@ -1,7 +1,8 @@
 // Coin games (play-only coins, never withdrawable) — v48 rules.
 // Keno: pick 3 of 1–10, draw 5; 2 matches ×1, 3 matches ×6.5.
 // Memory Match: 4 pairs; ≤5 moves ×2, 6 ×1.15, 7 ×0.6, 8 ×0.3 (v48 exact).
-// Whack-a-Mole: 30s; multiplier = points / 110, capped ×2 (continuous).
+// Whack-a-Mole: 30s; golden +10, normal +3, bomb −10 (v48 export exact);
+// multiplier = max(points, 0) / 110, capped ×2 (continuous).
 // Scratch Card: decide-first — ×10 2%, ×5 6%, ×2 22.5%, blank 69.5%.
 
 "use client";
@@ -120,11 +121,11 @@ export function MemoryRoom({ game }: { game: GameDef }) {
 
 // ---------------- Whack-a-Mole ----------------
 export function WhackRoom({ game }: { game: GameDef }) {
-  const { room, stake, setStake, msg, setMsg } = useCoin(game, "30 seconds — whack the moles. Golden moles are worth 3. Your multiplier is points ÷ 110, up to ×2.");
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "30 seconds — whack the moles. Golden moles are worth 10, normal moles 3, bomb moles cost 10. Your multiplier is points ÷ 110, up to ×2.");
   const [playing, setPlaying] = useState(false);
   const [score, setScore] = useState(0);
   const [time, setTime] = useState(30);
-  const [active, setActive] = useState<{ hole: number; golden: boolean } | null>(null);
+  const [active, setActive] = useState<{ hole: number; kind: "golden" | "normal" | "bomb" } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const spawnRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scoreRef = useRef(0);
@@ -134,8 +135,9 @@ export function WhackRoom({ game }: { game: GameDef }) {
     setActive(null);
     if (timerRef.current) clearInterval(timerRef.current);
     if (spawnRef.current) clearInterval(spawnRef.current);
-    // v48 export: continuous multiplier = points / 110, capped ×2.
-    const mult = Math.min(2, finalScore / 110);
+    // v48 export: continuous multiplier = max(points, 0) / 110, capped ×2.
+    // Bombs can drive points below zero; a negative score pays nothing.
+    const mult = Math.min(2, Math.max(0, finalScore) / 110);
     const payout = Math.round(stake * mult);
     setMsg(mult > 0 ? `${finalScore} points — ×${mult.toFixed(2)}! ${fmtCoins(payout)} coins` : `${finalScore} points — no payout this time.`);
     await room.settle(stake, payout, { score: finalScore, mult: Math.round(mult * 100) / 100 });
@@ -143,7 +145,7 @@ export function WhackRoom({ game }: { game: GameDef }) {
 
   const start = () => {
     setScore(0); scoreRef.current = 0; setTime(30); setPlaying(true);
-    setMsg("Whack!");
+    setMsg("Whack! Golden moles are +10, normal +3 — leave the bomb moles alone, tapping one costs 10.");
     timerRef.current = setInterval(() => {
       setTime((t) => {
         if (t <= 1) { void end(scoreRef.current); return 0; }
@@ -151,14 +153,18 @@ export function WhackRoom({ game }: { game: GameDef }) {
       });
     }, 1000);
     spawnRef.current = setInterval(() => {
-      setActive({ hole: Math.floor(Math.random() * 9), golden: Math.random() < 0.2 });
-      setTimeout(() => setActive((a) => (a ? null : a)), 750);
-    }, 850);
+      // v48 export spawn mix: 10% bomb, 20% golden, 70% normal.
+      const r = Math.random();
+      const kind = r < 0.10 ? "bomb" : r < 0.30 ? "golden" : "normal";
+      setActive({ hole: Math.floor(Math.random() * 9), kind });
+      setTimeout(() => setActive((a) => (a ? null : a)), 600);
+    }, 900);
   };
 
   const whack = (hole: number) => {
     if (!playing || !active || active.hole !== hole) return;
-    const pts = active.golden ? 3 : 1;
+    // v48 export economy: golden +10, normal +3, bomb −10 (round goes on).
+    const pts = active.kind === "golden" ? 10 : active.kind === "bomb" ? -10 : 3;
     scoreRef.current += pts;
     setScore(scoreRef.current);
     setActive(null);
@@ -167,14 +173,14 @@ export function WhackRoom({ game }: { game: GameDef }) {
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); if (spawnRef.current) clearInterval(spawnRef.current); }, []);
 
   return (
-    <RoomShell game={game} subtitle="30 seconds — whack the moles. Golden moles are worth 3. Your multiplier is points ÷ 110, up to ×2." stats={room.stats} history={room.history}>
+    <RoomShell game={game} subtitle="30 seconds — whack the moles. Golden moles are worth 10, normal moles 3, bomb moles cost 10. Your multiplier is points ÷ 110, up to ×2." stats={room.stats} history={room.history}>
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
         <div className="wm-hud">Time: {time}s · Points: {score}</div>
         <div className="wm-grid">
           {Array.from({ length: 9 }, (_, i) => (
-            <button key={i} type="button" className={`wm-hole${active?.hole === i ? (active.golden ? " golden" : " up") : ""}`} onClick={() => whack(i)} disabled={!playing} aria-label={`Hole ${i + 1}`}>
-              {active?.hole === i ? (active.golden ? "★" : "●") : ""}
+            <button key={i} type="button" className={`wm-hole${active?.hole === i ? ` ${active.kind === "golden" ? "golden" : active.kind === "bomb" ? "bomb" : "up"}` : ""}`} onClick={() => whack(i)} disabled={!playing} aria-label={`Hole ${i + 1}`}>
+              {active?.hole === i ? (active.kind === "golden" ? "★" : active.kind === "bomb" ? "💣" : "●") : ""}
             </button>
           ))}
         </div>

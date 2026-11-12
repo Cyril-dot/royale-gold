@@ -85,7 +85,7 @@ export const TOP_PLAYERS = [
   { name: "Ama S.", amount: 9320, game: "Penalty Shoot Out" },
   { name: "Kofi D.", amount: 7150, game: "Mines" },
   { name: "Efua M.", amount: 5400, game: "Lucky Wheel" },
-  { name: "Yaw B.", amount: 4100, game: "Plinko" },
+  { name: "Yaw B.", amount: 4100, game: "Plinko Drop" },
 ];
 
 export const LIVE_WINS = [

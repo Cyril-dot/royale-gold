@@ -126,6 +126,15 @@ export default function Hero() {
             <button className="btn btn-gold stage-spin" type="button" onClick={spin} disabled={spinning}>Spin the 3D slot · GH₵ 5</button>
           </div>
         </div>
+        {/* Phone-only jackpot strip: the export hides BOTH jackpot spots at
+            ≤640px (header ticker + the .stage card), so no phone user could
+            see the counter. This slim strip surfaces the same shared live
+            counter under the hero on phone only — the heavy 3D stage / fox
+            art stays hidden per the ≤640px lighten rules. */}
+        <div className="jackpot-strip" aria-label="Mega jackpot">
+          <small><i /> MEGA JACKPOT</small>
+          <strong className="jp-val">{jackpotText}</strong>
+        </div>
       </div>
       <div className="marquee" aria-label="Latest wins">
         <div className="marquee-track" id="winsTrack">

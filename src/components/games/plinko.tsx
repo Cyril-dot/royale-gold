@@ -110,7 +110,7 @@ export default function PlinkoRoom({ game }: { game: GameDef }) {
   return (
     <RoomShell game={game} subtitle="8 rows · 9 bins · pick your risk, drop the ball" stats={room.stats} history={room.history}>
       <div className="pk-stage">
-        <canvas ref={canvasRef} width={560} height={560} className="pk-canvas" aria-label="Plinko board" />
+        <canvas ref={canvasRef} width={560} height={560} className="pk-canvas" aria-label="Plinko Drop board" />
         <div className="pk-last">{lastMult !== null ? <>Last drop: bin {lastBin} · ×{lastMult}</> : "No drop yet"}</div>
       </div>
       <div className="xg-controls">
