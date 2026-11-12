@@ -88,7 +88,7 @@ function bjValue(hand: Card[]): number {
 export function BlackjackRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(25);
-  const [msg, setMsg] = useState("Blackjack pays 3:2. Dealer stands on 17.");
+  const [msg, setMsg] = useState("Tap Hit to take a card or Stand to hold. Blackjack pays 3:2 and the dealer stands on 17.");
   const [deck, setDeck] = useState<Card[]>([]);
   const [you, setYou] = useState<Card[]>([]);
   const [dealer, setDealer] = useState<Card[]>([]);
@@ -156,7 +156,7 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
 export function PokerRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(25);
-  const [msg, setMsg] = useState("Heads-up Hold'em · best 5 of 7 wins the pot · pays ×2.");
+  const [msg, setMsg] = useState("You and the dealer each get two cards, then the flop, turn and river land. Best 5 of 7 wins the pot — a tie hands the stake back.");
   const [you, setYou] = useState<Card[]>([]);
   const [dealer, setDealer] = useState<Card[]>([]);
   const [board, setBoard] = useState<Card[]>([]);
@@ -210,7 +210,7 @@ type BetKind = "straight" | "red" | "black" | "even" | "odd";
 export function RouletteRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(10);
-  const [msg, setMsg] = useState("European wheel, 0–36. Straight-up pays ×36, red/black and even/odd pay ×2.");
+  const [msg, setMsg] = useState("Pick red, black, even, odd or a straight-up number, set your stake and spin. Straight-up pays ×36, red/black and even/odd pay ×2.");
   const [betKind, setBetKind] = useState<BetKind>("straight");
   const [pick, setPick] = useState(7);
   const [spun, setSpun] = useState<number | null>(null);

@@ -22,7 +22,7 @@ export default function PlinkoRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(25);
   const [risk, setRisk] = useState<"low" | "med" | "high">("low");
-  const [msg, setMsg] = useState("Pick a risk and stake, then drop the ball. The bin it lands in sets your multiplier.");
+  const [msg, setMsg] = useState("Pick your risk, set your stake, drop the ball. Every peg is a coin flip — the middle bins land often and pay small, the edge bins are rare and pay big.");
   const [lastBin, setLastBin] = useState<number | null>(null);
   const [lastMult, setLastMult] = useState<number | null>(null);
   const [ball, setBall] = useState<{ x: number; y: number } | null>(null);

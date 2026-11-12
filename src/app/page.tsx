@@ -8,8 +8,16 @@ import Link from "next/link";
 import { useState } from "react";
 import Hero from "../components/Hero";
 import GameTile from "../components/GameTile";
+import VerbTilt from "../components/VerbTilt";
+import Dock from "../components/Dock";
 import { LIVE_WINS, TILE_GAMES, TOP_PLAYERS } from "../lib/tiles";
 import { fmtCash } from "../lib/api";
+
+// Podium avatar initials ("Kwame A." → "KA") and the artifact's
+// no-decimals podium amounts (GH₵ 12,480, not GH₵ 12,480.00).
+const initials = (name: string) =>
+  name.split(/[\s.]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+const fmtPodium = (n: number) => `GH₵ ${n.toLocaleString("en-GH")}`;
 
 export default function Home() {
   const [expanded, setExpanded] = useState(false);
@@ -56,20 +64,40 @@ export default function Home() {
             <span className="sec-tag">Leaderboard</span>
             <h2>Top <em>players</em></h2>
           </div>
+          {/* Podium phone override: the artifact's .pod cells keep the
+              3-column laptop composition on mobile (gap 8px, 6px ≤380px).
+              globals.css stacks .podium to 1 column below 700px (the
+              288d092 fix for the old .pod-step rows); .podium.podium
+              (0,3,0) outranks it (0,2,0) at any load order. A CSS Module
+              was tried first and REMOVED — this repo's next.config.ts
+              routes *.css through the Tailwind loader, so .module.css
+              files are bundled as plain global CSS and the import
+              resolves to undefined. */}
+          <style>{`@media (max-width:700px){.pod-wrap .podium.podium{grid-template-columns:1fr 1.15fr 1fr;gap:8px}}@media (max-width:380px){.pod-wrap .podium.podium{gap:6px}}`}</style>
           <div className="pod-wrap">
             <div className="podium" id="podium">
-              {TOP_PLAYERS.slice(0, 3).map((p, i) => (
-                <div key={p.name} className={`pod-step p${i + 1}`}>
-                  <span className="pod-rank">{i + 1}</span>
-                  <b>{p.name}</b>
-                  <span>{fmtCash(p.amount)}</span>
-                  <small>{p.game}</small>
-                </div>
-              ))}
+              {[2, 1, 3].map((rank) => {
+                const p = TOP_PLAYERS[rank - 1];
+                return (
+                  <div key={p.name} className={`pod pod-${rank}`}>
+                    <div className="who">
+                      <span className="ava" aria-hidden="true">{initials(p.name)}</span>
+                      <b>{p.name}</b>
+                      <span>{p.game}</span>
+                      <div className="amt">{fmtPodium(p.amount)}</div>
+                    </div>
+                    <div className="base" aria-hidden="true">#{rank}</div>
+                  </div>
+                );
+              })}
             </div>
             <div className="pod-rest">
               {TOP_PLAYERS.slice(3).map((p, i) => (
-                <div key={p.name} className="pod-row"><span>{i + 4}</span><b>{p.name}</b><span>{fmtCash(p.amount)}</span><small>{p.game}</small></div>
+                <div key={p.name} className="p-row">
+                  <span className="rank">#{i + 4}</span>
+                  <span className="who"><b>{p.name}</b><span>{p.game}</span></span>
+                  <span className="won">{fmtPodium(p.amount)}</span>
+                </div>
               ))}
             </div>
             <p className="demo-note">Demo data only — connect your game backend to show real standings.</p>
@@ -93,9 +121,9 @@ export default function Home() {
             <h2>Three moves, <em>that&rsquo;s it</em></h2>
           </div>
           <div className="verbs">
-            <article className="verb"><div className="verb-tilt"><span className="vnum">STEP 01</span><h3>Depo<em>sit</em></h3><p>Top up with MTN MoMo, Telecel Cash, AirtelTigo, bank or card. Money lands instantly, from GH₵ 10, no deposit fees.</p></div></article>
-            <article className="verb"><div className="verb-tilt"><span className="vnum">STEP 02</span><h3>Pl<em>ay</em></h3><p>Stakes from GH₵ 1 across slots, crash, tables and arcade. Every result lands in your game history, and each game&rsquo;s RTP is printed on its tile.</p></div></article>
-            <article className="verb"><div className="verb-tilt"><span className="vnum">STEP 03</span><h3>Cash <em>out</em></h3><p>Withdraw winnings back to the same MoMo number you deposited from. Most cash-outs complete in under five minutes.</p></div></article>
+            <article className="verb"><VerbTilt index={0}><span className="vnum">STEP 01</span><div className="v-art" aria-hidden="true"><div className="coin-stack3d"><i /><i /><i /><i /><i /></div><span className="cn-solo">₵</span></div><h3>Depo<em>sit</em></h3><p>Top up with MTN MoMo, Telecel Cash, AirtelTigo, bank or card. Money lands instantly, from GH₵ 10, no deposit fees.</p></VerbTilt></article>
+            <article className="verb"><VerbTilt index={1}><span className="vnum">STEP 02</span><div className="v-art" aria-hidden="true"><div className="cube cube-a"><i className="fc f-front p5" /><i className="fc f-back p2" /><i className="fc f-right p3" /><i className="fc f-left p4" /><i className="fc f-top p1" /><i className="fc f-bottom p6" /></div><div className="cube cube-b"><i className="fc f-front p3" /><i className="fc f-back p4" /><i className="fc f-right p5" /><i className="fc f-left p2" /><i className="fc f-top p6" /><i className="fc f-bottom p1" /></div></div><h3>Pl<em>ay</em></h3><p>Stakes from GH₵ 1 across slots, crash, tables and arcade. Every result lands in your game history, and each game&rsquo;s RTP is printed on its tile.</p></VerbTilt></article>
+            <article className="verb"><VerbTilt index={2}><span className="vnum">STEP 03</span><div className="v-art" aria-hidden="true"><div className="fan"><i className="note n1" /><i className="note n2" /><i className="note n3">GH₵</i></div></div><h3>Cash <em>out</em></h3><p>Withdraw winnings back to the same MoMo number you deposited from. Most cash-outs complete in under five minutes.</p></VerbTilt></article>
           </div>
         </div>
       </section>
@@ -109,7 +137,7 @@ export default function Home() {
           <article className="promo-gold">
             <div className="pg-txt">
               <div className="big">100% up to GH₵ 1,000 — welcome bonus</div>
-              <p>We match your first top-up cedi for cedi, plus 50 free spins on Emerald Sevens. 18+. Wagering ×35 applies.</p>
+              <p>We match your first top-up cedi for cedi, plus 50 free spins on the headline slot. 18+. Wagering ×35 applies.</p>
             </div>
             <a className="btn" href="#promos">Claim the bonus</a>
           </article>
@@ -133,6 +161,8 @@ export default function Home() {
           <p className="foot-legal">All balances, jackpots, player counts and winnings shown on this page are demo figures for the design sample.</p>
         </div>
       </footer>
+
+      <Dock />
     </main>
   );
 }

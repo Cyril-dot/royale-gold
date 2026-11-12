@@ -23,6 +23,8 @@ export interface TileMeta {
   slots?: boolean; // in the export's "slots" filter (data-cats includes slots)
   hideMobile?: boolean;
   beginner?: boolean;
+  top?: string; // artifact TOPW value, shown as the TOP ×n pill
+  cssArt?: "blackjack"; // artifact CSS-art tile (fan of cards), not an image
 }
 
 const T: Record<string, TileMeta> = {
@@ -33,30 +35,30 @@ const T: Record<string, TileMeta> = {
   "penalty-shoot-out": { cover: "/covers/cover-penalty.jpg", rtp: "97.2%", min: "GH₵ 1", players: 3210, size: "wide", badge: "new", mult: "Top rung ×12.5", tag: "arcade" },
   mines: { cover: "/covers/mines-art.png", fullArt: true, rtp: "97.5%", min: "GH₵ 1", players: 2210, size: "cell", badge: "new", mult: "Top prize ×5,000", tag: "arcade" },
   plinko: { cover: "/covers/cover-plinko.jpg", rtp: "99.0%", min: "GH₵ 1", players: 1950, size: "cell", badge: "new", mult: "Edges ×29 · playable", tag: "arcade" },
-  "coin-flip": { cover: "/covers/cover-coin.jpg", rtp: "100%", min: "GH₵ 1", players: 2874, size: "cell", badge: "new", mult: "Pays ×2 · playable", tag: "arcade", beginner: true },
-  "dice-roll": { cover: "/covers/cover-dice.jpg", rtp: "97.2%", min: "GH₵ 1", players: 1932, size: "cell", badge: "new", mult: "Exactly 7 pays ×5", tag: "arcade", beginner: true },
-  "lucky-wheel": { cover: "/covers/cover-wheel.jpg", rtp: "95.8%", min: "GH₵ 1", players: 2417, size: "cell", badge: "new", mult: "Top prize ×4 · playable", tag: "arcade", beginner: true },
-  "hi-lo": { cover: "/covers/cover-hilo.jpg", rtp: "95%", min: "GH₵ 1", players: 1311, size: "cell", badge: "new", mult: "Chain ×1.9 a card", tag: "arcade", beginner: true },
-  "rock-paper-scissors": { cover: "/covers/cover-rps.jpg", rtp: "95%", min: "GH₵ 1", players: 1448, size: "cell", badge: "new", mult: "Win the throw ×2", tag: "arcade", beginner: true },
-  limbo: { glyph: "×19.4", rtp: "95%", min: "GH₵ 1", players: 1585, size: "cell", badge: "new", mult: "Climb to ×19.4", tag: "arcade", beginner: true },
-  "red-or-black": { glyph: "♥♦", rtp: "95%", min: "GH₵ 1", players: 1722, size: "cell", badge: "new", mult: "Chain doubles to ×8", tag: "arcade", beginner: true },
-  war: { glyph: "♠ K", rtp: "95%", min: "GH₵ 1", players: 1859, size: "cell", badge: "new", mult: "Higher card ×2", tag: "arcade", beginner: true },
-  "pick-a-box": { glyph: "▣", rtp: "95%", min: "GH₵ 1", players: 1996, size: "cell", badge: "new", mult: "Find the gold ×1.8", tag: "arcade", beginner: true },
-  "mini-roulette": { cover: "/covers/game-roulette.webp", rtp: "95%", min: "GH₵ 1", players: 2681, size: "cell", badge: "new", mult: "Green zero ×36", tag: "table", beginner: true },
-  "texas-poker-room": { glyph: "♠♥", rtp: "97.8%", min: "GH₵ 10", players: 1187, size: "tall", badge: null, mult: "Best hand wins · playable", tag: "table" },
+  "coin-flip": { cover: "/covers/cover-coin.jpg", rtp: "100%", min: "GH₵ 1", players: 2874, size: "cell", badge: "new", mult: "Pays ×2 · playable", tag: "arcade", beginner: true, top: "×2" },
+  "dice-roll": { cover: "/covers/cover-dice.jpg", rtp: "97.2%", min: "GH₵ 1", players: 1932, size: "cell", badge: "new", mult: "Exactly 7 pays ×5", tag: "arcade", beginner: true, top: "×5" },
+  "lucky-wheel": { cover: "/covers/cover-wheel.jpg", rtp: "95.8%", min: "GH₵ 1", players: 2417, size: "cell", badge: "new", mult: "Top prize ×4 · playable", tag: "arcade", beginner: true, top: "×4" },
+  "hi-lo": { cover: "/covers/cover-hilo.jpg", rtp: "95%", min: "GH₵ 1", players: 1311, size: "cell", badge: "new", mult: "Chain ×1.9 a card", tag: "arcade", beginner: true, top: "×1.9" },
+  "rock-paper-scissors": { cover: "/covers/cover-rps.jpg", rtp: "95%", min: "GH₵ 1", players: 1448, size: "cell", badge: "new", mult: "Win the throw ×2", tag: "arcade", beginner: true, top: "×2" },
+  limbo: { cover: "/covers/cover-limbo.svg", rtp: "95%", min: "GH₵ 1", players: 1585, size: "cell", badge: "new", mult: "Climb to ×19.4", tag: "arcade", beginner: true, top: "×19.4" },
+  "red-or-black": { cover: "/covers/cover-red-or-black.svg", rtp: "95%", min: "GH₵ 1", players: 1722, size: "cell", badge: "new", mult: "Chain doubles to ×8", tag: "arcade", beginner: true, top: "×8" },
+  war: { cover: "/covers/cover-war.svg", rtp: "95%", min: "GH₵ 1", players: 1859, size: "cell", badge: "new", mult: "Higher card ×2", tag: "arcade", beginner: true, top: "×2" },
+  "pick-a-box": { cover: "/covers/cover-pick-a-box.svg", rtp: "95%", min: "GH₵ 1", players: 1996, size: "cell", badge: "new", mult: "Find the gold ×1.8", tag: "arcade", beginner: true, top: "×1.8" },
+  "mini-roulette": { cover: "/covers/game-roulette.webp", rtp: "95%", min: "GH₵ 1", players: 2681, size: "cell", badge: "new", mult: "Green zero ×36", tag: "table", beginner: true, top: "×36" },
+  "texas-poker-room": { cover: "/covers/cover-texas-poker-room.svg", rtp: "97.8%", min: "GH₵ 10", players: 1187, size: "tall", badge: null, mult: "Best hand wins · playable", tag: "table" },
   "spin-da-bottle": { cover: "/covers/spin-da-bottle-art.png", fullArt: true, rtp: "96.8%", min: "GH₵ 1", players: 764, size: "hero", badge: "new", mult: "Pays ×2 · playable", tag: "arcade" },
-  "blackjack-vip": { glyph: "♠ 21", rtp: "99.4%", min: "GH₵ 5", players: 932, size: "cell", badge: "live", mult: "Blackjack pays 3:2", tag: "live", hideMobile: true },
+  "blackjack-vip": { cssArt: "blackjack", rtp: "99.4%", min: "GH₵ 5", players: 932, size: "cell", badge: "live", mult: "Blackjack pays 3:2", tag: "live", hideMobile: true },
   "royale-roulette": { cover: "/covers/game-roulette.webp", rtp: "97.3%", min: "GH₵ 2", players: 1874, size: "cell", badge: "live", mult: "Straight-up ×36", tag: "live", hideMobile: true },
   "fruit-ninja": { cover: "/covers/cover-fruit.jpg", rtp: "95%", min: "5 coins", players: 2640, size: "cell", badge: "new", mult: "Score 400 · ×4", tag: "arcade", beginner: true },
   "candy-crush": { cover: "/covers/cover-candy.jpg", rtp: "95%", min: "5 coins", players: 2510, size: "cell", badge: "new", mult: "500 pts ×1 · 1500 ×3", tag: "arcade", slots: true, beginner: true },
   tetris: { cover: "/covers/cover-tetris.jpg", rtp: "95%", min: "5 coins", players: 2380, size: "cell", badge: "new", mult: "Clear lines · ×3", tag: "arcade", beginner: true },
   "whack-a-mole": { cover: "/covers/cover-mole.jpg", rtp: "95%", min: "5 coins", players: 2407, size: "cell", badge: "new", mult: "Golden moles · up to ×2", tag: "arcade", beginner: true },
-  "memory-match": { glyph: "◆◆", rtp: "95%", min: "5 coins", players: 2270, size: "cell", badge: "new", mult: "Clear in ≤5 · ×2", tag: "arcade", beginner: true },
-  "scratch-card": { glyph: "✦", rtp: "95%", min: "5 coins", players: 2544, size: "cell", badge: "new", mult: "Match 3 · up to ×10", tag: "arcade", slots: true, beginner: true },
-  keno: { cover: "/covers/cover-keno.jpg", rtp: "95%", min: "5 coins", players: 2133, size: "cell", badge: "new", mult: "Match 3 · ×6.5", tag: "arcade", beginner: true },
-  trivia: { glyph: "?", rtp: "Skill", min: "5 coins", players: 3120, size: "cell", badge: "new", mult: "10/10 pays 25 coins", tag: "arcade", beginner: true },
-  snake: { glyph: "≈", rtp: "Skill", min: "5 coins", players: 2985, size: "cell", badge: "new", mult: "300+ pts pays 40 coins", tag: "arcade", beginner: true },
-  "2048": { glyph: "2048", rtp: "Skill", min: "5 coins", players: 2740, size: "cell", badge: "new", mult: "Reach 1024 · 50 coins", tag: "arcade", beginner: true },
+  "memory-match": { cover: "/covers/cover-memory-match.svg", rtp: "95%", min: "5 coins", players: 2270, size: "cell", badge: "new", mult: "Clear in ≤5 · ×2", tag: "arcade", beginner: true, top: "×2" },
+  "scratch-card": { cover: "/covers/cover-scratch-card.svg", rtp: "95%", min: "5 coins", players: 2544, size: "cell", badge: "new", mult: "Match 3 · up to ×10", tag: "arcade", slots: true, beginner: true, top: "×10" },
+  keno: { cover: "/covers/cover-keno.jpg", rtp: "95%", min: "5 coins", players: 2133, size: "cell", badge: "new", mult: "Match 3 · ×6.5", tag: "arcade", beginner: true, top: "×6.5" },
+  trivia: { cover: "/covers/cover-trivia.svg", rtp: "Skill", min: "5 coins", players: 3120, size: "cell", badge: "new", mult: "10/10 pays 25 coins", tag: "arcade", beginner: true, top: "×5" },
+  snake: { cover: "/covers/cover-snake.svg", rtp: "Skill", min: "5 coins", players: 2985, size: "cell", badge: "new", mult: "300+ pts pays 40 coins", tag: "arcade", beginner: true, top: "×8" },
+  "2048": { cover: "/covers/cover-2048.svg", rtp: "Skill", min: "5 coins", players: 2740, size: "cell", badge: "new", mult: "Reach 1024 · 50 coins", tag: "arcade", beginner: true, top: "×10" },
 };
 
 export interface TileGame extends GameDef {

@@ -12,16 +12,16 @@ import { fmtCoins } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
-function useCoin(game: GameDef, subtitle: string) {
+function useCoin(game: GameDef, subtitle: string, intro?: string) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(5);
-  const [msg, setMsg] = useState(subtitle);
+  const [msg, setMsg] = useState(intro ?? subtitle);
   return { room, stake, setStake, msg, setMsg };
 }
 
 // ---------------- Keno ----------------
 export function KenoRoom({ game }: { game: GameDef }) {
-  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Pick 3 numbers from 1–10 — the draw picks 5. 2 matches pays ×1, 3 matches pays ×6.5.");
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Pick 3 numbers from 1–10 — the draw picks 5. 2 matches pays ×1, 3 matches pays ×6.5.", "Tap 3 numbers to pick them, then draw. The draw picks 5 — 2 matches pays ×1, 3 matches pays ×6.5.");
   const [picked, setPicked] = useState<number[]>([]);
   const [drawn, setDrawn] = useState<number[]>([]);
   const [done, setDone] = useState(false);
@@ -65,7 +65,7 @@ export function KenoRoom({ game }: { game: GameDef }) {
 const MEM_SYMBOLS = ["♠", "♥", "♦", "♣", "★", "◆", "●", "▲"];
 function memTier(moves: number) { return moves <= 5 ? 2 : moves === 6 ? 1.15 : moves === 7 ? 0.6 : moves === 8 ? 0.3 : 0; }
 export function MemoryRoom({ game }: { game: GameDef }) {
-  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Find all 4 pairs — clear in 5 moves for ×2.");
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Find all 4 pairs — clear in 5 moves for ×2.", "Tap Start, then flip two cards at a time to find the 4 pairs. Clear the board in 5 moves for ×2.");
   const [deck, setDeck] = useState<string[]>([]);
   const [flipped, setFlipped] = useState<number[]>([]);
   const [matched, setMatched] = useState<number[]>([]);
@@ -121,7 +121,7 @@ export function MemoryRoom({ game }: { game: GameDef }) {
 
 // ---------------- Whack-a-Mole ----------------
 export function WhackRoom({ game }: { game: GameDef }) {
-  const { room, stake, setStake, msg, setMsg } = useCoin(game, "30 seconds — whack the moles. Golden moles are worth 10, normal moles 3, bomb moles cost 10. Your multiplier is points ÷ 110, up to ×2.");
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "30 seconds — whack the moles. Golden moles are worth 10, normal moles 3, bomb moles cost 10. Your multiplier is points ÷ 110, up to ×2.", "Tap the moles as they pop up — golden +10, normal +3, bomb −10. Your multiplier is points ÷ 110, up to ×2.");
   const [playing, setPlaying] = useState(false);
   const [score, setScore] = useState(0);
   const [time, setTime] = useState(30);
@@ -225,7 +225,7 @@ function buildScratchBoard(targetMult: number): { cells: string[]; sym: string }
   return { cells: ["gold", "silver", "bronze", "star", "coin", "gold", "silver", "star", "coin"], sym: "" };
 }
 export function ScratchRoom({ game }: { game: GameDef }) {
-  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Scratch all 9 — match 3 of a kind. Three gold pays ×10, silver ×5, bronze ×2.");
+  const { room, stake, setStake, msg, setMsg } = useCoin(game, "Scratch all 9 — match 3 of a kind. Three gold pays ×10, silver ×5, bronze ×2.", "Buy a card, then tap each square to scratch it off. Match 3 of a kind — three gold pays ×10, silver ×5, bronze ×2.");
   const [cells, setCells] = useState<string[]>([]);
   const [revealed, setRevealed] = useState<boolean[]>(Array(9).fill(false));
   const [done, setDone] = useState(false);

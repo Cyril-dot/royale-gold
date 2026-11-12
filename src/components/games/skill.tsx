@@ -24,7 +24,7 @@ export function CandyRoom({ game }: { game: GameDef }) {
   const [moves, setMoves] = useState(30);
   const [score, setScore] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [msg, setMsg] = useState("Swap adjacent candies to match 3+. 30 moves — 500 pts ×1, 1000 ×2, 1500 ×3.");
+  const [msg, setMsg] = useState("Set your stake and start. 500+ pts returns your stake · 1,000+ pays ×2 · 1,500+ pays ×3. A swap that makes no match flips straight back and costs nothing.");
   const scoreRef = useRef(0);
 
   const genBoard = () => {
@@ -89,10 +89,13 @@ export function CandyRoom({ game }: { game: GameDef }) {
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
         <div className="cc-hud"><span>SCORE <b>{score}</b></span><span>MOVES <b>{moves}</b></span><span>TIER <b>×{candyTier(score)}</b></span></div>
-        <div className="cc-board">
-          {board.map((row, r) => row.map((v, c) => (
-            <button key={`${r}-${c}`} type="button" className={`cc-gem${sel && sel[0] === r && sel[1] === c ? " sel" : ""}`} style={{ color: CANDY_COLORS[v] }} onClick={() => void click(r, c)} aria-label={`Candy row ${r + 1} column ${c + 1}`}>{CANDY_TYPES[v]}</button>
-          )))}
+        <div className="cc-boardwrap">
+          <div className="cc-board">
+            {board.map((row, r) => row.map((v, c) => (
+              <button key={`${r}-${c}`} type="button" className={`cc-gem${sel && sel[0] === r && sel[1] === c ? " sel" : ""}`} style={{ color: CANDY_COLORS[v] }} onClick={() => void click(r, c)} aria-label={`Candy row ${r + 1} column ${c + 1}`}>{CANDY_TYPES[v]}</button>
+            )))}
+          </div>
+          {!playing && <div className="fn-idle"><b>30 moves</b><span>Match 3 = 60 · match 4 = 120 + line clear · match 5 = 240 + bonus cross · cascades ×2</span></div>}
         </div>
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start · {stake} coins</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
@@ -115,7 +118,7 @@ export function TetrisRoom({ game }: { game: GameDef }) {
   const [score, setScore] = useState(0);
   const [lines, setLines] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [msg, setMsg] = useState("Clear lines — 800 pts ×1, 1500 ×2, 2500 ×3. One Rotate button + drag to move.");
+  const [msg, setMsg] = useState("Set your stake and start. Clear lines before the stack tops out — a Tetris (4 lines at once) pays 800.");
   const scoreRef = useRef(0);
   const stateRef = useRef({ board, cur, playing });
   stateRef.current = { board, cur, playing };
@@ -201,8 +204,11 @@ export function TetrisRoom({ game }: { game: GameDef }) {
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
         <div className="tt-hud"><span>SCORE <b>{score}</b></span><span>LINES <b>{lines}</b></span><span>TIER <b>×{tetrisTier(score)}</b></span></div>
-        <div className="tt-board">
-          {display.map((row, r) => row.map((v, c) => <span key={`${r}-${c}`} className={`tt-cell${v ? " on" : ""}`} style={v ? { background: CANDY_COLORS[(v - 1) % 6] } : undefined} />))}
+        <div style={{ position: "relative" }}>
+          <div className="tt-board">
+            {display.map((row, r) => row.map((v, c) => <span key={`${r}-${c}`} className={`tt-cell${v ? " on" : ""}`} style={v ? { background: CANDY_COLORS[(v - 1) % 6] } : undefined} />))}
+          </div>
+          {!playing && <div className="fn-idle"><b>2 minutes on the clock</b><span>800+ pts returns your stake · 1,500+ pays ×2 · 2,500+ pays ×3 · every 10 lines the fall speeds up</span></div>}
         </div>
         {playing && (
           <div className="tt-btns">
@@ -231,7 +237,7 @@ export function TriviaRoom({ game }: { game: GameDef }) {
   const [time, setTime] = useState(15);
   const [phase, setPhase] = useState<"idle" | "playing" | "done">("idle");
   const [result, setResult] = useState<{ correct: number; payoutCoins: number; breakdown: { question: number; correct: boolean }[] } | null>(null);
-  const [msg, setMsg] = useState("10 questions, 15 seconds each. Entry 5 coins — 7 right pays 10, 9 pays 15, 10 pays 25.");
+  const [msg, setMsg] = useState("Tap an answer before the 15 seconds run out. 7 right pays 10 coins, 9 pays 15, 10 pays 25.");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const start = async () => {
@@ -326,7 +332,7 @@ export function SnakeRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [playing, setPlaying] = useState(false);
   const [score, setScore] = useState(0);
-  const [msg, setMsg] = useState("Eat apples (+10 pts), don't hit the walls or yourself. Entry 5 coins — 100+ pays 10, 200+ pays 20, 300+ pays 40.");
+  const [msg, setMsg] = useState("Steer with the arrow keys, swipe, or the on-screen arrows. Eat apples for +10 pts — don't hit the walls or yourself.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stRef = useRef<{ snake: { x: number; y: number }[]; dir: { x: number; y: number }; apple: { x: number; y: number }; speed: number } | null>(null);
   const scoreRef = useRef(0);
@@ -400,6 +406,25 @@ export function SnakeRoom({ game }: { game: GameDef }) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [playing, end]);
 
+  // Pre-start: draw the starting board (snake + apple) so the canvas
+  // is not a blank dark box before the first Start — the artifact shows
+  // the board on load.
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    const cell = 20;
+    const snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+    const apple = { x: 14, y: 6 };
+    ctx.fillStyle = "#0C2B22";
+    ctx.fillRect(0, 0, 400, 400);
+    ctx.fillStyle = "#E5322D";
+    ctx.beginPath(); ctx.arc(apple.x * cell + 10, apple.y * cell + 10, 8, 0, 7); ctx.fill();
+    ctx.fillStyle = "#3ED97E";
+    snake.forEach((sn) => ctx.fillRect(sn.x * cell + 1, sn.y * cell + 1, cell - 2, cell - 2));
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const st = stRef.current;
@@ -443,7 +468,7 @@ export function Game2048Room({ game }: { game: GameDef }) {
   const [playing, setPlaying] = useState(false);
   const [over, setOver] = useState(false);
   const [maxTile, setMaxTile] = useState(0);
-  const [msg, setMsg] = useState("Slide the tiles — reach 256 for 10 coins, 512 for 20, 1024 for 50. Entry 5 coins.");
+  const [msg, setMsg] = useState("Slide the tiles to merge them — reach 256 for 10 coins, 512 for 20, 1024 for 50.");
   const boardRef = useRef<number[][]>([]);
   const maxRef = useRef(0);
 

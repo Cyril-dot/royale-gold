@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 120" aria-hidden="true" role="img" aria-label="Glossy green glass bottle">
+              <defs>
+                <linearGradient id="glassGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#A9E8A2"/><stop offset=".13" stop-color="#5ED06C"/><stop offset=".3" stop-color="#21B14C"/>
+                  <stop offset=".52" stop-color="#0E8A38"/><stop offset=".74" stop-color="#065C24"/><stop offset=".9" stop-color="#043D17"/><stop offset="1" stop-color="#032B10"/>
+                </linearGradient>
+                <linearGradient id="capGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#FFE89A"/><stop offset=".45" stop-color="#F2C230"/><stop offset=".8" stop-color="#9A7410"/><stop offset="1" stop-color="#6E5207"/>
+                </linearGradient>
+                <filter id="blur2" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="2"/></filter>
+                <filter id="blur4" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="4"/></filter>
+                <clipPath id="bottleClip"><path d="M44 45 L98 45 C124 45 138 24 166 24 L398 24 C418 24 428 36 428 60 C428 84 418 96 398 96 L166 96 C138 96 124 75 98 75 L44 75 Z"/></clipPath>
+              </defs>
+              <!-- glass body: neck, sloping shoulder, long body — proportions matched to the supplied art -->
+              <path d="M44 45 L98 45 C124 45 138 24 166 24 L398 24 C418 24 428 36 428 60 C428 84 418 96 398 96 L166 96 C138 96 124 75 98 75 L44 75 Z" fill="url(#glassGrad)" stroke="#023012" stroke-width="2"/>
+              <g clip-path="url(#bottleClip)">
+                <!-- light bending through the glass: deep shade low, bright core mid-body -->
+                <rect x="40" y="66" width="392" height="34" fill="#021F0B" opacity=".34"/>
+                <rect x="120" y="48" width="300" height="20" fill="#7DFF9E" opacity=".16" filter="url(#blur4)"/>
+                <rect x="150" y="80" width="252" height="9" rx="4.5" fill="#8DFFA6" opacity=".3" filter="url(#blur2)"/>
+                <!-- the long specular highlight running the length of the bottle -->
+                <rect x="112" y="31" width="292" height="13" rx="6.5" fill="#FFFFFF" opacity=".82" filter="url(#blur2)"/>
+                <!-- second, softer highlight below it -->
+                <rect x="122" y="52" width="258" height="9" rx="4.5" fill="#FFFFFF" opacity=".2" filter="url(#blur4)"/>
+                <!-- shoulder sheen following the slope -->
+                <path d="M102 47 C124 47 138 29 164 27" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" opacity=".5" filter="url(#blur2)"/>
+                <!-- neck highlight -->
+                <rect x="48" y="49" width="46" height="6" rx="3" fill="#FFFFFF" opacity=".7" filter="url(#blur2)"/>
+              </g>
+              <!-- glass thickness: inner wall line and the thick base at the right end -->
+              <path d="M51 51 L99 51 C122 51 137 31 167 31 L395 31 C410 31 420 41 420 60 C420 79 410 89 395 89 L167 89 C137 89 122 69 99 69 L51 69 Z" fill="rgba(255,255,255,.05)" stroke="rgba(195,255,205,.34)" stroke-width="3"/>
+              <ellipse cx="413" cy="60" rx="6.5" ry="29" fill="rgba(225,255,230,.2)" stroke="rgba(195,255,205,.3)" stroke-width="1.5"/>
+              <!-- neck ring ridges -->
+              <rect x="40" y="42" width="9" height="36" rx="3.5" fill="#0B7434" stroke="#023012" stroke-width="1.4"/>
+              <rect x="54" y="42" width="7" height="36" rx="3" fill="#0B7434" stroke="#023012" stroke-width="1.4"/>
+              <!-- gold cap -->
+              <rect x="6" y="41" width="34" height="38" rx="5" fill="url(#capGrad)" stroke="#5A4303" stroke-width="1.6"/>
+              <path d="M14 43v34M21 43v34M28 43v34M35 43v34" stroke="rgba(90,67,3,.55)" stroke-width="2"/>
+              <rect x="8" y="44" width="30" height="7" rx="3.5" fill="#FFFFFF" opacity=".55" filter="url(#blur2)"/>
+            </svg>

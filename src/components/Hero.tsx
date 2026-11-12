@@ -8,7 +8,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtCash } from "../lib/api";
 import { useJackpot } from "../lib/jackpot";
 import { useStore } from "../lib/store";
@@ -82,6 +82,13 @@ export default function Hero() {
       }
     }, 70);
   }, [spinning, muted, finishSpin]);
+
+  // Dock play button (mobile bottom nav) spins the headline slot.
+  useEffect(() => {
+    const h = () => spin();
+    window.addEventListener("rg:spin-slot", h);
+    return () => window.removeEventListener("rg:spin-slot", h);
+  }, [spin]);
 
   return (
     <section className="hero">

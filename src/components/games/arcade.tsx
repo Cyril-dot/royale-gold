@@ -25,7 +25,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(10);
   const [playing, setPlaying] = useState(false);
-  const [msg, setMsg] = useState("Drive! Dodge the traffic, grab coins (+0.10x), near-miss a truck (+0.05x). Cash out before you crash.");
+  const [msg, setMsg] = useState("Steer with the arrow keys or drag. The multiplier climbs as you drive — cash out before you crash.");
   const [odds, setOdds] = useState(1);
   const [coins, setCoins] = useState(0);
   const [roundId, setRoundId] = useState<string | null>(null);
@@ -180,6 +180,34 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [playing, crash]);
 
+  // Pre-start: draw the road + parked car so the stage is not a blank
+  // box before the first Start — the artifact shows the scene on load.
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    const W = 300, H = 420, laneW = 100, carY = H - 90;
+    ctx.fillStyle = "#0C2B22";
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(242,194,48,.5)";
+    ctx.setLineDash([18, 14]);
+    for (let l = 1; l < 3; l++) { ctx.beginPath(); ctx.moveTo(l * laneW, 0); ctx.lineTo(l * laneW, H); ctx.stroke(); }
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#F2C230";
+    [80, 190].forEach((x, i) => {
+      const y = 120 + i * 90;
+      ctx.beginPath(); ctx.arc(x, y, 10, 0, 7); ctx.fill();
+      ctx.fillStyle = "#231600"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center"; ctx.fillText("₵", x, y + 3);
+      ctx.fillStyle = "#F2C230";
+    });
+    ctx.fillStyle = "#F2C230";
+    ctx.fillRect(150 - 20, carY - 34, 40, 68);
+    ctx.fillStyle = "#141828";
+    ctx.fillRect(150 - 16, carY - 22, 32, 14);
+    ctx.fillRect(150 - 16, carY + 6, 32, 14);
+  }, []);
+
   // Server crash: long-poll the reveal while driving — when it answers,
   // the server's round has crashed at its point and so does this run.
   // One request at a time, all 200s (no 403 console noise).
@@ -259,7 +287,7 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
   const [lives, setLives] = useState(3);
   const [coins, setCoins] = useState(0);
   const [power, setPower] = useState("");
-  const [msg, setMsg] = useState("Shoot the asteroids. Reach the kill goal to win — EASY 20 → ×2, MEDIUM 35 → ×3, HARD 50 → ×4.");
+  const [msg, setMsg] = useState("Pick a difficulty, set your stake and start. Reach the kill goal to win — EASY 20 pays ×2, MEDIUM 35 pays ×3, HARD 50 pays ×4.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stRef = useRef<{ rx: number; rocks: { x: number; y: number; r: number; v: number }[]; shots: { x: number; y: number }[]; items: { x: number; y: number; kind: string }[]; coins: { x: number; y: number }[]; speed: number; shield: number; rapid: number; slow: number; double: number; t: number } | null>(null);
   const rafRef = useRef(0);
@@ -373,6 +401,24 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [playing, goal, end]);
 
+  // Pre-start: draw the ship + a few asteroids so the stage is not a
+  // blank box before the first Launch — the artifact shows the scene on load.
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    const W = 400, H = 420;
+    ctx.fillStyle = "#070A18";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#F2C230";
+    ctx.beginPath(); ctx.arc(320, 120, 7, 0, 7); ctx.fill();
+    ctx.fillStyle = "#8A93A8";
+    [[70, 90, 18], [200, 160, 24], [330, 240, 15]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); });
+    ctx.fillStyle = "#F2C230";
+    ctx.beginPath(); ctx.moveTo(200, H - 78); ctx.lineTo(200 - 14, H - 40); ctx.lineTo(200 + 14, H - 40); ctx.closePath(); ctx.fill();
+  }, []);
+
   const move = (e: React.PointerEvent) => {
     const st = stRef.current;
     const cv = canvasRef.current;
@@ -411,7 +457,7 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
   const [lives, setLives] = useState(3);
   const [coins, setCoins] = useState(0);
   const [timeLeft, setTimeLeft] = useState(45);
-  const [msg, setMsg] = useState("Slice the fruit, dodge the bombs. Score 150 → ×2, 250 → ×3, 400 → ×4 in 45 seconds.");
+  const [msg, setMsg] = useState("Swipe or drag across the fruit to slice. Fruit is 10 pts, combos pay ×2/×3, coins are +25 pts — slice a bomb and the round ends on the spot.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stRef = useRef<{ fruits: { x: number; y: number; vx: number; vy: number; kind: string; r: number }[]; speed: number } | null>(null);
   const rafRef = useRef(0);
@@ -496,7 +542,10 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
         <div className="rs-hud"><span>SCORE <b>{score}</b></span><span>LIVES <b>{"♥".repeat(Math.max(0, lives))}</b></span><span>COINS <b>{coins}</b></span><span>TIME <b>{timeLeft}s</b></span></div>
-        <canvas ref={canvasRef} width={400} height={420} className="rs-canvas" onPointerMove={slice} onPointerDown={slice} aria-label="Fruit Ninja — drag across fruit to slice" />
+        <div style={{ position: "relative" }}>
+          <canvas ref={canvasRef} width={400} height={420} className="rs-canvas" onPointerMove={slice} onPointerDown={slice} aria-label="Fruit Ninja — drag across fruit to slice" />
+          {!playing && <div className="fn-idle"><b>Swipe to slice</b><span>Fruit = 10 pts · combos ×2/×3 · coins +25 pts · powerups hide in the volleys · a bomb ends the round on the spot</span></div>}
+        </div>
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start slicing · {stake} coins</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
