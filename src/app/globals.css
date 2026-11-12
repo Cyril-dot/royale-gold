@@ -345,14 +345,24 @@ html{overflow-x:clip}
   .rg48-f.rg48-f input,.rg48-f.rg48-f select,.jf-autorow.jf-autorow input{font-size:16px}
 }
 
-/* ============ Phone header rebuild + top-section fixes (12 Nov 2026, round 2)
-   The 288d092 audit proved zero horizontal overflow at 320–430px — what the
-   user still saw was STYLING, not overflow: the phone header wrapped into
-   3 accidental rows (258px at 320px) with a lone coin on row 1, the v48 dev
-   pills dangled on their own lines, the games subtitle truncated, the
-   homepage games filters sat ~112px under the subtitle, and the hero
-   kicker/CTA wrapped mid-word. Fixes are mobile-first, keep every control
-   and the v48 look — nothing deleted except dev version labels on phone.
+/* ============ Phone header, round 3 (12 Nov 2026) — MOBILE-FIRST ============
+   Designed at 360px first; desktop is the adaptation (the >=641 rules below
+   are unchanged). The artifact's own phone header, MEASURED at 390px, is
+   hdr-main 113px (coin alone on row 1; balance + coins + Deposit + Log in
+   on row 2) + a 45px ver-strip = 162px total — and it HIDES search, the LV
+   chip and Register on phone. The port keeps all 9 controls visible, so a
+   2-row header is geometrically impossible at 360px (332px of space vs
+   ~400px of controls at artifact sizes). The compact form is 3 SHORT rows:
+   tools 32px + money 40px + auth 36px + 8/6px padding + 2x5px gaps = 132px
+   — 22px shorter than round 2 (154px) and 30px shorter than the artifact's
+   own full header. Sizes match or sit just under the artifact's measured
+   phone sizes (bal-pill 48→40px tall, btn-dep 46→40px, btn-acct 40→36px,
+   coin-mark 36→32px, mode buttons 34→30px). Touch note: 30–40px is below
+   Apple's 44px guideline — the artifact itself ships 33–46px controls on
+   phone, and 32px is the smallest size that stays reliably tappable; the
+   money/auth rows keep 36–40px for the thumb. Nothing deleted: search and
+   the LV chip were display:none on phone (inherited artifact rules) and
+   are RESTORED here as compact controls.
    NOTE on specificity: v48.css is imported AFTER this file, so every
    override below uses a higher-specificity selector than the v48 rule
    it beats (the 288d092 trap: equal-specificity rules silently lose). */
@@ -368,28 +378,52 @@ html{overflow-x:clip}
   header.site #searchBtn{margin-left:auto}
 }
 @media (max-width:640px){
-  header.site .hdr-main{padding:8px 0 6px;row-gap:6px}
-  /* brand wordmark back on phone (v48 hid it, leaving a lone coin on its
-     own row); small caps tagline stays hidden to save width */
-  header.site .brand .brand-text{display:block}
-  header.site .brand-name{font-size:18px}
-  header.site .brand small{display:none}
-  header.site .coin-mark{width:36px;height:36px}
-  header.site .hdr-row-1{display:flex;align-items:center;gap:7px;margin-left:auto}
+  header.site .hdr-main{padding:8px 0 6px;row-gap:5px}
+  /* brand: the artifact hides the wordmark on phone — a lone coin is the
+     phone brand. Round 2 showed it at 17–18px and it ate ~100px of row 1. */
+  header.site .brand .brand-text{display:none}
+  header.site .coin-mark{width:32px;height:32px}
+  header.site .coin-mark svg{width:18px;height:18px}
+  /* row 1 — tools: coin left, search + REAL/SIM + sound + LV right. Search
+     and the LV chip were display:none on phone (inherited artifact rules);
+     restored here as compact 30–32px controls. */
+  header.site .hdr-row-1{display:flex;align-items:center;gap:6px;margin-left:auto}
+  header.site #searchBtn{display:grid}
+  header.site .icon-btn{width:32px;height:32px}
+  header.site .icon-btn svg{width:18px;height:18px}
+  header.site .mode-toggle button{padding:5px 8px;font-size:11px;min-height:30px}
+  header.site .xp-chip{display:flex;min-height:30px;padding:4px 8px}
+  header.site .xp-chip .xp-lvl{font-size:11px}
+  /* row 2 — money: balance + coins + Deposit, artifact fonts, shorter pills.
+     The balance pill flexes to fill the row (room for big balances). */
   header.site .hdr-row-2{display:flex;align-items:center;gap:7px;flex:1 1 100%}
+  header.site .bal-pill{min-width:0;min-height:40px;padding:4px 10px 4px 4px;gap:7px;flex:1 1 0}
+  header.site .bal-coin{width:26px;height:26px;font-size:13px}
+  header.site .bal-pill strong{font-size:13px}
+  header.site .coin-pill{min-width:0;min-height:30px;padding:3px 8px 3px 4px;gap:6px}
+  header.site .coin-pill .cp-ico{width:20px;height:20px;font-size:12px}
+  header.site .coin-pill b{font-size:13px}
+  header.site .btn-dep{min-height:40px;font-size:13px;padding:0 12px}
+  /* row 3 — auth: Log in + Register share the row, 36px (was 40px);
+     logged-in chip 36px (was 45px). */
   header.site .hdr-row-3{display:flex;align-items:center;gap:8px;flex:1 1 100%}
-  /* logged-out: Log in + Register share the row evenly, full width */
-  header.site .hdr-row-3 .btn-acct{flex:1}
+  header.site .hdr-row-3 .btn-acct{flex:1;min-height:36px;font-size:13px}
   /* logged-in: the box spans the row, the chip itself sits right */
   header.site .hdr-row-3 .acct-box{flex:1}
   header.site .hdr-row-3 .acct-wrap{margin-left:auto}
+  header.site .acct-chip{min-height:36px;padding:3px 8px 3px 3px;gap:7px}
+  header.site .acct-chip .ac-av{width:26px;height:26px;font-size:12px}
+  header.site .acct-chip .ac-name{font-size:13px}
   /* balance/coin pills must never force a row to wrap: shrink + ellipsis
      guards (7-figure balances, long coin counts) */
-  header.site .bal-pill{min-width:0}
   header.site .bal-pill>div{min-width:0}
   header.site .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  header.site .coin-pill{min-width:0}
   header.site .coin-pill b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* search row: the input's min-content width pushed the hidden close
+     button 13px past the viewport at 360px (invisible, but a real
+     overflow on the DOM walk) */
+  header.site .search-inner form{min-width:0}
+  header.site .search-inner input{min-width:0}
   /* v48 pills are dev version labels (aria-hidden, pointer-events:none),
      not controls: hide on phone, keep on desktop. Their 42px bar padding
      goes with them. */
@@ -408,9 +442,6 @@ html{overflow-x:clip}
      10px/.06em + tighter padding brings it to ~280px (fits 292px). */
   section.hero .hero-kicker{font-size:10px;letter-spacing:.06em;padding:8px 12px}
   section.hero .hero-cta .btn{font-size:15px;padding:0 12px}
-  /* brand + row-1 measured 150+135+gap = 292px at 320px — sub-pixel wrap
-     pushed row-1 to its own line (header 196px). 17px buys ~6px back. */
-  header.site .brand-name{font-size:17px}
 }
 
 /* --- Homepage games gap: .gp-filters carries the /games-page sticky-bar
