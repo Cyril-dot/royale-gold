@@ -7,12 +7,19 @@
 
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useRef, useState } from "react";
 import { fmtCash } from "../lib/api";
 import { useJackpot } from "../lib/jackpot";
 import { useStore } from "../lib/store";
 import { playSfx } from "../lib/store";
 import { LIVE_WINS } from "../lib/tiles";
+import type { HeroSlotHandle } from "./three/HeroSlot3D";
+
+// Hero 3D slot (restored from the v48 artifact): client-only, so the
+// Three.js scene never renders on the server. If WebGL is unavailable
+// the DOM fallback/reels below show instead.
+const HeroSlot3D = dynamic(() => import("./three/HeroSlot3D"), { ssr: false });
 
 const SYMBOLS = ["7", "♠", "♥", "♦", "♣", "★"];
 const PAYOUTS: Record<string, number> = {};
@@ -33,6 +40,23 @@ export default function Hero() {
   const [spinning, setSpinning] = useState(false);
   const [msg, setMsg] = useState("");
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 3D slot controller (null until the scene mounts / when WebGL is down).
+  const slot3dRef = useRef<HeroSlotHandle | null>(null);
+  const [slot3d, setSlot3d] = useState(false);
+
+  const finishSpin = useCallback((final: string[]) => {
+    setReels(final);
+    setSpinning(false);
+    const p = prize(final[0], final[1], final[2]);
+    if (p > 0) {
+      setMsg(`You won GH₵ ${p}!`);
+      toast(`Slot win — GH₵ ${p}`, "win");
+      playSfx("cheer", muted);
+    } else {
+      setMsg("No win — spin again");
+      playSfx("groan", muted);
+    }
+  }, [toast, muted]);
 
   const spin = useCallback(() => {
     if (spinning) return;
@@ -40,27 +64,24 @@ export default function Hero() {
     setSpun(true);
     setMsg("");
     playSfx("tick", muted);
+    // Finals are picked up front: the 3D drums spin TO them (artifact
+    // RGspin), and the DOM path settles on the same values.
+    const finals = [0, 1, 2].map(() => Math.floor(Math.random() * SYMBOLS.length));
+    const finalSymbols = finals.map((i) => SYMBOLS[i]);
+    if (slot3dRef.current) {
+      slot3dRef.current.spin(finals as [number, number, number], () => finishSpin(finalSymbols));
+      return;
+    }
     let ticks = 0;
     timer.current = setInterval(() => {
       ticks++;
       setReels([SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)], SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)], SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)]]);
       if (ticks > 14) {
         if (timer.current) clearInterval(timer.current);
-        const final = [SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)], SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)], SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)]];
-        setReels(final);
-        setSpinning(false);
-        const p = prize(final[0], final[1], final[2]);
-        if (p > 0) {
-          setMsg(`You won GH₵ ${p}!`);
-          toast(`Slot win — GH₵ ${p}`, "win");
-          playSfx("cheer", muted);
-        } else {
-          setMsg("No win — spin again");
-          playSfx("groan", muted);
-        }
+        finishSpin(finalSymbols);
       }
     }, 70);
-  }, [spinning, toast, muted]);
+  }, [spinning, muted, finishSpin]);
 
   return (
     <section className="hero">
@@ -68,7 +89,8 @@ export default function Hero() {
         <span className="hero-kicker"><i /> 2,300+ games · Instant MoMo payouts</span>
         <h1 className="headline">Play
           <span className="slot-frame" id="slotStage" role="group" aria-label="Slot machine — press spin to play">
-            <span className="slot-view">
+            <span className={`slot-view${slot3d ? " has-3d" : ""}`}>
+              <HeroSlot3D controllerRef={slot3dRef} onReady={setSlot3d} />
               {!spun ? (
                 <span className="slot-fallback" aria-hidden="true">
                   <span className="fb-coin"><svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12 2C9 7 4 9 4 13a8 8 0 0 0 16 0c0-4-5-6-8-11z" /></svg></span>

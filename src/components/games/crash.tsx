@@ -15,11 +15,19 @@
 
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { useStore } from "../../lib/store";
+import type { CrashSceneState } from "../../lib/three/crash";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
+
+// Crash 3D scene (restored from the v48 artifact): client-only, so the
+// Three.js scene never renders on the server. Aviator gets the Crash
+// scene (red plane), Jet Fly gets the Jet scene (SAFE box + holding
+// pattern). The 2D canvas stays as the no-WebGL fallback.
+const CrashScene3D = dynamic(() => import("../three/CrashScene3D"), { ssr: false });
 
 const GROWTH = 0.00006;
 const DISPLAY_CAP = 50;
@@ -53,6 +61,12 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
   const startRef = useRef(0); // server startsAt (epoch ms) — the curve anchor
+  // 3D scene state (mutable ref, read by the scene's own rAF loop — no
+  // React re-render per frame). vehT0 is in the performance.now()
+  // domain: the moment the current vehState began.
+  const sceneStateRef = useRef<CrashSceneState>({ mult: 1, elapsed: 0, phase: "idle", vehState: "idle", vehT0: 0 });
+  const cashT0Ref = useRef(0); // performance.now() of the first cash-out this round (0 = none)
+  const [has3d, setHas3d] = useState(false);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const betsRef = useRef(bets);
@@ -68,6 +82,15 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
     setCrashPoint(rv.crashPoint);
     setMult(rv.crashPoint);
     setPhase("crashed");
+    // 3D: freeze the curve at the crash point; the vehicle falls
+    // (Aviator) or levels into its holding pattern (Jet Fly).
+    sceneStateRef.current = {
+      mult: rv.crashPoint,
+      elapsed: (Date.now() - startRef.current) / 1000,
+      phase: "crashed",
+      vehState: skin === "jet" ? "away" : "crash",
+      vehT0: performance.now(),
+    };
     setHistory((h) => [Math.round(rv.crashPoint * 100) / 100, ...h].slice(0, 12));
     setMsg(`Crashed at ×${rv.crashPoint.toFixed(2)} — server seed revealed below.`);
     const losers = betsRef.current.filter((b) => !b.cashed);
@@ -108,6 +131,8 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
       setPhase("waiting");
       setMult(1);
       setBets([]);
+      cashT0Ref.current = 0;
+      sceneStateRef.current = { mult: 1, elapsed: 0, phase: "waiting", vehState: "idle", vehT0: 0 };
       setMsg("Betting open — round takes off soon.");
       const waitMs = Math.max(500, r.startsAt - Date.now());
       setCountdown(Math.ceil(waitMs / 1000));
@@ -147,6 +172,17 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
       const elapsed = Date.now() - startRef.current;
       const m = multAt(elapsed);
       setMult(m);
+      // 3D: drive the vehicle from the live multiplier. A cashed bet
+      // lifts the plane (Aviator only — Jet Fly has no cash state and
+      // keeps flying after a cash-out, as in the artifact).
+      const cashedAny = betsRef.current.some((b) => b.cashed);
+      sceneStateRef.current = {
+        mult: m,
+        elapsed: elapsed / 1000,
+        phase: "running",
+        vehState: skin === "aviator" && cashedAny ? "cash" : "fly",
+        vehT0: cashT0Ref.current,
+      };
       // Auto cash-out
       const active = betsRef.current.find((b) => !b.cashed);
       if (active && active.auto && m >= active.auto) void cashOut(active);
@@ -223,6 +259,8 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
     // curve is below it, and the server re-checks on settle anyway.
     const m = Math.min(multAt(Date.now() - startRef.current), DISPLAY_CAP);
     const payout = Math.round(bet.stake * m * 100) / 100;
+    // 3D: the first cash-out of the round starts the cash lift.
+    if (!cashT0Ref.current) cashT0Ref.current = performance.now();
     setBets((bs) => bs.map((b) => (b === bet ? { ...b, cashed: true, payout } : b)));
     await room.settle(bet.stake, payout, { cashout: m }, roundId || undefined);
     setMsg(`Cashed out at ×${m.toFixed(2)} — ${fmtCash(payout)}`);
@@ -234,9 +272,15 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
 
   return (
     <RoomShell game={game} subtitle={skin === "jet" ? "Jet Fly — proper Aviator: 5-second betting window, dual bets, auto cash-out, live feed." : "Aviator Gold — watch the multiplier climb and cash out before it crashes. Display cap ×50."} stats={room.stats} history={room.history}>
-      <div className="cr-stage">
+      <div className={`cr-stage${has3d ? " has-3d" : ""}`}>
         <div className="cr-mult" style={{ color: phase === "crashed" ? "#E5322D" : undefined }}>×{dispMult.toFixed(2)}</div>
+        <CrashScene3D skin={skin} stateRef={sceneStateRef} onReady={setHas3d} />
         <canvas ref={canvasRef} width={640} height={260} className="cr-canvas" aria-label="Crash multiplier chart" />
+      </div>
+      {/* Round status + provably-fair line sit BELOW the stage: inside it
+          the in-flow hash ran under the multiplier, and the status text
+          was clipped to an 8px bar by the old progress-bar styling. */}
+      <div className="cr-meta">
         <div className="cr-hash">Provably fair · hash {hash || "—"} · round {roundId ? roundId.slice(0, 8) : "—"}</div>
         <div className="cr-count">{phase === "waiting" ? `Takes off in ${countdown}s` : phase === "running" ? "Flying…" : phase === "crashed" ? "Crashed" : "Press Start round"}</div>
       </div>

@@ -7,10 +7,21 @@
 
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
+import type { CoinFlipHandle } from "../three/CoinFlip3D";
+import type { DiceHandle } from "../three/Dice3D";
+import type { MiniRouletteHandle } from "../three/MiniRoulette2D";
+import MiniRoulette2D from "../three/MiniRoulette2D";
+
+// 3D scene mounts (restored from the v48 artifact): client-only, so
+// Three.js never renders on the server. The DOM coin / dice stay as
+// the no-WebGL fallbacks; Mini Roulette's wheel is a 2D canvas restore.
+const CoinFlip3D = dynamic(() => import("../three/CoinFlip3D"), { ssr: false });
+const Dice3D = dynamic(() => import("../three/Dice3D"), { ssr: false });
 
 function useSimple(game: GameDef, subtitle: string) {
   const room = useGameRoom(game);
@@ -40,22 +51,33 @@ export function CoinFlipRoom({ game }: { game: GameDef }) {
   const [pick, setPick] = useState<"heads" | "tails">("heads");
   const [flipping, setFlipping] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  // 3D coin controller (null until the scene mounts / when WebGL is down).
+  const flip3dRef = useRef<CoinFlipHandle | null>(null);
+  const [flip3d, setFlip3d] = useState(false);
   const flip = async () => {
     if (flipping) return;
     setFlipping(true);
     setResult(null);
     const out = Math.random() < 0.5 ? "heads" : "tails";
-    setTimeout(async () => {
+    const finish = async () => {
       setResult(out);
       setFlipping(false);
       const won = out === pick;
       setMsg(won ? `It landed ${out} — you called it! ${fmtCash(stake * 2)}` : `It landed ${out} — not your call.`);
       await room.settle(stake, won ? stake * 2 : 0, { pick, out });
-    }, 700);
+    };
+    // 3D: flip to the pre-decided face (2350ms artifact flip), then
+    // settle. DOM: the 700ms flip it replaces.
+    if (flip3dRef.current) {
+      flip3dRef.current.flip(out === "heads" ? "HEADS" : "TAILS", () => void finish());
+      return;
+    }
+    setTimeout(() => void finish(), 700);
   };
   return (
     <Shell game={game} subtitle="Call it — heads or tails, pays ×2." stake={stake} setStake={setStake} msg={msg}>
-      <div className="cf-stage">
+      <div className={`cf-stage${flip3d ? " has-3d" : ""}`}>
+        <CoinFlip3D controllerRef={flip3dRef} onReady={setFlip3d} />
         <div className={`cf-coin ${flipping ? "spin" : ""}`}>{result ? (result === "heads" ? "₵" : "★") : "?"}</div>
         <div className="cf-picks">
           {(["heads", "tails"] as const).map((p) => (
@@ -85,22 +107,32 @@ export function DiceRoom({ game }: { game: GameDef }) {
   const { room, stake, setStake, msg, setMsg } = useSimple(game, "Roll two dice — exactly 7 pays ×5.");
   const [dice, setDice] = useState<[number, number]>([3, 4]);
   const [rolling, setRolling] = useState(false);
+  // 3D dice controller (null until the scene mounts / when WebGL is down).
+  const dice3dRef = useRef<DiceHandle | null>(null);
+  const [dice3d, setDice3d] = useState(false);
   const roll = async () => {
     if (rolling) return;
     setRolling(true);
     const d1 = 1 + Math.floor(Math.random() * 6), d2 = 1 + Math.floor(Math.random() * 6);
-    setTimeout(async () => {
+    const finish = async () => {
       setDice([d1, d2]);
       setRolling(false);
       const total = d1 + d2;
       const won = total === 7;
       setMsg(won ? `Seven! ${d1} + ${d2} pays ×5 — ${fmtCash(stake * 5)}` : `${d1} + ${d2} = ${total} — not 7.`);
       await room.settle(stake, won ? stake * 5 : 0, { d1, d2, total });
-    }, 600);
+    };
+    // 3D: the physics throw lands on the pre-decided values, then
+    // settle. DOM: the 600ms roll it replaces.
+    if (dice3dRef.current) {
+      dice3dRef.current.roll([d1, d2], () => void finish());
+      return;
+    }
+    setTimeout(() => void finish(), 600);
   };
   return (
     <Shell game={game} subtitle="Roll two dice — exactly 7 pays ×5." stake={stake} setStake={setStake} msg={msg}>
-      <div className="dice-stage"><Die v={dice[0]} /><Die v={dice[1]} /></div>
+      <div className={`dice-stage${dice3d ? " has-3d" : ""}`}><Dice3D controllerRef={dice3dRef} onReady={setDice3d} /><Die v={dice[0]} /><Die v={dice[1]} /></div>
       <button className="btn btn-gold xg-action" type="button" onClick={() => void roll()} disabled={rolling}>{rolling ? "Rolling…" : `Roll · ${fmtCash(stake)}`}</button>
     </Shell>
   );
@@ -389,11 +421,14 @@ export function MiniRouletteRoom({ game }: { game: GameDef }) {
   const [bet, setBet] = useState<MrBet>("red");
   const [spun, setSpun] = useState<number | null>(null);
   const [spinning, setSpinning] = useState(false);
+  // 2D canvas wheel controller (null until the canvas mounts).
+  const mrRef = useRef<MiniRouletteHandle | null>(null);
+  const [mrReady, setMrReady] = useState(false);
   const spin = async () => {
     if (spinning) return;
     setSpinning(true);
     const out = Math.floor(Math.random() * 37);
-    setTimeout(async () => {
+    const finish = async () => {
       setSpun(out);
       setSpinning(false);
       const colour = out === 0 ? "green" : MR_RED.has(out) ? "red" : "black";
@@ -401,12 +436,20 @@ export function MiniRouletteRoom({ game }: { game: GameDef }) {
       const payout = Math.round(stake * mult * 100) / 100;
       setMsg(mult > 0 ? `Landed ${out} ${colour} — ×${mult}! ${fmtCash(payout)}` : `Landed ${out} ${colour} — your ${bet} bet loses.`);
       await room.settle(stake, payout, { bet, out, colour });
-    }, 900);
+    };
+    // Canvas: the wheel spins 4400ms and lands on the pre-decided
+    // pocket, then settles. DOM: the 900ms spin it replaces.
+    if (mrRef.current) {
+      mrRef.current.spin(out, () => void finish());
+      return;
+    }
+    setTimeout(() => void finish(), 900);
   };
   const landedColour = spun === null ? null : spun === 0 ? "green" : MR_RED.has(spun) ? "red" : "black";
   return (
     <Shell game={game} subtitle="European wheel, 0–36. Red or black pays ×2, green zero pays ×36." stake={stake} setStake={setStake} msg={msg}>
-      <div className="mr-stage">
+      <div className={`mr-stage${mrReady ? " has-2d" : ""}`}>
+        <MiniRoulette2D controllerRef={mrRef} onReady={setMrReady} />
         <div className={`mr-wheel${landedColour ? ` ${landedColour}` : ""}`}>{spun !== null ? spun : spinning ? "…" : "?"}</div>
         <div className="mr-bets" role="group" aria-label="Bet on red, black or green">
           {(["red", "black", "green"] as MrBet[]).map((b) => (

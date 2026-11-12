@@ -2075,3 +2075,25 @@ table.rg48-t tr.rg48-click:hover td{background:rgba(255,176,0,.05)}
 .bottle-msg.win.rg-fading,.bottle-msg.lose.rg-fading{opacity:0;transform:translateY(-6px);transition:opacity .3s ease,transform .3s ease,top .25s ease}
 .bottle-msg.win.rg-gone,.bottle-msg.lose.rg-gone{visibility:hidden;opacity:0}
 @media (prefers-reduced-motion: reduce){.bottle-msg.win.rg-fading,.bottle-msg.lose.rg-fading{transition:opacity .3s ease,top .25s ease;transform:none}}
+
+/* ---- 3D scene mounts, restored from the v48 artifact (Dec 2026) ----
+   The 3D/canvas layer replaces the DOM fallback only when it actually
+   initialises (the room adds .has-3d / .has-2d on the stage). Without
+   WebGL the DOM fallback renders exactly as before. #gl is sized by
+   the existing rules at the top of this file; the crash 3D canvas
+   fills .cr-stage via the existing .cr-stage canvas rule. */
+.slot-view.has-3d .slot-fallback,.slot-view.has-3d .slot-reels{display:none}
+.cr-stage.has-3d .cr-canvas{display:none}
+.cf-stage.has-3d .cf-coin{display:none}
+.dice-stage.has-3d .die{display:none}
+.mr-stage.has-2d .mr-wheel{display:none}
+.cf-stage canvas.cf-3d,.dice-stage canvas.dr-3d{display:block;width:min(440px,100%);height:280px;margin:0 auto}
+@media (max-width:640px){.cf-stage canvas.cf-3d,.dice-stage canvas.dr-3d{height:220px}}
+.mr-wheel-box{width:min(420px,100%);aspect-ratio:1;margin:0 auto}
+.mr-wheel-box canvas{width:100%!important;height:100%!important}
+
+/* Crash status + provably-fair line, below the stage (moved out of
+   .cr-stage: the hash ran under the multiplier and the status text was
+   clipped to the old 8px progress-bar strip). */
+.cr-meta{max-width:680px;margin:10px auto 0;text-align:center}
+.cr-meta .cr-count{position:static;left:auto;bottom:auto;transform:none;width:auto;height:auto;background:none;overflow:visible;font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--gold-2)}
