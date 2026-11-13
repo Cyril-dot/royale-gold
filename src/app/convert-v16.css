@@ -1,0 +1,73 @@
+/* Round 16 — cash → coins converter (3D tilt card + spinning gold coin).
+   Loaded after wallet-v11.css, so these rules win. No overflow:hidden on
+   the card — it would flatten the coin's 3D depth. */
+
+/* ---- 3D tilt card (same pattern as the Visa wallet card) ---- */
+.cv-wrap{perspective:1100px;margin:22px auto 4px;max-width:420px}
+.cv-card{position:relative;border-radius:20px;transform-style:preserve-3d;--mx:50%;--my:40%;--shx:0px;--shy:18px;box-shadow:var(--shx) var(--shy) 34px rgba(0,0,0,.55),0 0 0 1px rgba(242,194,48,.35),inset 0 1px 0 rgba(255,246,216,.18);background:radial-gradient(120% 90% at 12% 0%,rgba(242,194,48,.26),transparent 55%),radial-gradient(90% 70% at 95% 100%,rgba(12,43,34,.9),transparent 60%),linear-gradient(135deg,#0E2A20 0%,#071410 55%,#0A1F18 100%);color:#FFF6D8;padding:20px}
+.cv-card::after{content:"";position:absolute;inset:0;border-radius:20px;background:radial-gradient(420px 260px at var(--mx) var(--my),rgba(255,246,216,.16),transparent 65%);pointer-events:none}
+
+.cv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;transform:translateZ(24px)}
+.cv-head h3{margin:0;font-size:18px;font-weight:800;letter-spacing:.01em;color:#FFF6D8}
+.cv-sub{margin:4px 0 0;font-size:13px;line-height:1.45;color:var(--muted)}
+.cv-rate{flex:none;text-align:center;background:linear-gradient(180deg,#FFD964 0%,#F2C230 52%,#D9A41C 100%);color:#070812;border-radius:12px;padding:8px 10px;box-shadow:0 2px 14px rgba(242,194,48,.35);transform:translateZ(30px)}
+.cv-rate-num{display:block;font-family:var(--font-display,Anton,sans-serif);font-size:19px;line-height:1.05;letter-spacing:.02em;white-space:nowrap}
+.cv-rate-coin{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+
+/* ---- Coin stage: the 3D gold coin + the counting coin total ---- */
+.cv-stage{display:flex;align-items:center;gap:16px;margin:18px 0 6px;transform:translateZ(20px)}
+.cv-coin-scene{flex:none;width:96px;height:96px;perspective:800px}
+.cv-coin{position:relative;width:88px;height:88px;margin:4px;transform-style:preserve-3d;animation:cvCoinIdle 7s linear infinite}
+.cv-coin[data-spinning="1"]{animation:cvCoinSpin .9s cubic-bezier(.2,.7,.25,1.15)}
+@keyframes cvCoinIdle{from{transform:rotateY(0deg)}to{transform:rotateY(360deg)}}
+@keyframes cvCoinSpin{from{transform:rotateY(0deg)}to{transform:rotateY(1080deg)}}
+.cv-coin-edge{position:absolute;inset:-3px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#B98A1B,#8A6A10 70%);transform:translateZ(-4px)}
+.cv-coin-face{position:absolute;inset:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:radial-gradient(circle at 35% 28%,#FFE89A 0%,#F2C230 45%,#C99612 78%,#9A7410 100%);box-shadow:inset 0 0 0 3px rgba(138,106,16,.55),inset 0 0 0 7px rgba(255,232,154,.35),inset 0 -4px 10px rgba(0,0,0,.28);backface-visibility:hidden;-webkit-backface-visibility:hidden;color:#5C430A}
+.cv-coin-back{transform:rotateY(180deg)}
+.cv-coin-glyph{font-size:32px;font-weight:900;line-height:1;text-shadow:0 1px 0 rgba(255,246,216,.6)}
+.cv-coin-word{font-size:9px;font-weight:800;letter-spacing:.28em}
+.cv-coins-readout{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cv-coins-readout span{font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.cv-coins-readout b{font-size:26px;font-weight:800;color:var(--gold-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---- Form: input, chips, preview, convert ---- */
+.cv-label{display:block;margin:14px 0 6px;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.cv-input-row{display:flex;align-items:center;gap:8px;background:rgba(7,8,18,.55);border:1px solid rgba(242,194,48,.35);border-radius:12px;padding:0 14px}
+.cv-input-row:focus-within{border-color:var(--gold);box-shadow:0 0 0 2px rgba(242,194,48,.25)}
+.cv-cur{font-size:17px;font-weight:800;color:var(--gold-2)}
+.cv-input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#FFF6D8;font-family:var(--font-body,Outfit,sans-serif);font-size:16px;font-weight:700;padding:13px 0;font-variant-numeric:tabular-nums}
+.cv-chips{display:flex;gap:8px;margin-top:10px}
+.cv-chip{flex:1;min-height:44px;border-radius:10px;border:1px solid rgba(242,194,48,.35);background:rgba(7,8,18,.45);color:#FFF6D8;font-family:var(--font-body,Outfit,sans-serif);font-size:15px;font-weight:800;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:background .18s ease,border-color .18s ease,transform .12s ease}
+.cv-chip[aria-pressed="true"]{background:linear-gradient(180deg,#FFD964,#F2C230);border-color:#F2C230;color:#070812}
+.cv-chip:active{transform:scale(.96)}
+.cv-preview{min-height:26px;margin:14px 0 10px;font-size:17px;font-weight:800;color:var(--gold-2);text-align:center;font-variant-numeric:tabular-nums}
+.cv-preview .cv-arrow{color:#FFF6D8;padding:0 2px}
+.cv-flash{display:inline-block;animation:cvFlipIn .5s cubic-bezier(.2,.9,.3,1.25)}
+@keyframes cvFlipIn{from{transform:rotateX(-90deg);opacity:0}to{transform:rotateX(0deg);opacity:1}}
+.cv-convert{width:100%;min-height:52px;font-size:16px}
+.cv-convert:disabled{opacity:.45;cursor:not-allowed}
+.cv-msg{min-height:46px;margin-top:10px;text-align:center}
+.cv-msg p{margin:0;font-size:13px;line-height:1.45}
+.cv-err{color:#FF8A80;font-weight:700}
+.cv-hint{color:var(--muted)}
+.cv-dep-link{margin-top:4px;background:none;border:0;padding:4px 8px;color:var(--gold-2);font-family:var(--font-body,Outfit,sans-serif);font-size:14px;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+/* ---- SIM mode: the converter is locked, one tap switches to REAL ---- */
+.cv-sim{margin-top:14px;text-align:center}
+.cv-sim p{margin:0 0 14px;font-size:14px;line-height:1.55;color:#FFF6D8}
+.cv-sim p b{color:var(--gold-2)}
+.cv-switch{min-height:48px;padding:0 22px;font-size:15px}
+.cv-sim .cv-hint{margin-top:14px;font-size:13px}
+
+/* ---- Touch: the coin bobs gently instead of the card tilting ---- */
+@media (hover:none){
+  .cv-coin-scene{animation:cvFloat 5s ease-in-out infinite}
+  @keyframes cvFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+}
+@media (hover:hover) and (pointer:fine){
+  .cv-chip:hover{border-color:var(--gold)}
+  .cv-dep-link:hover{color:#FFE89A}
+}
+@media (prefers-reduced-motion:reduce){
+  .cv-coin,.cv-coin-scene,.cv-flash{animation:none}
+}

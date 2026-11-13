@@ -9,6 +9,7 @@ import Link from "next/link";
 import { fmtCash, fmtCoins } from "../../lib/api";
 import { useStore } from "../../lib/store";
 import WalletCard from "../../components/WalletCard";
+import CoinConverter from "../../components/CoinConverter";
 
 export default function WalletPage() {
   const { user, wallet, mode, simSession, topUpSim, openAuth, setDepositOpen } = useStore();
@@ -57,7 +58,10 @@ export default function WalletPage() {
         {mode === "SIM" && (
           <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
         )}
-        <p className="rg48-mini wallet-note">Coins are play-only — never withdrawable.</p>
+        {/* Round 16: convert REAL cash to coins at GH₵5 = 1 coin. The
+            deposit centre above stays as-is; this section is the new work.
+            (The "coins are play-only" line lives inside the converter now.) */}
+        <CoinConverter />
       </div>
     </main>
   );

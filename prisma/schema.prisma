@@ -45,6 +45,7 @@ model User {
   redemptions     Redemption[]
   deposits        DepositEvent[] @relation("Depositor")
   adminDeposits   DepositEvent[] @relation("CommissionAdmin")
+  conversions     ConversionEvent[]
   gameResults     GameResult[]
   dailyClaims     DailyClaim[]
   achievements    Achievement[]
@@ -88,6 +89,20 @@ model DepositEvent {
   createdAt  DateTime @default(now())
 
   @@index([adminId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ConversionEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // REAL cash debited (GH₵) — SIM is never involved in conversions.
+  cashDebited Decimal  @db.Decimal(12, 2)
+  // Coins credited at the fixed rate GH₵5 = 1 coin. One-way only:
+  // coins are never withdrawable or convertible back to cash.
+  coinsGained Int
+  createdAt   DateTime @default(now())
+
   @@index([userId, createdAt])
 }
 
