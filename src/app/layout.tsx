@@ -18,6 +18,7 @@ import "./games-v17-coin.css";
 import "./games-v17-quick.css";
 import "./games-v17-gamespage.css";
 import "./games-v18.css";
+import "./account-v27.css";
 import { StoreProvider } from "../lib/store";
 import Header from "../components/Header";
 import Dock from "../components/Dock";

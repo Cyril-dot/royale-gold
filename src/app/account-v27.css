@@ -1,0 +1,163 @@
+/* --- Account profile (Round 27) ---
+   Gaming profile: hero + XP bar, wallet cards, REAL/SIM stats grid,
+   per-game breakdown, recent history, achievements. Brand tokens only
+   (midnight #070812, felt #0C2B22, gold #F2C230, cream #FFF6D8).
+   Amounts in Outfit bold — never Anton. Mobile-first. */
+
+.ac-page .wrap{max-width:860px}
+
+/* --- Hero --- */
+.ac-hero{
+  display:flex;flex-wrap:wrap;align-items:center;gap:14px;
+  padding:18px;border-radius:18px;margin:6px 0 14px;
+  background:linear-gradient(160deg, rgba(12,43,34,.9), rgba(7,8,18,.92) 60%), radial-gradient(220px 90px at 85% 0%, rgba(242,194,48,.22), transparent 70%);
+  border:1px solid rgba(242,194,48,.35);
+  box-shadow:0 10px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,246,216,.08);
+}
+.ac-avatar{
+  width:64px;height:64px;flex:0 0 64px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:24px;font-weight:800;color:#1A1200;
+  background:linear-gradient(180deg,#FFE9A8,#F2C230 55%,#C98F12);
+  border:3px solid rgba(255,246,216,.85);
+  box-shadow:0 0 0 3px rgba(242,194,48,.35), 0 0 22px rgba(242,194,48,.45);
+}
+.ac-who{flex:1 1 180px;min-width:0}
+.ac-who h3{margin:0;font-size:21px;font-weight:800;color:#FFF6D8;overflow-wrap:anywhere}
+.ac-who p{margin:3px 0 0;font-size:13px;color:rgba(255,246,216,.72);overflow-wrap:anywhere}
+.ac-level{flex:1 1 100%;min-width:0}
+.ac-level-num{font-size:12px;font-weight:800;letter-spacing:.14em;color:#FFD964}
+.ac-xpbar{
+  height:10px;margin:6px 0 5px;border-radius:99px;overflow:hidden;
+  background:rgba(255,246,216,.12);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.6);
+}
+.ac-xpbar span{
+  display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,#C98F12,#F2C230 60%,#FFE9A8);
+  box-shadow:0 0 12px rgba(242,194,48,.6);
+  transition:width .8s ease-out;
+}
+.ac-xptext{font-size:12px;color:rgba(255,246,216,.65)}
+
+/* --- Wallet cards --- */
+.ac-wallet{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 8px}
+.ac-wcard{
+  display:flex;flex-direction:column;gap:2px;min-width:0;
+  padding:12px 12px 10px;border-radius:14px;text-decoration:none;
+  background:linear-gradient(180deg, rgba(27,35,64,.9), rgba(16,20,42,.9));
+  border:1px solid rgba(242,194,48,.28);
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+.ac-wcard span{font-size:11px;font-weight:800;letter-spacing:.14em;color:rgba(255,246,216,.6)}
+.ac-wcard b{font-size:19px;font-weight:800;color:#FFF6D8;overflow-wrap:anywhere}
+.ac-wcard i{font-style:normal;font-size:11px;color:#FFD964}
+@media (hover:hover) and (pointer:fine){ .ac-wcard:hover{border-color:rgba(242,194,48,.65)} }
+.ac-wcard:active{transform:scale(.98)}
+
+/* --- Sections --- */
+.ac-sec{
+  margin:0 0 14px;padding:16px;border-radius:16px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,246,216,.1);
+}
+.ac-sec h3{margin:0 0 12px;font-size:17px;font-weight:800;color:#FFF6D8}
+.ac-sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.ac-sec-head h3{margin:0}
+.ac-count{font-size:12px;font-weight:700;color:#FFD964;white-space:nowrap}
+
+/* --- REAL/SIM tabs --- */
+.ac-tabs{display:flex;gap:6px}
+.ac-tabs button{
+  min-width:56px;min-height:36px;padding:6px 12px;border-radius:99px;
+  border:1px solid rgba(255,246,216,.25);background:transparent;
+  font-size:13px;font-weight:800;color:rgba(255,246,216,.7);cursor:pointer;
+  touch-action:manipulation;user-select:none;-webkit-user-select:none;
+}
+.ac-tabs button.on{background:linear-gradient(180deg,#FFE9A8,#F2C230);border-color:#F2C230;color:#1A1200}
+
+/* --- Stats grid --- */
+.ac-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.ac-stat{
+  min-width:0;padding:13px 12px;border-radius:13px;
+  background:linear-gradient(180deg, rgba(27,35,64,.85), rgba(16,20,42,.85));
+  border:1px solid rgba(255,246,216,.1);
+}
+.ac-stat span{display:block;font-size:11px;font-weight:800;letter-spacing:.12em;color:rgba(255,246,216,.6)}
+.ac-stat b{display:block;margin-top:4px;font-size:22px;font-weight:800;line-height:1.1;color:#FFF6D8;overflow-wrap:anywhere}
+.ac-stat b.gold{color:#FFD964;text-shadow:0 0 16px rgba(242,194,48,.4)}
+.ac-stat b.red{color:#FF9B92}
+.ac-empty{padding:10px 0 4px}
+.ac-empty p{margin:0 0 12px;color:rgba(255,246,216,.75)}
+
+/* --- Per-game rows --- */
+.ac-games{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ac-game{
+  display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;
+  padding:11px 12px;border-radius:12px;text-decoration:none;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,246,216,.09);
+}
+.ac-game-name{font-size:15px;font-weight:800;color:#FFF6D8;overflow-wrap:anywhere}
+.ac-game-nums{font-size:12px;color:rgba(255,246,216,.65);grid-column:1}
+.ac-ratebar{
+  grid-column:1;height:6px;border-radius:99px;overflow:hidden;
+  background:rgba(255,246,216,.12);
+}
+.ac-ratebar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#C98F12,#F2C230)}
+.ac-rate{grid-row:1 / span 2;grid-column:2;font-size:16px;font-weight:800;color:#FFD964;white-space:nowrap}
+@media (hover:hover) and (pointer:fine){ .ac-game:hover{border-color:rgba(242,194,48,.5)} }
+
+/* --- History --- */
+.ac-hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ac-hist-row{
+  display:grid;grid-template-columns:52px 1fr auto;gap:2px 10px;align-items:center;
+  padding:10px 12px;border-radius:12px;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,246,216,.09);
+}
+.ac-result{font-size:11px;font-weight:800;letter-spacing:.08em;text-align:center;padding:4px 0;border-radius:7px}
+.ac-result.win{color:#0C2B22;background:#3ED97E}
+.ac-result.lose{color:#FFF6D8;background:rgba(229,50,45,.75)}
+.ac-hist-game{font-size:14px;font-weight:700;color:#FFF6D8;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-hist-amt{font-size:14px;font-weight:800;color:#FFF6D8;white-space:nowrap}
+.ac-hist-when{grid-column:2 / span 2;font-size:11px;color:rgba(255,246,216,.55)}
+
+/* --- Achievements --- */
+.ac-badges{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.ac-badge{
+  display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px;
+  min-width:0;padding:14px 10px 12px;border-radius:14px;
+  background:rgba(255,255,255,.025);border:1px solid rgba(255,246,216,.09);
+  color:rgba(255,246,216,.45);
+}
+.ac-badge-ico{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,246,216,.07);border:1px solid rgba(255,246,216,.14)}
+.ac-badge-ico svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ac-badge b{font-size:13px;font-weight:800;color:rgba(255,246,216,.55)}
+.ac-badge span{font-size:11px;line-height:1.35}
+.ac-badge i{font-style:normal;font-size:11px;font-weight:700;color:rgba(255,246,216,.4)}
+.ac-badge.on{
+  color:#FFF6D8;border-color:rgba(242,194,48,.55);
+  background:linear-gradient(180deg, rgba(242,194,48,.14), rgba(242,194,48,.04));
+  box-shadow:0 0 18px rgba(242,194,48,.18);
+}
+.ac-badge.on .ac-badge-ico{background:linear-gradient(180deg,#FFE9A8,#F2C230);border-color:#FFE9A8;color:#1A1200;box-shadow:0 0 14px rgba(242,194,48,.5)}
+.ac-badge.on b{color:#FFD964}
+.ac-badge.on i{color:#3ED97E}
+
+/* --- Wider screens --- */
+@media (min-width:641px){
+  .ac-hero{flex-wrap:nowrap;padding:20px 22px}
+  .ac-level{flex:0 0 240px}
+  .ac-stats{grid-template-columns:repeat(3,1fr)}
+  .ac-badges{grid-template-columns:repeat(3,1fr)}
+  .ac-hist-row{grid-template-columns:64px 1fr auto auto}
+  .ac-hist-when{grid-column:auto}
+}
+@media (min-width:900px){
+  .ac-stats{grid-template-columns:repeat(4,1fr)}
+  .ac-badges{grid-template-columns:repeat(6,1fr)}
+}
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce){
+  .ac-xpbar span{transition:none}
+}
