@@ -1,8 +1,10 @@
 // Header — v48 structure (brand, chip nav, search, LV chip, balance pill
-// with eye, coin pill, Deposit, Login/Register or account chip), plus
-// the jackpot ticker with the export's content and live counter.
+// with eye, coin pill, Login/Register or account chip), plus the jackpot
+// ticker with the export's content and live counter. Round 11: NO Deposit
+// button anywhere — the balance pill, coin pill, submenu balance/coins
+// rows and the account-chip balances all link to the wallet page.
 // Phone tier (export): search + LV chip retire under 640px, the header
-// condenses to coin logo + balance + Deposit.
+// condenses to coin logo + balance.
 
 "use client";
 
@@ -14,7 +16,7 @@ import { useJackpot } from "../lib/jackpot";
 import { useStore } from "../lib/store";
 
 export default function Header() {
-  const { user, wallet, mode, setMode, muted, toggleMute, openAuth, logout, setDepositOpen } = useStore();
+  const { user, wallet, mode, setMode, muted, toggleMute, openAuth, logout } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -136,23 +138,24 @@ export default function Header() {
           </div>
           <div className="hdr-row hdr-row-2">
             <div className="bal-pill" aria-label="Wallet balance">
-              <span className="bal-coin" aria-hidden="true">₵</span>
-              <div>
-                <small>{mode === "SIM" ? "SIM BALANCE" : "BALANCE"}</small>
-                <strong>{balText}</strong>
-              </div>
+              <Link href="/wallet" className="bal-link" aria-label="Open wallet">
+                <span className="bal-coin" aria-hidden="true">₵</span>
+                <div>
+                  <small>{mode === "SIM" ? "SIM BALANCE" : "BALANCE"}</small>
+                  <strong>{balText}</strong>
+                </div>
+              </Link>
               <button className="eye" type="button" aria-label={balHidden ? "Show balance" : "Hide balance"} onClick={() => setBalHidden((v) => !v)}>
                 <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5C6.5 5 2 12 2 12s4.5 7 10 7 10-7 10-7-4.5-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" /></svg>
               </button>
             </div>
-            <div className="coin-pill" aria-label="Coin balance — play-only, never withdrawable">
+            <Link href="/wallet" className="coin-pill" aria-label="Coin balance — play-only, never withdrawable">
               <span className="cp-ico" aria-hidden="true">◉</span>
               <span>
                 <small>COINS</small>
                 <b>{fmtCoins(coins)}</b>
               </span>
-            </div>
-            <button className="btn btn-gold btn-dep" type="button" onClick={() => (user ? setDepositOpen(true) : openAuth("login"))}>Deposit</button>
+            </Link>
           </div>
           <div className="hdr-row hdr-row-3">
             <div className="acct-box">
@@ -169,7 +172,7 @@ export default function Header() {
                       <span className="ac-name">{user.name.split(" ")[0]}</span>
                       <span className="ac-role">{user.role === "owner" ? "Owner" : user.role === "admin" ? "Admin" : "Player"}</span>
                     </span>
-                    <span className="ac-bals">
+                    <span className="ac-bals" title="Open wallet" style={{ cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); router.push("/wallet"); }}>
                       <span className="ac-bal">{fmtCash(cash)}</span>
                       <span className="ac-bal coin">◉ {fmtCoins(coins)}</span>
                     </span>
@@ -177,6 +180,7 @@ export default function Header() {
                   {menuOpen && (
                     <div className="acct-menu" role="menu">
                       <Link href="/account" onClick={() => setMenuOpen(false)}>My account</Link>
+                      <Link href="/wallet" onClick={() => setMenuOpen(false)}>Wallet</Link>
                       <Link href="/settings" onClick={() => setMenuOpen(false)}>Settings</Link>
                       {(user.role === "admin" || user.role === "owner") && <Link href="/admin" onClick={() => setMenuOpen(false)}>Admin panel</Link>}
                       {user.role === "owner" && <Link href="/owner" onClick={() => setMenuOpen(false)}>Owner panel</Link>}
@@ -217,22 +221,24 @@ export default function Header() {
           {user && (
             <>
               <div className="htm-row" role="menuitem">
-                <span className="bal-coin htm-ico" aria-hidden="true">₵</span>
-                <span className="htm-lab">{mode === "SIM" ? "SIM balance" : "Balance"}</span>
-                <span className="htm-ctl">
+                <Link href="/wallet" className="htm-link" onClick={() => setToolsOpen(false)}>
+                  <span className="bal-coin htm-ico" aria-hidden="true">₵</span>
+                  <span className="htm-lab">{mode === "SIM" ? "SIM balance" : "Balance"}</span>
                   <span className="htm-val">{balText}</span>
+                </Link>
+                <span className="htm-ctl">
                   <button className="icon-btn" type="button" aria-label={balHidden ? "Show balance" : "Hide balance"} onClick={() => setBalHidden((v) => !v)}>
                     <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5C6.5 5 2 12 2 12s4.5 7 10 7 10-7 10-7-4.5-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" /></svg>
                   </button>
                 </span>
               </div>
-              <div className="htm-row" role="menuitem">
+              <Link href="/wallet" className="htm-row" role="menuitem" onClick={() => setToolsOpen(false)}>
                 <span className="cp-ico htm-ico" aria-hidden="true">◉</span>
                 <span className="htm-lab">Coins</span>
                 <span className="htm-ctl">
                   <span className="htm-val coin">{fmtCoins(coins)}</span>
                 </span>
-              </div>
+              </Link>
             </>
           )}
           <button type="button" className="htm-row" role="menuitem" onClick={() => { setToolsOpen(false); setSearchOpen(true); }}>

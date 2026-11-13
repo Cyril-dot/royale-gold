@@ -1,0 +1,114 @@
+// Admin dashboard — Referrals (round 11). The round-10 referral section,
+// re-housed unchanged in content, plus the referred-users list. A referred
+// user now opens as a real page (/admin/players/[id]) instead of an overlay.
+
+"use client";
+
+import { Suspense, useRef, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { api } from "../../../lib/api";
+import { useStore } from "../../../lib/store";
+import { useAdminOverview, copyText, shareLink } from "../../../lib/admin-client";
+import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../../../components/AdminNav";
+
+export default function AdminReferralsPage() {
+  return (
+    <main className="rg48-page-main">
+      <div className="wrap">
+        <Suspense fallback={null}>
+          <AdminReferralsInner />
+        </Suspense>
+      </div>
+    </main>
+  );
+}
+
+function AdminReferralsInner() {
+  const { user, toast } = useStore();
+  const sp = useSearchParams();
+  const previewId = sp.get("preview");
+  const { ov, err, load } = useAdminOverview(previewId);
+  const [newCode, setNewCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<{ id: string; kind: "code" | "link" } | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  if (!user) return <AdminLoginPrompt />;
+  if (err) return <AdminError err={err} />;
+  if (!ov) return <p>Loading admin panel…</p>;
+
+  const copyRef = (id: string, kind: "code" | "link", text: string, doneMsg: string) => {
+    void copyText(text).then(() => {
+      setCopied({ id, kind });
+      toast(doneMsg, "win");
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(null), 1600);
+    }).catch(() => toast("Copy failed — long-press the text to copy it", "lose"));
+  };
+
+  const createCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api("/api/admin/codes", { method: "POST", body: JSON.stringify({ code: newCode.trim() || undefined }) });
+      setNewCode("");
+      toast("Referral code created", "win");
+      await load();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not create code", "lose");
+    } finally { setBusy(false); }
+  };
+
+  const playerHref = (id: string) => (previewId ? `/admin/players/${id}?preview=${previewId}` : `/admin/players/${id}`);
+
+  return (
+    <>
+      {previewId ? <AdminPreviewBanner name={ov.admin.name} /> : null}
+      <div className="rg48-hbar-in">
+        <Link className="gp-back" href={previewId ? `/admin?preview=${previewId}` : "/admin"} aria-label="Back to admin overview"><span className="gp-back-coin">←</span></Link>
+        <h2>Referrals</h2>
+      </div>
+      <p className="rg48-sub">{ov.admin.name} · {ov.admin.email} · {ov.admin.commissionPct}% commission{ov.admin.active ? "" : " · DEACTIVATED"}</p>
+      <AdminNav />
+      <section className="admin-sec referral-sec">
+        <h3>Referral — share your link</h3>
+        <p className="referral-sub">Your link earns you <b>{ov.admin.commissionPct}% commission</b> on their deposits. New players get <b>5 extra coins</b>.</p>
+        {ov.codes.length === 0 && <p>No codes yet — create one below.</p>}
+        {ov.codes.map((c) => (
+          <div key={c.id} className="code-row referral-row">
+            <b className="code-chip">{c.code}</b>
+            <span className="code-state">{c.active ? "Active" : "Inactive"}</span>
+            <span className="referral-copy">
+              <button className={`btn btn-ghost btn-sm${copied?.id === c.id && copied?.kind === "code" ? " done" : ""}`} type="button" onClick={() => copyRef(c.id, "code", c.code, "Referral code copied")}>
+                {copied?.id === c.id && copied?.kind === "code" ? "Copied ✓" : "Copy code"}
+              </button>
+              <button className={`btn btn-ghost btn-sm${copied?.id === c.id && copied?.kind === "link" ? " done" : ""}`} type="button" onClick={() => copyRef(c.id, "link", shareLink(c.code), "Referral link copied")}>
+                {copied?.id === c.id && copied?.kind === "link" ? "Copied ✓" : "Copy link"}
+              </button>
+            </span>
+            <span className="code-link">{shareLink(c.code)}</span>
+          </div>
+        ))}
+        {!previewId && (
+          <form className="code-form" onSubmit={createCode}>
+            <input type="text" placeholder="Custom code e.g. RG-GOLD1 (blank = auto)" value={newCode} onChange={(e) => setNewCode(e.target.value.toUpperCase())} pattern="RG-[A-Z0-9]{4,12}" title="RG- followed by 4–12 letters or digits" />
+            <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Creating…" : "Create code"}</button>
+          </form>
+        )}
+      </section>
+      <section className="admin-sec">
+        <h3>Referred users ({ov.referredUsers.length}) · {ov.coinsGiven} coins given · {ov.redemptions} redemptions</h3>
+        {ov.referredUsers.length === 0 ? <p>No referred users yet.</p> : (
+          <div className="user-list">
+            {ov.referredUsers.map((u) => (
+              <Link key={u.id} className="user-row" href={playerHref(u.id)}>
+                <b>{u.name}</b><span>{u.email || u.phone || "—"}</span><span className="code-chip sm">{u.referralCodeUsed || ""}</span><span>Joined {new Date(u.createdAt).toLocaleDateString("en-GB")}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}

@@ -89,14 +89,13 @@ export default function SettingsPage() {
           <Link className="gp-back" href="/account" aria-label="Back to account"><span className="gp-back-coin">←</span></Link>
         </div>
         <h2>Your <em>settings</em></h2>
-        <p className="rg48-mini">Profile, password and preferences for {user.name}.</p>
 
         <section className="admin-sec">
           <h3>Profile</h3>
           <form onSubmit={saveProfile}>
             <div className="rg48-f"><label htmlFor="stName">Full name</label><input id="stName" type="text" value={name} onChange={(e) => setName(e.target.value)} required /></div>
             <div className="rg48-f"><label htmlFor="stContact">Email or phone</label><input id="stContact" type="text" value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
-            <p className="rg48-mini">One contact only — an email or a phone number. Changing it changes how you log in.</p>
+            <p className="rg48-mini">One contact only. Changing it changes how you log in.</p>
             <button className="btn btn-gold" type="submit" disabled={profileBusy}>{profileBusy ? "Saving…" : "Save profile"}</button>
           </form>
         </section>
@@ -124,18 +123,18 @@ export default function SettingsPage() {
               <button className={`btn ${mode === "REAL" ? "btn-gold" : "btn-ghost"}`} type="button" onClick={() => setMode("REAL")} aria-pressed={mode === "REAL"}>REAL</button>
               <button className={`btn ${mode === "SIM" ? "btn-gold" : "btn-ghost"}`} type="button" onClick={() => setMode("SIM")} aria-pressed={mode === "SIM"}>SIM</button>
             </div>
-            <p className="rg48-mini">SIM is demo play — no real money moves. REAL plays with your cash balance.</p>
+            <p className="rg48-mini">SIM is demo play. REAL uses your cash balance.</p>
           </div>
         </section>
 
         <section className="admin-sec">
           <h3>How winning works</h3>
-          <p>SIM is demo play — no real money moves, and winning comes easier so you can test the games.</p>
-          <p>LIVE win chance starts at the game&apos;s normal rate and falls as your total deposits grow — 5% lower for every GH₵100 deposited, never below half the normal rate.</p>
+          <p>SIM is demo play — winning comes easier so you can test the games.</p>
+          <p>LIVE win chance falls 5% for every GH₵100 you have deposited, never below half the normal rate.</p>
           {economy && (
             <p>Your total deposits: <b>{fmtCash(economy.lifetimeDeposited)}</b> — your LIVE win chance right now is <b>{Math.round(economy.liveFactor * 100)}%</b> of normal.</p>
           )}
-          <p className="rg48-mini">Crash games (Aviator, Jet Fly, Car Crash) are provably fair and never adjusted. Coin games are not affected.</p>
+          <p className="rg48-mini">Crash games are provably fair and never adjusted. Coin games are not affected.</p>
         </section>
 
         <section className="admin-sec">
@@ -149,7 +148,7 @@ export default function SettingsPage() {
           <p>Role: <b>{user.role}</b></p>
           <p>Joined: <b>{new Date(user.createdAt).toLocaleDateString("en-GB")}</b></p>
           <p>Referral code used: <b>{user.referralCodeUsed ?? "—"}</b></p>
-          <p className="rg48-mini">Currency is Ghana cedi (GH₵) for everyone. Changing country or currency is not available.</p>
+          <p className="rg48-mini">Currency is Ghana cedi (GH₵) for everyone.</p>
           <p><Link className="linklike" href="/account">Back to my account →</Link></p>
         </section>
       </div>

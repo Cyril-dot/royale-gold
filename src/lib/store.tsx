@@ -170,7 +170,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // Referral landing: a shared link (/?ref=CODE) opens the register
   // modal with the code already filled in, signed-out users only. The
   // old /register?ref= link 404s — there is no /register route — so
-  // shared links use /?ref=CODE (see AdminPanel.shareLink).
+  // shared links use /?ref=CODE (see shareLink in lib/admin-client).
   useEffect(() => {
     try {
       const ref = new URLSearchParams(window.location.search).get("ref");

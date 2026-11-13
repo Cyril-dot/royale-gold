@@ -1,0 +1,24 @@
+/* Round 11 — games page: horizontally scrollable category rows.
+   Loaded after v48.css, so these rules win. */
+
+/* ---- Scrollable rows (replaces the static .gp-grid) ---- */
+.gp-row-sec{margin:22px 0 6px}
+.gp-row-title{margin:0 0 10px;font-size:17px;font-weight:800}
+.gp-row-title span{font-size:12px;color:var(--muted);font-weight:700;margin-left:4px}
+.gp-row{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;padding:4px 20px 12px 2px}
+.gp-row::-webkit-scrollbar{display:none}
+.gp-row .gp-card{flex:0 0 168px;scroll-snap-align:start}
+@media (min-width:641px){
+  .gp-row{gap:14px}
+  .gp-row .gp-card{flex-basis:210px}
+}
+/* The balance in the games header links to the wallet page. */
+a.gp-bal{text-decoration:none}
+a.gp-bal:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:6px}
+/* Dock clearance (phone only): the fixed bottom dock is ~86px tall, so
+   the last row clears it instead of sliding underneath. The game rooms
+   (.xgame-room) end in the .xg-note, which sat under the dock too. */
+@media (max-width:760px){
+  .gpage{padding-bottom:120px}
+  .xgame-room{padding-bottom:120px}
+}

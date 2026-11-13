@@ -72,11 +72,11 @@ export default function AccountPage() {
             <div className="sum-card"><span>SIM</span><b>{fmtCoins(sim)}</b></div>
             <div className="sum-card"><span>LEVEL</span><b>{user.level} · {user.xp} XP</b></div>
           </div>
-          <p className="rg48-mini">Coins are play-only — they can never be withdrawn or swapped for cash.</p>
+          <p className="rg48-mini">Coins are play-only — never withdrawable.</p>
         </section>
         <section className="admin-sec">
           <h3>Redeem a referral code — +5 coins</h3>
-          <p className="rg48-mini">One code per account, ever. If you registered with a code, this is already used.</p>
+          <p className="rg48-mini">One code per account.</p>
           <form className="code-form" onSubmit={redeem}>
             <input type="text" placeholder="e.g. RG-DEMO1" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} required />
             <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Redeeming…" : "Redeem · +5 coins"}</button>
@@ -84,12 +84,12 @@ export default function AccountPage() {
         </section>
         <section className="admin-sec">
           <h3>Daily bonus</h3>
-          <p>Claim your daily +5 coins.</p>
           <button className="btn btn-gold" type="button" onClick={() => void claimCoins()} disabled={claimBusy}>{claimBusy ? "Claiming…" : "Claim daily +5 coins"}</button>
         </section>
         <section className="admin-sec">
           <h3>Session</h3>
           <p><Link className="linklike" href="/settings">Settings — profile, password, preferences →</Link></p>
+          <p><Link className="linklike" href="/wallet">Wallet — balances and deposit →</Link></p>
           {(user.role === "admin" || user.role === "owner") && <p><Link className="linklike" href="/admin">Open admin panel →</Link></p>}
           {user.role === "owner" && <p><Link className="linklike" href="/owner">Open owner panel →</Link></p>}
           <button className="btn btn-ghost" type="button" onClick={() => void logout()}>Log out</button>

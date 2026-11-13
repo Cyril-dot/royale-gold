@@ -1,0 +1,30 @@
+/* Round 11 — admin dashboard (split routes) + wallet links.
+   Loaded after v48.css / admin-ref.css, so these rules win. */
+
+/* ---- Admin dashboard nav (Overview / Referrals / Commission) ---- */
+.admin-nav{display:flex;gap:8px;margin:0 0 18px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.admin-nav::-webkit-scrollbar{display:none}
+.admin-nav a{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:11px 18px;border-radius:11px;border:1px solid var(--line);background:var(--steel);color:var(--ink);font:inherit;font-weight:800;font-size:14.5px;text-decoration:none;white-space:nowrap;touch-action:manipulation}
+.admin-nav a.an-active{background:var(--gold);color:#231a02;border-color:var(--gold)}
+.admin-nav a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ---- Owner-preview banner (every admin route, ?preview=<adminId>) ---- */
+.admin-preview{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;background:rgba(242,194,48,.1);border:1px solid rgba(242,194,48,.45);border-radius:12px;padding:11px 14px;margin:0 0 16px;font-size:14px}
+.admin-preview b{color:var(--gold-2)}
+.admin-preview a{margin-left:auto;color:var(--gold-2);font-weight:800;text-decoration:none;white-space:nowrap}
+.admin-preview a:hover{text-decoration:underline}
+
+/* ---- Referred-user rows are Links now (round 11) ---- */
+a.user-row{text-decoration:none}
+a.user-row:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ---- Dock clearance (phone only) ----
+   The fixed bottom dock is ~86px tall (≤760px) but .rg48-page-main only
+   carries 60px bottom padding, so the lowest content sat under the dock.
+   120px clears it on every rg48 page (admin, owner, account, settings)
+   and on the homepage (main#top, whose short footer leaves the last
+   section under the dock without it). */
+@media (max-width:760px){
+  .rg48-page-main{padding-bottom:120px}
+  main#top{padding-bottom:120px}
+}

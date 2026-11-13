@@ -1,0 +1,40 @@
+/* Round 11 — wallet page + the header links that open it.
+   Loaded after v48.css / hdr-menu.css, so these rules win. */
+
+/* ---- Header: every balance links to /wallet ---- */
+.bal-pill .bal-link{display:flex;align-items:center;gap:10px;min-width:0;color:inherit;text-decoration:none}
+.bal-pill .bal-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:8px}
+a.coin-pill{text-decoration:none}
+a.coin-pill:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.hdr-zone .hdr-tools-menu .htm-link{display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;color:inherit;text-decoration:none}
+.hdr-zone .hdr-tools-menu a.htm-row{text-decoration:none;cursor:pointer}
+
+/* ---- Wallet card (Visa-style, 3D) ----
+   No overflow:hidden here — it would flatten the children's 3D depth.
+   The sheen + felt overlays carry the card's radius instead. */
+.wallet-card-wrap{perspective:1100px;margin:18px auto 22px;max-width:420px}
+.wallet-card{position:relative;aspect-ratio:1.586/1;border-radius:20px;transform-style:preserve-3d;--mx:50%;--my:40%;--shx:0px;--shy:20px;box-shadow:var(--shx) var(--shy) 34px rgba(0,0,0,.55),0 0 0 1px rgba(242,194,48,.35),inset 0 1px 0 rgba(255,246,216,.18);background:radial-gradient(120% 90% at 12% 0%,rgba(242,194,48,.28),transparent 55%),radial-gradient(90% 70% at 95% 100%,rgba(12,43,34,.9),transparent 60%),linear-gradient(135deg,#0E2A20 0%,#071410 55%,#0A1F18 100%);color:#FFF6D8;padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between}
+.wallet-card::before{content:"";position:absolute;inset:0;border-radius:20px;background:repeating-linear-gradient(115deg,rgba(255,246,216,.025) 0 2px,transparent 2px 7px);pointer-events:none}
+.wallet-card::after{content:"";position:absolute;inset:0;border-radius:20px;background:radial-gradient(420px 260px at var(--mx) var(--my),rgba(255,246,216,.22),transparent 65%);pointer-events:none}
+.wc-top{display:flex;align-items:flex-start;justify-content:space-between;transform:translateZ(28px)}
+.wc-chip{width:46px;height:34px;flex:none}
+.wc-brand{font-size:12px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-2)}
+.wc-num{font-family:var(--mono,monospace);font-size:clamp(19px,5.4vw,24px);font-weight:700;letter-spacing:.14em;color:#FFF6D8;text-shadow:0 2px 0 rgba(0,0,0,.45);transform:translateZ(22px);white-space:nowrap}
+.wc-bottom{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;transform:translateZ(28px)}
+.wc-holder{display:flex;flex-direction:column;gap:3px;min-width:0}
+.wc-holder small{font-size:9px;letter-spacing:.2em;color:var(--muted);font-weight:800;text-transform:uppercase}
+.wc-holder b{font-size:14px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wc-visa{font-size:26px;font-weight:900;font-style:italic;letter-spacing:.02em;color:#fff;line-height:1}
+/* touch: gentle float instead of tilt */
+@media (hover:none){
+  .wallet-card{animation:wcFloat 6s ease-in-out infinite}
+  @keyframes wcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+}
+@media (prefers-reduced-motion:reduce){
+  .wallet-card{animation:none}
+}
+
+/* ---- Wallet page ---- */
+.wallet-bals{margin:4px 0 16px}
+.wallet-dep{width:100%;min-height:52px;font-size:16px}
+.wallet-note{margin:12px 0 0}

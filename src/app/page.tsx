@@ -41,7 +41,6 @@ export default function Home() {
           <div className="sec-head">
             <span className="sec-tag">The floor</span>
             <h2>All the <em>games</em></h2>
-            <p className="sec-sub">{TILE_GAMES.length} games · every one playable · cash in GH₵, coins for play</p>
           </div>
           <div className="gp-filters" role="group" aria-label="Filter games">
             {(["all", "cash", "coins", "crash"] as const).map((f) => (
@@ -126,11 +125,9 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <p className="demo-note">Demo data only — connect your game backend to show real standings.</p>
           </div>
           <aside className="live-feed" aria-label="Live wins feed">
             <h3><span className="live-dot" /> Live wins</h3>
-            <p>Demo feed — new wins slide in as they land.</p>
             <div className="feed-list">
               {LIVE_WINS.map((w) => (
                 <div key={w.name + w.amount} className="feed-row"><b>{w.name}</b><span>won {fmtCash(w.amount)}</span><small>{w.game}</small></div>
@@ -147,9 +144,9 @@ export default function Home() {
             <h2>Three moves, <em>that&rsquo;s it</em></h2>
           </div>
           <div className="verbs">
-            <article className="verb"><VerbTilt index={0}><span className="vnum">STEP 01</span><div className="v-art" aria-hidden="true"><div className="coin-stack3d"><i /><i /><i /><i /><i /></div><span className="cn-solo">₵</span></div><h3>Depo<em>sit</em></h3><p>Top up with MTN MoMo, Telecel Cash, AirtelTigo, bank or card. Money lands instantly, from GH₵ 10, no deposit fees.</p></VerbTilt></article>
-            <article className="verb"><VerbTilt index={1}><span className="vnum">STEP 02</span><div className="v-art" aria-hidden="true"><div className="cube cube-a"><i className="fc f-front p5" /><i className="fc f-back p2" /><i className="fc f-right p3" /><i className="fc f-left p4" /><i className="fc f-top p1" /><i className="fc f-bottom p6" /></div><div className="cube cube-b"><i className="fc f-front p3" /><i className="fc f-back p4" /><i className="fc f-right p5" /><i className="fc f-left p2" /><i className="fc f-top p6" /><i className="fc f-bottom p1" /></div></div><h3>Pl<em>ay</em></h3><p>Stakes from GH₵ 1 across slots, crash, tables and arcade. Every result lands in your game history, and each game&rsquo;s RTP is printed on its tile.</p></VerbTilt></article>
-            <article className="verb"><VerbTilt index={2}><span className="vnum">STEP 03</span><div className="v-art" aria-hidden="true"><div className="fan"><i className="note n1" /><i className="note n2" /><i className="note n3">GH₵</i></div></div><h3>Cash <em>out</em></h3><p>Withdraw winnings back to the same MoMo number you deposited from. Most cash-outs complete in under five minutes.</p></VerbTilt></article>
+            <article className="verb"><VerbTilt index={0}><span className="vnum">STEP 01</span><div className="v-art" aria-hidden="true"><div className="coin-stack3d"><i /><i /><i /><i /><i /></div><span className="cn-solo">₵</span></div><h3>Depo<em>sit</em></h3><p>Top up from GH₵ 10 — MoMo, bank or card. Instant, no fees.</p></VerbTilt></article>
+            <article className="verb"><VerbTilt index={1}><span className="vnum">STEP 02</span><div className="v-art" aria-hidden="true"><div className="cube cube-a"><i className="fc f-front p5" /><i className="fc f-back p2" /><i className="fc f-right p3" /><i className="fc f-left p4" /><i className="fc f-top p1" /><i className="fc f-bottom p6" /></div><div className="cube cube-b"><i className="fc f-front p3" /><i className="fc f-back p4" /><i className="fc f-right p5" /><i className="fc f-left p2" /><i className="fc f-top p6" /><i className="fc f-bottom p1" /></div></div><h3>Pl<em>ay</em></h3><p>Stakes from GH₵ 1. Every game&rsquo;s RTP is on its tile.</p></VerbTilt></article>
+            <article className="verb"><VerbTilt index={2}><span className="vnum">STEP 03</span><div className="v-art" aria-hidden="true"><div className="fan"><i className="note n1" /><i className="note n2" /><i className="note n3">GH₵</i></div></div><h3>Cash <em>out</em></h3><p>Cash out to the same MoMo number. Most land in under five minutes.</p></VerbTilt></article>
           </div>
         </div>
       </section>
@@ -163,7 +160,7 @@ export default function Home() {
           <article className="promo-gold">
             <div className="pg-txt">
               <div className="big">100% up to GH₵ 1,000 — welcome bonus</div>
-              <p>We match your first top-up cedi for cedi, plus 50 free spins on the headline slot. 18+. Wagering ×35 applies.</p>
+              <p>We match your first top-up, plus 50 free spins. 18+. Wagering ×35 applies.</p>
             </div>
             <a className="btn" href="#promos">Claim the bonus</a>
           </article>

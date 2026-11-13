@@ -1,9 +1,11 @@
 /* ============ Phone header submenu (round 4) — MOBILE-FIRST ============
    The header no longer shows all 9 controls on phone. The tools row
-   (search, REAL/SIM, sound, LV) moves into a submenu; the header is
-   2 short rows: money (balance + coins + Deposit) and auth (brand coin
-   + Log in/Register or account chip + menu button). Nothing deleted —
-   every control stays reachable, visible or one tap away in the menu.
+   (search, REAL/SIM, sound, LV) moves into a submenu; the money row
+   is gone from the phone header entirely — the header gets shorter.
+   Round 11: there is NO Deposit button anywhere. The balance and coins
+   rows in the submenu link to the wallet page (/wallet), where the
+   user deposits. Nothing deleted — every control stays reachable,
+   visible or one tap away.
    All rules live here (inline <style>): CSS Modules do not work in
    this repo and globals.css belongs to round 3. Overrides use the
    #siteHdr id so they beat the v48.css rules that load after
@@ -13,10 +15,10 @@
   header#siteHdr .hdr-main .hdr-row-1{display:none}
   /* line 1: money row, full width */
   header#siteHdr .hdr-main .hdr-row-2{order:1;flex:1 1 100%}
-  /* round 10: balance + coins live in the submenu when signed in —
-     the phone header keeps Deposit only, stretched full width */
-  header#siteHdr .hdr-main .hdr-row-2 .bal-pill,header#siteHdr .hdr-main .hdr-row-2 .coin-pill{display:none}
-  header#siteHdr .hdr-main .hdr-row-2 .btn-dep{flex:1 1 auto}
+  /* round 10 fix: the whole money row hides on phone and the header
+     gets shorter (round 11: Deposit is gone entirely — the balance
+     and coins rows in the submenu link to /wallet) */
+  header#siteHdr .hdr-main .hdr-row-2{display:none}
   /* line 2: brand coin + auth row share the line */
   header#siteHdr .hdr-main .brand{order:2;align-self:center}
   header#siteHdr .hdr-main .hdr-row-3{order:2;flex:1 1 auto}

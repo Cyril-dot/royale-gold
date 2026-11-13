@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, fmtCash } from "../../lib/api";
 import { useStore } from "../../lib/store";
-import AdminPanel, { copyText, todayStr } from "../../components/AdminPanel";
+import { copyText, todayStr } from "../../lib/admin-client";
 
 interface AdminRow {
   id: string; name: string; email: string; role: string; commissionPct: number | null; active: boolean;
@@ -28,12 +28,12 @@ export default function OwnerPage() {
   useEffect(() => { setDate(todayStr()); }, []);
   const [dayAdmins, setDayAdmins] = useState<OwnerDayAdmin[] | null>(null);
   const [dayTotals, setDayTotals] = useState<{ deposits: number; totalAmount: number; totalCommission: number } | null>(null);
-  const [preview, setPreview] = useState<AdminRow | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Per-admin referral link copy (first active code) — the preview panel
-  // itself shows the full Referral section via AdminPanel.
+  // Per-admin referral link copy (first active code) — the admin's own
+  // panel lives on the /admin routes; "Preview panel" links there with
+  // ?preview=<adminId>.
   const copyAdminLink = (a: AdminRow) => {
     const c = a.codes.find((x) => x.active) ?? a.codes[0];
     if (!c) return;
@@ -130,17 +130,6 @@ export default function OwnerPage() {
     }
   };
 
-  if (preview) {
-    return (
-      <>
-        <div className="wrap" style={{ paddingTop: 16 }}>
-          <button className="btn btn-ghost" type="button" onClick={() => setPreview(null)}>← Back to owner panel</button>
-        </div>
-        <AdminPanel previewAdminId={preview.id} previewName={preview.name} />
-      </>
-    );
-  }
-
   return (
     <main className="rg48-page-main">
       <div className="wrap">
@@ -182,7 +171,7 @@ export default function OwnerPage() {
                     {copiedId === a.id ? "Copied ✓" : "Copy referral link"}
                   </button>
                 )}
-                <button className="btn btn-gold btn-sm" type="button" onClick={() => setPreview(a)}>Preview panel</button>
+                <Link className="btn btn-gold btn-sm" href={`/admin?preview=${a.id}`}>Preview panel</Link>
               </div>
             </div>
           ))}
@@ -196,14 +185,16 @@ export default function OwnerPage() {
           {dayAdmins?.map((da) => (
             <div key={da.admin.id} className="day-admin">
               <h4>{da.admin.name} — {fmtCash(da.totalAmount)} · {fmtCash(da.totalCommission)} commission</h4>
-              <table className="dep-table">
-                <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th></tr></thead>
-                <tbody>
-                  {da.deposits.map((d) => (
-                    <tr key={d.id}><td>{d.userName}</td><td>{d.userContact}</td><td>{fmtCash(d.amount)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtCash(d.commission)} ({d.pctInForce}%)</td></tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th></tr></thead>
+                  <tbody>
+                    {da.deposits.map((d) => (
+                      <tr key={d.id}><td>{d.userName}</td><td>{d.userContact}</td><td>{fmtCash(d.amount)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtCash(d.commission)} ({d.pctInForce}%)</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))}
         </section>
@@ -211,14 +202,16 @@ export default function OwnerPage() {
         <section className="admin-sec">
           <h3>All-admins rollup — every active day</h3>
           {!rollup || rollup.days.length === 0 ? <p>No commission days yet.</p> : (
-            <table className="dep-table">
-              <thead><tr><th>Date</th><th>Admin</th><th>Deposits</th><th>Total deposited</th><th>Commission</th></tr></thead>
-              <tbody>
-                {rollup.days.map((d, i) => (
-                  <tr key={`${d.date}-${d.adminId}-${i}`}><td>{d.date}</td><td>{d.adminName}</td><td>{d.deposits}</td><td>{fmtCash(d.totalAmount)}</td><td>{fmtCash(d.totalCommission)}</td></tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="rg48-twrap">
+              <table className="dep-table">
+                <thead><tr><th>Date</th><th>Admin</th><th>Deposits</th><th>Total deposited</th><th>Commission</th></tr></thead>
+                <tbody>
+                  {rollup.days.map((d, i) => (
+                    <tr key={`${d.date}-${d.adminId}-${i}`}><td>{d.date}</td><td>{d.adminName}</td><td>{d.deposits}</td><td>{fmtCash(d.totalAmount)}</td><td>{fmtCash(d.totalCommission)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       </div>
