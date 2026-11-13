@@ -197,35 +197,6 @@
    whole Mines UI is too bad — impress it. Scoped under .mn-hud / .mn-stage
    / .mn-tile so no other game is touched. Brand tokens only. */
 
-/* --- HUD: the multiplier is a big gold ×, the gems are an icon + count --- */
-.mn-hud .mn-chip-mult{
-  background:linear-gradient(180deg, rgba(242,194,48,.26), rgba(242,194,48,.08));
-  border-color:rgba(242,194,48,.7);
-  box-shadow:0 0 18px rgba(242,194,48,.3), inset 0 1px 0 rgba(255,255,255,.2);
-}
-.mn-hud .mn-chip-mult b{
-  color:#FFD964;
-  font-family:Outfit, sans-serif;
-  font-size:21px;
-  font-weight:800;
-  letter-spacing:.02em;
-  background:linear-gradient(180deg, #FFF6C8 0%, #FFD964 48%, #F2C230 72%, #C98F12 100%);
-  -webkit-background-clip:text;
-  background-clip:text;
-  -webkit-text-fill-color:transparent;
-  filter:drop-shadow(0 2px 6px rgba(242,194,48,.5));
-}
-.mn-hud .mn-chip-gems{
-  display:inline-flex;
-  align-items:center;
-  background:linear-gradient(180deg, rgba(62,217,126,.18), rgba(12,43,34,.55));
-  border-color:rgba(62,217,126,.5);
-  box-shadow:0 6px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.1);
-}
-.mn-hud .mn-chip-gems .mn-gem-ico{ display:inline-flex; width:19px; height:19px; margin-right:6px; }
-.mn-hud .mn-chip-gems .mn-gem-ico svg{ width:19px; height:19px; display:block; filter:drop-shadow(0 0 6px rgba(242,194,48,.6)); }
-.mn-hud .mn-chip-gems b{ font-size:16px; color:#FFE9A8; margin-left:0; }
-
 /* --- Board: gold-framed inset panel --- */
 .mn-stage .mn-board{
   background:rgba(0,0,0,.32);
