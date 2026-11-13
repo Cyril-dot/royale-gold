@@ -40,7 +40,9 @@ export async function getLifetimeDeposited(userId: string): Promise<number> {
     where: { userId },
     _sum: { amount: true },
   });
-  return agg._sum.amount ?? 0;
+  // Prisma types the Decimal sum as `number` on SQLite but `Decimal` on
+  // Postgres (Vercel) — Number() is correct under both.
+  return Number(agg._sum.amount ?? 0);
 }
 
 /** LIVE win-chance factor for a lifetime-deposited total. 1.0 → floor. */
