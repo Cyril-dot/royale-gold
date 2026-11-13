@@ -146,7 +146,7 @@ export function RoomShell({ game, subtitle, children, stats, history, bare }: {
   history: GameHistoryRow[];
   bare?: boolean;
 }) {
-  const { mode, setMode, muted, toggleMute, user, wallet, simSession } = useStore();
+  const { mode, setMode, muted, toggleMute, user, wallet, simSession, topUpSim } = useStore();
   const isCoin = game.currency === "coins";
   const simMode = mode === "SIM" && !isCoin;
   const balance = isCoin ? wallet?.coins ?? user?.coins ?? 0 : simMode ? simSession ?? wallet?.sim ?? 0 : wallet?.cash ?? user?.cash ?? 0;
@@ -169,6 +169,12 @@ export function RoomShell({ game, subtitle, children, stats, history, bare }: {
                 end of the bar, after the back coin. */}
             <div className="xg-mode">
               <span className="xg-bal">{balText}</span>
+              {/* Round 12: SIM runs out mid-session with no way back —
+                  the top-up lives next to the balance, where the
+                  "Not enough SIM — top up to play" toast fires. */}
+              {simMode && (
+                <button type="button" className="xg-topup" onClick={topUpSim}>Top up SIM</button>
+              )}
               {!isCoin && (
                 <span className="xg-mode-btns" role="group" aria-label="Real or demo cash">
                   <button type="button" aria-pressed={mode === "REAL"} className={mode === "REAL" ? "on" : ""} onClick={() => setMode("REAL")}>REAL</button>

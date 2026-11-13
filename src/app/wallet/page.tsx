@@ -11,7 +11,7 @@ import { useStore } from "../../lib/store";
 import WalletCard from "../../components/WalletCard";
 
 export default function WalletPage() {
-  const { user, wallet, openAuth, setDepositOpen } = useStore();
+  const { user, wallet, mode, simSession, topUpSim, openAuth, setDepositOpen } = useStore();
 
   if (!user) {
     return (
@@ -26,7 +26,10 @@ export default function WalletPage() {
   }
 
   const cash = wallet?.cash ?? user.cash ?? 0;
-  const sim = wallet?.sim ?? user.sim ?? 0;
+  // Round 12: in SIM mode the SIM card shows the LIVE session counter
+  // (the money the user actually has to play with), not the server
+  // value — the server value only changes at signup / daily claim.
+  const sim = mode === "SIM" ? (simSession ?? wallet?.sim ?? user.sim ?? 0) : (wallet?.sim ?? user.sim ?? 0);
   const coins = wallet?.coins ?? user.coins ?? 0;
   // Wallet id, not a payment card — the last 4 of the user id, uppercased.
   const last4 = (user.id || "").replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase() || "0000";
@@ -44,7 +47,16 @@ export default function WalletPage() {
           <div className="sum-card"><span>SIM</span><b>{fmtCash(sim)}</b></div>
           <div className="sum-card"><span>Coins</span><b>{fmtCoins(coins)}</b></div>
         </div>
-        <button className="btn btn-gold wallet-dep" type="button" onClick={() => setDepositOpen(true)}>Deposit</button>
+        {/* Round 12: SIM mode is demo-only — the action is an instant
+            SIM top-up, never a real-money deposit. */}
+        {mode === "SIM" ? (
+          <button className="btn btn-gold wallet-dep" type="button" onClick={topUpSim}>Top up SIM +GH₵ 1,000</button>
+        ) : (
+          <button className="btn btn-gold wallet-dep" type="button" onClick={() => setDepositOpen(true)}>Deposit</button>
+        )}
+        {mode === "SIM" && (
+          <p className="rg48-mini wallet-note">SIM is demo money — top up anytime, it never touches your real cash.</p>
+        )}
         <p className="rg48-mini wallet-note">Coins are play-only — never withdrawable.</p>
       </div>
     </main>

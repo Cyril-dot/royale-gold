@@ -47,6 +47,10 @@ interface Store {
    *  SIM must never touch the real cash wallet. */
   simSession: number | null;
   setSimSession: (v: number) => void;
+  /** Instant demo credit: +GH₵ 1,000 SIM, client-side only. SIM is
+   *  demo money by design — there is no SIM top-up endpoint, and a
+   *  reload re-seeds the session counter from the server value. */
+  topUpSim: () => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -131,6 +135,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Round 12: SIM top-up — instant demo credit, no server call. The
+  // session counter is the live SIM balance; a reload re-seeds it from
+  // the server value, which is fine for demo money.
+  const topUpSim = useCallback(() => {
+    setSimSession((prev) => (prev ?? wallet?.sim ?? 0) + 1000);
+    toast("SIM topped up +GH₵ 1,000 — demo money, keep checking", "info");
+  }, [wallet, toast]);
+
   const login = useCallback(async (emailOrPhone: string, password: string) => {
     const r = await api<{ user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify({ emailOrPhone, password }) });
     try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
@@ -188,9 +200,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       user, wallet, loading, mode, setMode, muted, toggleMute, toasts, toast,
       refresh, setWallet, setUser, login, register, logout,
       authOpen, authMode, openAuth, closeAuth, depositOpen, setDepositOpen,
-      refPrefill, setRefPrefill, simSession, setSimSession,
+      refPrefill, setRefPrefill, simSession, setSimSession, topUpSim,
     }),
-    [user, wallet, loading, mode, setMode, muted, toggleMute, toasts, toast, refresh, login, register, logout, authOpen, authMode, openAuth, closeAuth, depositOpen, refPrefill, simSession]
+    [user, wallet, loading, mode, setMode, muted, toggleMute, toasts, toast, refresh, login, register, logout, authOpen, authMode, openAuth, closeAuth, depositOpen, refPrefill, simSession, topUpSim]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
