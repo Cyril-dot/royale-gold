@@ -22,3 +22,10 @@ a.gp-bal:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-r
   .gpage{padding-bottom:120px}
   .xgame-room{padding-bottom:120px}
 }
+
+/* Games page filters: one scrollable row, never wrapped into a stack
+   (round 11 follow-up — the 9 chips wrapped onto 3 rows). NOTE: the
+   page root is <main class="gpage">, not #gamesPage — the v48
+   #gamesPage rules are dead in this port, so scope to .gpage. */
+.gpage .gp-filters{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+.gpage .gp-filters::-webkit-scrollbar{display:none}
