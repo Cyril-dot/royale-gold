@@ -69,6 +69,12 @@
    min(1280px,100% - 40px) inset, so the pill's right edge touches the
    viewport edge with 0 gap). No negative-margin hack: the row is
    exactly viewport-wide, so it cannot cause horizontal overflow.
+   Round 14d: JUST the balance — the coin icon and the eye (hide/show)
+   are gone from the tab, it keeps only the label + value text. The
+   pill's v48 padding (5px 14px 5px 6px) was sized for the coin icon,
+   so the text gets symmetric padding here (14px desktop / 10px phone)
+   and the dead .eye override is dropped. No replacement hide/show
+   control anywhere — that is what was asked for.
    The old top-row pill (hdr-row-2) and the submenu balance row are
    gone; the coins pill is untouched. The pill reuses the .bal-pill
    styling; the row only pins it right and keeps it a pill (never a
@@ -78,14 +84,14 @@
    carried it) is gone. position:relative keeps the pill painted above
    the header.site::after gold glow, so the pill's top edge stays clean. */
 .hdr-zone .hdr-bal-row{position:relative;display:flex;justify-content:flex-end;padding:0 0 10px;width:100%}
-.hdr-zone .hdr-bal-row .bal-pill{flex:0 0 auto;min-width:0;max-width:100%;border-radius:0}
+.hdr-zone .hdr-bal-row .bal-pill{flex:0 0 auto;min-width:0;max-width:100%;border-radius:0;padding:5px 14px}
 .hdr-zone .hdr-bal-row .bal-pill>div{min-width:0}
 .hdr-zone .hdr-bal-row .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:640px){
   .hdr-zone .hdr-bal-row{padding:0 0 8px}
-  /* phone: the eye + label stay visible on this pill (v48.css hides them
-     on the old top-row pill) — the hide/show feature must not be lost */
-  .hdr-zone .hdr-bal-row .bal-pill .eye{display:grid}
+  .hdr-zone .hdr-bal-row .bal-pill{padding:5px 10px}
+  /* phone: the label stays visible on this tab (v48.css hides it
+     on the old top-row pill) */
   .hdr-zone .hdr-bal-row .bal-pill small{display:block}
 }
       

@@ -22,7 +22,6 @@ export default function Header() {
   const toolsBtnRef = useRef<HTMLButtonElement | null>(null);
   const toolsPanelRef = useRef<HTMLDivElement | null>(null);
   const [hidden, setHidden] = useState(false);
-  const [balHidden, setBalHidden] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const lastY = useRef(0);
@@ -79,7 +78,7 @@ export default function Header() {
   // after playing in SIM (the server SIM only moves on signup + daily claim).
   const sim = simSession ?? wallet?.sim ?? user?.sim ?? 0;
   const shownBal = mode === "SIM" ? sim : cash;
-  const balText = balHidden ? "••••••" : mode === "SIM" ? `SIM ${sim.toLocaleString("en-GH")}` : fmtCash(shownBal);
+  const balText = mode === "SIM" ? `SIM ${sim.toLocaleString("en-GH")}` : fmtCash(shownBal);
 
   const tickerItems = (
     <>
@@ -208,26 +207,22 @@ export default function Header() {
         <div className="ver-strip"><span className="xg-ver hdr-ver" aria-hidden="true">v48</span></div>
       </header>
       {/* Round 14b: the wallet balance lives HERE and nowhere else — a
-          standalone pill hanging just below the header's gold bottom
+          standalone tab hanging just below the header's gold bottom
           line, top edge attached to the line, right-aligned, on phone +
           desktop. The row is a direct child of .hdr-zone (NOT inside
           header.site), so it sits below the gold border-bottom instead
           of above it; it is in normal flow, so page content starts
-          below the pill and nothing is covered. Same pill markup
-          (Link to /wallet + eye) as before, so the styling and
-          behaviour are unchanged. */}
+          below the tab and nothing is covered. Round 14d: JUST the
+          balance — the coin icon and the eye (hide/show) are gone, the
+          tab keeps only the label + value text in the Link to /wallet. */}
       <div className="wrap hdr-bal-row">
         <div className="bal-pill" aria-label="Wallet balance">
           <Link href="/wallet" className="bal-link" aria-label="Open wallet">
-            <span className="bal-coin" aria-hidden="true">₵</span>
             <div>
               <small>{mode === "SIM" ? "SIM BALANCE" : "BALANCE"}</small>
               <strong>{balText}</strong>
             </div>
           </Link>
-          <button className="eye" type="button" aria-label={balHidden ? "Show balance" : "Hide balance"} onClick={() => setBalHidden((v) => !v)}>
-            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5C6.5 5 2 12 2 12s4.5 7 10 7 10-7 10-7-4.5-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" /></svg>
-          </button>
         </div>
       </div>
       {toolsOpen && (
