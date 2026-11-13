@@ -94,12 +94,12 @@ export function useGameRoom(game: GameDef) {
 }
 
 export function StakeChips({ stake, setStake, currency, disabled }: { stake: number; setStake: (n: number) => void; currency: "cash" | "coins"; disabled?: boolean }) {
-  const chips = currency === "coins" ? [1, 5, 10] : [5, 10, 25];
-  // Round 13: a typed stake input, first in the row, then the quick chips.
+  // Round 13: a typed stake input. Round 13 follow-up: the quick-amount
+  // chips are GONE (user's order — the input is the only stake control).
   // The typed value lives in local text state so the user can clear the
   // field mid-type (empty never commits) and "7." stays editable while
-  // they type the decimals. Chips write through setStake and the effect
-  // below re-syncs the text, so input and chips never disagree.
+  // they type the decimals. The effect below re-syncs the text when the
+  // stake changes from elsewhere, so input and state never disagree.
   const [text, setText] = useState(String(stake));
   useEffect(() => { setText(String(stake)); }, [stake]);
 
@@ -145,9 +145,6 @@ export function StakeChips({ stake, setStake, currency, disabled }: { stake: num
           disabled={disabled}
         />
       </span>
-      {chips.map((c) => (
-        <button key={c} type="button" className="stake-chip" aria-pressed={stake === c} onClick={() => setStake(c)} disabled={disabled}>{c}</button>
-      ))}
     </div>
   );
 }
