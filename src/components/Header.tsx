@@ -2,12 +2,15 @@
 // Join now or account chip), plus the jackpot ticker with the export's
 // content and live counter. Round 11: NO Deposit button anywhere — the
 // coin pill and submenu coins row link to the wallet page. Round 14g:
-// the account-chip figures are gone (cash + coins) — the chip is avatar
-// + name + role only. Round 15: the balance pill/tab is GONE entirely;
-// the balance lives in the phone hamburger submenu again (Balance row,
-// first); the chip carries a 👑 crown after the name; signed-out shows
-// ONE gold "Join now" button opening the toggle-based auth modal;
-// header polish — premium chip, richer gold bottom line, breathing room.
+// the account-chip figures were removed (cash + coins). Round 15: the
+// balance pill/tab is GONE entirely; the balance lives in the phone
+// hamburger submenu again (Balance row, first); the chip carries a 👑
+// crown after the name; signed-out shows ONE gold "Join now" button
+// opening the toggle-based auth modal; header polish — premium chip,
+// richer gold bottom line, breathing room. Round 15d: the cash balance
+// is back in the chip as a bare number (no GH₵ / SIM prefix) next to
+// the name, and the role text is gone — the chip is single-line:
+// avatar + name + 👑 + balance. No coins figure.
 // Phone tier (export): search + LV chip retire under 640px, the header
 // condenses to coin logo + balance.
 
@@ -84,6 +87,11 @@ export default function Header() {
   const sim = simSession ?? wallet?.sim ?? user?.sim ?? 0;
   const shownBal = mode === "SIM" ? sim : cash;
   const balText = mode === "SIM" ? `SIM ${sim.toLocaleString("en-GH")}` : fmtCash(shownBal);
+  // Round 15d: the chip shows the balance as a bare number — no "GH₵ "
+  // prefix in REAL mode, no "SIM" prefix in SIM mode (the REAL/SIM toggle
+  // already shows the mode). balText keeps its full labels for the
+  // submenu Balance row; only the chip drops the prefixes.
+  const chipBal = mode === "SIM" ? sim.toLocaleString("en-GH") : Number(shownBal).toFixed(2);
 
   const tickerItems = (
     <>
@@ -127,7 +135,7 @@ export default function Header() {
             <button className="icon-btn" id="searchBtn" type="button" aria-label="Search games" aria-expanded={searchOpen} onClick={() => setSearchOpen((v) => !v)}>
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z" /></svg>
             </button>
-            <div className="mode-toggle" role="group" aria-label="Real or demo cash">
+            <div className="mode-toggle" role="group" aria-label="Real or SIM cash">
               <button type="button" className={mode === "REAL" ? "on" : ""} onClick={() => setMode("REAL")} aria-pressed={mode === "REAL"}>REAL</button>
               <button type="button" className={mode === "SIM" ? "on" : ""} onClick={() => setMode("SIM")} aria-pressed={mode === "SIM"}>SIM</button>
             </div>
@@ -162,7 +170,9 @@ export default function Header() {
                     <span className="ac-av">{user.name.trim().charAt(0).toUpperCase()}</span>
                     <span className="ac-id">
                       <span className="ac-name">{user.name.split(" ")[0]} <span className="ac-crown" aria-hidden="true">👑</span></span>
-                      <span className="ac-role">{user.role === "owner" ? "Owner" : user.role === "admin" ? "Admin" : "Player"}</span>
+                    </span>
+                    <span className="ac-bals">
+                      <span className="ac-bal">{chipBal}</span>
                     </span>
                   </button>
                   {menuOpen && (
@@ -231,7 +241,7 @@ export default function Header() {
           <div className="htm-row" role="menuitem">
             <span className="htm-lab">Cash mode</span>
             <span className="htm-ctl">
-              <span className="mode-toggle" role="group" aria-label="Real or demo cash">
+              <span className="mode-toggle" role="group" aria-label="Real or SIM cash">
                 <button type="button" className={mode === "REAL" ? "on" : ""} onClick={() => setMode("REAL")} aria-pressed={mode === "REAL"}>REAL</button>
                 <button type="button" className={mode === "SIM" ? "on" : ""} onClick={() => setMode("SIM")} aria-pressed={mode === "SIM"}>SIM</button>
               </span>

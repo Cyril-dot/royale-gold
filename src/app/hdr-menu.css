@@ -86,14 +86,44 @@ header#siteHdr .btn-acct.btn-gold{box-shadow:0 10px 24px rgba(242,194,48,.35),in
   header#siteHdr .acct-chip:hover{border-color:rgba(242,194,48,.9);box-shadow:0 0 0 1px rgba(242,194,48,.20),0 8px 22px rgba(0,0,0,.5),0 0 22px rgba(242,194,48,.28)}
 }
 
-/* ============ Account chip without figures (round 14g) ============
-   The cash + coins figures are gone from the chip — avatar + name +
-   role only. The v48 phone rule `.acct-chip>span:last-child{display:none}`
-   (it hid the figures on phone) would now hide .ac-id, the name/role,
-   since it is the last child — so it is overridden here. hdr-menu.css
-   loads after v48.css and #siteHdr beats the v48 specificity, so
-   this wins. The chip still opens the account menu on click. */
+/* ============ Account chip without figures (round 14g, revised 15d) ============
+   Round 14g removed the cash + coins figures from the chip. Round 15d
+   restores the CASH figure only (bare number, no GH₵ / SIM prefix) as the
+   last child, and removes the role text — the chip is single-line:
+   avatar + name + 👑 + balance. The v48 phone rule
+   `.acct-chip>span:last-child{display:none}` would hide that last child
+   (the balance) on phone, so it is overridden here. hdr-menu.css loads
+   after v48.css and #siteHdr beats the v48 specificity, so this wins.
+   The chip still opens the account menu on click. */
 @media (max-width:640px){
   header#siteHdr .acct-chip>span:last-child{display:flex}
+}
+
+/* ============ Round 15d — wallet balance back in the chip (number only) ============
+   The cash balance sits on the name line, right-aligned, next to the
+   username — avatar + name + 👑 + number in one pill, single line, no
+   role. Gold-2, Outfit bold, sized to sit with the 15px/900 name
+   (14px desktop / 13px phone). No coins figure (coins stay in the
+   coins pill). Plain text — no click handler; the chip opens the menu,
+   the submenu Balance row links to /wallet. */
+header#siteHdr .acct-chip .ac-bals{display:flex;flex-direction:column;line-height:1.2;text-align:right;font-size:14px;font-weight:800;color:var(--gold-2,#FFD964);white-space:nowrap}
+@media (max-width:640px){
+  header#siteHdr .acct-chip .ac-bals{font-size:13px}
+}
+
+/* ============ Round 15b — "Join now" pushed to the side on phone ============
+   Signed out on phone the button covered the whole top row: globals.css
+   gave it flex:1 inside .acct-box (itself flex:1 in the row), a leftover
+   from when row 3 held Log in + Register sharing the row. Now there is
+   only one button — undo the grow on both, and push the box right with
+   margin-left:auto, so the top row reads: coin logo, clear space,
+   compact gold button, hamburger. Signed-in is unaffected in practice
+   (the box shrinks to the chip, which .acct-wrap's margin-left:auto
+   already pushed right). Desktop untouched (scoped to <=640px; desktop
+   rows are display:contents, and the button already sits compact right
+   there). #siteHdr beats the globals.css (0,3,1) rules. */
+@media (max-width:640px){
+  header#siteHdr .hdr-row-3 .acct-box{flex:0 0 auto;margin-left:auto}
+  header#siteHdr .hdr-row-3 .btn-acct{flex:0 0 auto}
 }
       
