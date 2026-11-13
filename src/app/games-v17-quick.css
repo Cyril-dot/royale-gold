@@ -269,3 +269,35 @@
   .mn-stage .mn-tile.safe:not(.dim)::after{ animation:none; opacity:0; }
   .mn-stage .mn-tile.boom{ animation:none; }
 }
+
+/* --- Dice Roll: fit the dice inside the phone (Round 26) ---
+   The DOM dice (.fb-dice) are the no-WebGL fallback, but the v48 hide
+   rule targets .die, which no longer exists — so when the 3D scene was
+   live BOTH showed at once. The flex stage then held canvas (328px) +
+   dice (192px) = 520px in a 390px phone, clipping the tray left and
+   the big dice right (Chuks's screenshot). Hide the fallback whenever
+   3D is live; the canvas alone centres and fits. */
+.dice-stage.has-3d .fb-dice{display:none}
+
+/* --- Dice Roll: total readout (clear result moment) --- */
+.dr-total{display:flex;align-items:baseline;justify-content:center;gap:10px;margin:0 0 12px;text-align:center}
+.dr-total .dr-total-label{font-size:11px;font-weight:800;letter-spacing:.18em;color:rgba(255,246,216,.65)}
+.dr-total .dr-total-num{font-size:32px;font-weight:800;line-height:1;color:#FFF6D8}
+.dr-total.win .dr-total-num{color:#FFD964;text-shadow:0 0 18px rgba(242,194,48,.55)}
+.dr-total .dr-total-sub{font-size:13px;font-weight:600;color:rgba(255,246,216,.8)}
+.dr-total.win .dr-total-sub{color:#FFE9A8}
+.dr-total.lose .dr-total-sub{color:rgba(255,179,172,.85)}
+
+/* --- Dice Roll: DOM fallback roll shake (no-WebGL path) --- */
+@keyframes dr-shake{
+  0%{transform:translate(0,0) rotate(0deg)}
+  20%{transform:translate(-3px,2px) rotate(-14deg)}
+  40%{transform:translate(3px,-2px) rotate(12deg)}
+  60%{transform:translate(-2px,-3px) rotate(-8deg)}
+  80%{transform:translate(2px,2px) rotate(10deg)}
+  100%{transform:translate(0,0) rotate(0deg)}
+}
+.dice-stage .fb-dice.rolling .fb-die{animation:dr-shake .18s linear infinite}
+@media (prefers-reduced-motion: reduce){
+  .dice-stage .fb-dice.rolling .fb-die{animation:none}
+}

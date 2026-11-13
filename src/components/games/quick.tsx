@@ -144,6 +144,8 @@ export function DiceRoom({ game }: { game: GameDef }) {
   const { room, stake, setStake, msg, setMsg } = useSimple(game, "Two 3D dice · Over/Under ×2 · Exactly 7 ×5.", "Call the total, set your stake, then roll. The dice settle where physics leaves them — the pips decide.");
   const [dice, setDice] = useState<[number, number]>([3, 4]);
   const [rolling, setRolling] = useState(false);
+  // Last roll, for the big TOTAL readout (clear result moment).
+  const [last, setLast] = useState<{ d1: number; d2: number; total: number; won: boolean; payout: number; stake: number } | null>(null);
   // The artifact's pick row — Under 7 ×2, Exactly 7 ×5, Over 7 ×2.
   // The port dropped Over/Under entirely and only paid exactly 7.
   const [pick, setPick] = useState<DicePick>("exact");
@@ -160,9 +162,11 @@ export function DiceRoom({ game }: { game: GameDef }) {
       const total = d1 + d2;
       const won = pick === "over" ? total > 7 : pick === "under" ? total < 7 : total === 7;
       const mult = pick === "exact" ? 5 : 2;
+      const payout = won ? stake * mult : 0;
+      setLast({ d1, d2, total, won, payout, stake });
       const call = pick === "over" ? "Over 7" : pick === "under" ? "Under 7" : "Exactly 7";
       setMsg(won ? `${d1} + ${d2} = ${total} — ${call}! ${fmtCash(stake * mult)} paid to your balance.` : `${d1} + ${d2} = ${total} — you called ${call}. The ${fmtCash(stake)} stake is gone; roll again.`);
-      await room.settle(stake, won ? stake * mult : 0, { d1, d2, total, pick });
+      await room.settle(stake, payout, { d1, d2, total, pick });
     };
     // 3D: the physics throw lands on the pre-decided values, then
     // settle. DOM: the 600ms roll it replaces.
@@ -174,7 +178,14 @@ export function DiceRoom({ game }: { game: GameDef }) {
   };
   return (
     <Shell game={game} subtitle="Two 3D dice · Over/Under ×2 · Exactly 7 ×5." stake={stake} setStake={setStake} msg={msg} stats={room.stats} history={room.history}>
-      <div className={`dice-stage${dice3d ? " has-3d" : ""}`}><Dice3D controllerRef={dice3dRef} onReady={setDice3d} /><div className="fb-dice"><Die v={dice[0]} /><Die v={dice[1]} /></div></div>
+      <div className={`dice-stage${dice3d ? " has-3d" : ""}`}><Dice3D controllerRef={dice3dRef} onReady={setDice3d} /><div className={`fb-dice${rolling ? " rolling" : ""}`}><Die v={dice[0]} /><Die v={dice[1]} /></div></div>
+      {last && (
+        <div className={`dr-total${last.won ? " win" : " lose"}`} aria-live="polite">
+          <span className="dr-total-label">TOTAL</span>
+          <span className="dr-total-num">{last.total}</span>
+          <span className="dr-total-sub">{last.d1} + {last.d2} · {last.won ? `Won ${fmtCash(last.payout)}` : `Lost ${fmtCash(last.stake)}`}</span>
+        </div>
+      )}
       <div className="xg-pickrow" role="group" aria-label="Pick the total">
         {(["under", "exact", "over"] as DicePick[]).map((p) => (
           <button key={p} type="button" className="xg-pick" aria-pressed={pick === p} onClick={() => setPick(p)} disabled={rolling}>
