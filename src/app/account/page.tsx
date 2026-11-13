@@ -346,13 +346,38 @@ export default function AccountPage() {
           <h3>Daily bonus</h3>
           <button className="btn btn-gold" type="button" onClick={() => void claimCoins()} disabled={claimBusy}>{claimBusy ? "Claiming…" : "Claim daily +5 coins"}</button>
         </section>
-        <section className="ac-sec">
+        <section className="ac-sec ac-session">
           <h3>Session</h3>
-          <p><Link className="linklike" href="/settings">Settings — profile, password, preferences →</Link></p>
-          <p><Link className="linklike" href="/wallet">Wallet — balances and deposit →</Link></p>
-          {(user.role === "admin" || user.role === "owner") && <p><Link className="linklike" href="/admin">Open admin panel →</Link></p>}
-          {user.role === "owner" && <p><Link className="linklike" href="/owner">Open owner panel →</Link></p>}
-          <button className="btn btn-ghost" type="button" onClick={() => void logout()}>Log out</button>
+          <nav className="ac-menu" aria-label="Session">
+            <Link className="ac-row" href="/settings">
+              <span className="ac-row-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" /><path d="M12 2.6v2.8M12 18.6v2.8M2.6 12h2.8M18.6 12h2.8M5.2 5.2l2 2M16.8 16.8l2 2M18.8 5.2l-2 2M7.2 16.8l-2 2" /></svg></span>
+              <span className="ac-row-txt"><b>Settings</b><span>profile, password, preferences</span></span>
+              <span className="ac-row-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></span>
+            </Link>
+            <Link className="ac-row" href="/wallet">
+              <span className="ac-row-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M3 10h18M16.5 14.5h.01" /></svg></span>
+              <span className="ac-row-txt"><b>Wallet</b><span>balances and deposit</span></span>
+              <span className="ac-row-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></span>
+            </Link>
+            {(user.role === "admin" || user.role === "owner") && (
+              <Link className="ac-row" href="/admin">
+                <span className="ac-row-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 2.8v5.4c0 4.6-3 7.6-7 9.3-4-1.7-7-4.7-7-9.3V5.8L12 3z" /><path d="M9 11.5l2.2 2.2 4.3-4.2" /></svg></span>
+                <span className="ac-row-txt"><b>Admin panel</b><span>players, referrals and commission</span></span>
+                <span className="ac-row-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></span>
+              </Link>
+            )}
+            {user.role === "owner" && (
+              <Link className="ac-row" href="/owner">
+                <span className="ac-row-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8.5l3.4 2.8L12 5.5l4.6 5.8L20 8.5 18.4 17H5.6L4 8.5z" /><path d="M6.5 20h11" /></svg></span>
+                <span className="ac-row-txt"><b>Owner panel</b><span>admins, users and platform settings</span></span>
+                <span className="ac-row-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></span>
+              </Link>
+            )}
+          </nav>
+          <button className="ac-row ac-row-danger" type="button" onClick={() => void logout()}>
+            <span className="ac-row-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 4H6v16h7" /><path d="M10 12h11M17.5 8.5L21 12l-3.5 3.5" /></svg></span>
+            <span className="ac-row-txt"><b>Log out</b><span>sign out of your account</span></span>
+          </button>
         </section>
       </div>
     </main>

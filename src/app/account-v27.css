@@ -171,3 +171,39 @@
 @media (prefers-reduced-motion: reduce){
   .ac-xpbar span{transition:none}
 }
+
+/* --- Session menu (Round 29) ---
+   Card rows replace the bare text links: gold-ring icon + bold title +
+   muted description + gold chevron, the whole row tappable. Rows are
+   separated cards (the same gap pattern as .ac-games / .ac-hist).
+   Log out is its own red-tinted row below the menu. */
+.ac-menu{display:flex;flex-direction:column;gap:8px}
+.ac-row{
+  display:flex;align-items:center;gap:12px;min-width:0;width:100%;
+  padding:12px;border-radius:14px;text-decoration:none;text-align:left;
+  font:inherit;color:#FFF6D8;cursor:pointer;
+  background:linear-gradient(180deg, rgba(27,35,64,.85), rgba(16,20,42,.85));
+  border:1px solid rgba(255,246,216,.12);
+  touch-action:manipulation;user-select:none;-webkit-user-select:none;
+}
+.ac-row-ico{
+  width:40px;height:40px;flex:0 0 40px;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;color:#FFD964;
+  background:rgba(242,194,48,.12);border:1px solid rgba(242,194,48,.35);
+}
+.ac-row-ico svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ac-row-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.ac-row-txt b{font-size:15px;font-weight:800;color:#FFF6D8}
+.ac-row-txt span{font-size:12px;color:rgba(255,246,216,.65);overflow-wrap:anywhere}
+.ac-row-chev{flex:0 0 auto;display:flex;color:#FFD964}
+.ac-row-chev svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media (hover:hover) and (pointer:fine){ .ac-row:hover{border-color:rgba(242,194,48,.55)} }
+.ac-row:active{transform:scale(.98)}
+.ac-row-danger{
+  margin-top:8px;
+  border-color:rgba(229,50,45,.5);
+  background:linear-gradient(180deg, rgba(229,50,45,.14), rgba(229,50,45,.05));
+}
+.ac-row-danger .ac-row-ico{background:rgba(229,50,45,.14);border-color:rgba(229,50,45,.5);color:#FF9B92}
+.ac-row-danger .ac-row-txt b{color:#FF9B92}
+@media (hover:hover) and (pointer:fine){ .ac-row-danger:hover{border-color:rgba(229,50,45,.8)} }
