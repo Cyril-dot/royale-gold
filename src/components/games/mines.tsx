@@ -92,7 +92,7 @@ export default function MinesRoom({ game }: { game: GameDef }) {
         <div className="xg-pickrow" role="group" aria-label="Mine count">
           {[3, 5, 10].map((m) => (
             <button key={m} type="button" className="xg-pick" aria-pressed={mineCount === m} onClick={() => setMineCount(m)} disabled={playing}>
-              <span className="xg-pick-txt">{m} mines<small>{m === 3 ? "gentler multipliers" : m === 5 ? "balanced" : "big multipliers"}</small></span>
+              <span className="xg-pick-txt">{m} mines</span>
             </button>
           ))}
         </div>

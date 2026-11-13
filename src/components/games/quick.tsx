@@ -576,8 +576,8 @@ export function BottleRoom({ game, variant = "room" }: { game: GameDef; variant?
       </div>
       <div className="bottle-controls">
         <div className="pick-row" role="group" aria-label="Pick a side">
-          <button className="pick-btn pick-up" type="button" aria-pressed={pick === "up"} onClick={() => setPick("up")}>▲ UP<small>Bottle neck finishes up · pays ×2</small></button>
-          <button className="pick-btn pick-down" type="button" aria-pressed={pick === "down"} onClick={() => setPick("down")}>▼ DOWN<small>Bottle neck finishes down · pays ×2</small></button>
+          <button className="pick-btn pick-up" type="button" aria-pressed={pick === "up"} onClick={() => setPick("up")}>▲ UP</button>
+          <button className="pick-btn pick-down" type="button" aria-pressed={pick === "down"} onClick={() => setPick("down")}>▼ DOWN</button>
         </div>
         <button className="btn btn-gold xg-action bottle-spin-btn" type="button" onClick={() => void spin()} disabled={spinning}>
           {spinning ? "Spinning…" : isPhone ? "Spin" : `Spin — win ${fmtCash(stake * 2).replace(".00", "")}`}

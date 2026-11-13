@@ -117,7 +117,7 @@ export default function PlinkoRoom({ game }: { game: GameDef }) {
         <div className="xg-pickrow" role="group" aria-label="Risk">
           {(["low", "med", "high"] as const).map((r) => (
             <button key={r} type="button" className="xg-pick" aria-pressed={risk === r} onClick={() => setRisk(r)} disabled={dropping}>
-              <span className="xg-pick-txt">{r === "low" ? "Low" : r === "med" ? "Medium" : "High"}<small>edge ×{table[0]}</small></span>
+              <span className="xg-pick-txt">{r === "low" ? "Low" : r === "med" ? "Medium" : "High"}</span>
             </button>
           ))}
         </div>

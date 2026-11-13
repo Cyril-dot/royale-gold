@@ -19,3 +19,13 @@
 .pick-btn.pick-up{background:linear-gradient(180deg,#4CB84A,#2E8F2C);box-shadow:0 10px 22px rgba(0,0,0,.45),inset 0 2px 0 rgba(255,255,255,.35),inset 0 -8px 14px rgba(0,0,0,.22)}
 .pick-btn.pick-down{background:linear-gradient(180deg,#F5A83D,#DE7A12);box-shadow:0 10px 22px rgba(0,0,0,.45),inset 0 2px 0 rgba(255,255,255,.35),inset 0 -8px 14px rgba(0,0,0,.22)}
 .pick-btn.pick-btn[aria-pressed="true"]{filter:brightness(1.14) saturate(1.12);transform:translateY(-3px) scale(1.03);box-shadow:0 16px 30px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.45),inset 0 -8px 14px rgba(0,0,0,.2)}
+
+/* Round 9 — the small label lines inside the buttons are gone (just
+   "▲ UP" / "▼ DOWN" now), so the two-line height would leave the pills
+   hollow. Single-line sizing: still fat bubbly pills, still ≥44px tap
+   targets at every width. Doubled class beats v48.css, including its
+   max-width:640px phone rule. */
+.pick-btn.pick-btn{min-height:56px;padding:12px 24px}
+@media (max-width:640px){
+  .pick-btn.pick-btn{min-height:52px;padding:10px 16px}
+}

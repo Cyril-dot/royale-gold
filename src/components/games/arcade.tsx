@@ -434,7 +434,7 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
         <div className="xg-pickrow" role="group" aria-label="Difficulty">
           {(["easy", "medium", "hard"] as RsDiff[]).map((d) => (
             <button key={d} type="button" className="xg-pick" aria-pressed={diff === d} onClick={() => setDiff(d)} disabled={playing}>
-              <span className="xg-pick-txt">{d.toUpperCase()}<small>{RS_GOALS[d].kills} kills → ×{RS_GOALS[d].mult}</small></span>
+              <span className="xg-pick-txt">{d.toUpperCase()}</span>
             </button>
           ))}
         </div>

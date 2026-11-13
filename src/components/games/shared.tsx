@@ -163,7 +163,10 @@ export function RoomShell({ game, subtitle, children, stats, history, bare }: {
         <div className="wrap xg-bar-in">
           <Link className="xg-back xg-back-icon" href="/games" aria-label="Back to all games">←</Link>
           <div className="xg-head">
-            <h2 className="xg-title">{game.name}</h2>
+            {/* Round 9: no game name in any room's top bar — the user
+                wants the title gone from every game. The mode bar
+                carries margin-left:auto, so it still sits at the right
+                end of the bar, after the back coin. */}
             <div className="xg-mode">
               <span className="xg-bal">{balText}</span>
               {!isCoin && (
