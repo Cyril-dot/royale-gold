@@ -9,8 +9,15 @@ import { useState } from "react";
 import Hero from "../components/Hero";
 import GameTile from "../components/GameTile";
 import VerbTilt from "../components/VerbTilt";
+import { BottleRoom } from "../components/games/quick";
+import { getGame } from "../lib/games";
 import { LIVE_WINS, TILE_GAMES, TOP_PLAYERS } from "../lib/tiles";
 import { fmtCash } from "../lib/api";
+
+// The homepage Bottle showcase plays the same room as
+// /games/spin-da-bottle (the artifact's #bottle section, playable on
+// the homepage itself).
+const BOTTLE_GAME = getGame("spin-da-bottle")!;
 
 // Podium avatar initials ("Kwame A." → "KA") and the artifact's
 // no-decimals podium amounts (GH₵ 12,480, not GH₵ 12,480.00).
@@ -46,14 +53,39 @@ export default function Home() {
           </div>
           <div className={`games${expanded ? " expanded" : ""}`}>
             {shown.map((g, i) => (
-              <GameTile key={g.slug} g={g} extra={i >= 6} />
+              // The Bottle tile always shows and never counts toward the
+              // six — the artifact's rule (v48: "the first FOUR visible
+              // games plus the Bottle tile"; the games module tags every
+              // game past the fourth .g-extra except the Bottle tile,
+              // which never takes the tag). The port keeps six; the
+              // Bottle tile is exempted so it shows in the collapsed
+              // phone grid without tapping "Show all".
+              <GameTile key={g.slug} g={g} extra={i >= 6 && g.slug !== "spin-da-bottle"} />
             ))}
           </div>
           {shown.length > 6 && (
             <button className="btn btn-ghost games-more" type="button" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? "Show fewer games" : `Show all games (${shown.length})`}
+              {expanded ? "Show fewer games" : "Show all games"}
             </button>
           )}
+        </div>
+      </section>
+
+      {/* Spin Da' Bottle, playable on the homepage — the artifact's
+          #bottle saloon showcase, right after the games grid. The room
+          below is the same BottleRoom as /games/spin-da-bottle; the
+          section head carries the artifact's copy and the room's
+          balance + REAL/SIM bar doubles as the section's mode bar
+          (home-bottle.css hides the room's back link, title and v48
+          pill here, which the section head already covers). */}
+      <section className="block bottle-sec" id="bottle">
+        <div className="wrap">
+          <div className="sec-head">
+            <span className="sec-tag">Saloon showcase · playable</span>
+            <h2>Spin Da&rsquo; <em>Bottle</em></h2>
+            <p>Pick UP or DOWN, set your stake, and spin. The bottle carries real momentum and settles where it settles — land your side and it pays ×2, straight into your header balance. Demo money on this sample.</p>
+          </div>
+          <BottleRoom game={BOTTLE_GAME} />
         </div>
       </section>
 
@@ -61,7 +93,7 @@ export default function Home() {
         <div className="wrap">
           <div className="sec-head">
             <span className="sec-tag">Leaderboard</span>
-            <h2>Top <em>players</em></h2>
+            <h2>This week&rsquo;s <em>top players</em></h2>
           </div>
           {/* Podium phone override: the artifact's .pod cells keep the
               3-column laptop composition on mobile (gap 8px, 6px ≤380px).
@@ -140,6 +172,42 @@ export default function Home() {
             </div>
             <a className="btn" href="#promos">Claim the bonus</a>
           </article>
+        </div>
+      </section>
+
+      {/* FAQ — the artifact's "Questions, answered straight", verbatim. */}
+      <section className="block" id="faq">
+        <div className="wrap">
+          <div className="sec-head">
+            <span className="sec-tag">Good to know</span>
+            <h2>Questions, <em>answered straight</em></h2>
+          </div>
+          <div className="faq">
+            <details>
+              <summary><span className="fnum">01</span><span className="fq">Is this real-money play?</span><span className="fx" aria-hidden="true">+</span></summary>
+              <p>Yes — deposits, stakes and winnings are real Ghana cedis. You must be 18 or older and pass a quick ID check before your first withdrawal, as Ghanaian gaming law requires.</p>
+            </details>
+            <details>
+              <summary><span className="fnum">02</span><span className="fq">How fast are withdrawals?</span><span className="fx" aria-hidden="true">+</span></summary>
+              <p>MoMo cash-outs are automatic and usually land in under five minutes. Bank withdrawals take up to one working day. There are no withdrawal fees on our side.</p>
+            </details>
+            <details>
+              <summary><span className="fnum">03</span><span className="fq">Can I practise without money?</span><span className="fx" aria-hidden="true">+</span></summary>
+              <p>Every game has a Demo button with a play-money balance. The games play identically — only the money is pretend, so you can learn the ropes risk-free.</p>
+            </details>
+            <details>
+              <summary><span className="fnum">04</span><span className="fq">Are the games fair?</span><span className="fx" aria-hidden="true">+</span></summary>
+              <p>The live build is designed around a certified, independently audited random number generator. Each game&rsquo;s return-to-player (RTP) is printed on its tile, and your full bet history is always available in your account.</p>
+            </details>
+          </div>
+
+          <div className="resp">
+            <div className="age" aria-label="18 plus only">18+</div>
+            <div>
+              <h3>Play responsibly</h3>
+              <p>Casino games are entertainment, not a way to make money. Set a deposit limit before you start, never chase losses, and take breaks. If gambling stops being fun, free and confidential help is available — and you can self-exclude from your account settings at any time. Under-18s are strictly prohibited.</p>
+            </div>
+          </div>
         </div>
       </section>
 

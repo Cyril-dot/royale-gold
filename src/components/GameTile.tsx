@@ -68,6 +68,19 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
   }
 
   if (m.fullArt && m.cover) {
+    // Spin Da Bottle: the artifact's tile is the full-width .g-bottle
+    // banner (grid-column 1/-1, aspect 1200/630) linking to the playable
+    // section below — it never takes .g-extra and never links to a room.
+    if (g.slug === "spin-da-bottle") {
+      return (
+        <a href="#bottle" className="game g-bottle" aria-label="Spin Da Bottle — play it in the section below">
+          <img src={m.cover} alt={g.name} />
+          <span className={`g-cur-ico ${cur}`} role="img" aria-label={cur === "coin" ? "Coin game" : "Cash game"}>
+            {cur === "coin" ? COIN_ICON : CASH_ICON}
+          </span>
+        </a>
+      );
+    }
     return (
       <Link href={`/games/${g.slug}`} className={`game g-fullart${sizeCls}${extra ? " g-extra" : ""}`} aria-label={g.name}>
         <img src={m.cover} alt={g.name} />
