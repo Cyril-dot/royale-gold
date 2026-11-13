@@ -53,7 +53,7 @@
   .hdr-zone .hdr-tools-menu{animation:none}
 }
 
-/* ============ Standalone balance pill row (round 14, moved 14b) ============
+/* ============ Standalone balance pill row (round 14, moved 14b, squared + edge-flush 14c) ============
    The wallet balance lives HERE and nowhere else — a pill on its own
    hanging just below the header's gold bottom line, top edge attached
    to the line, right-aligned, on phone + desktop. Round 14b moved the
@@ -63,6 +63,12 @@
    hides with the header on scroll and page content starts below the
    pill — nothing is covered, no clearance hack needed. padding-top is
    0 so the pill's top edge is flush against the gold line.
+   Round 14c: the pill is NOT rounded and is pushed to the edge —
+   border-radius:0 on all four corners (a rectangular tab, not a pill
+   shape) and the row is full-bleed (width:100% beats the .wrap
+   min(1280px,100% - 40px) inset, so the pill's right edge touches the
+   viewport edge with 0 gap). No negative-margin hack: the row is
+   exactly viewport-wide, so it cannot cause horizontal overflow.
    The old top-row pill (hdr-row-2) and the submenu balance row are
    gone; the coins pill is untouched. The pill reuses the .bal-pill
    styling; the row only pins it right and keeps it a pill (never a
@@ -71,8 +77,8 @@
    must survive on phone now that the submenu balance row (which
    carried it) is gone. position:relative keeps the pill painted above
    the header.site::after gold glow, so the pill's top edge stays clean. */
-.hdr-zone .hdr-bal-row{position:relative;display:flex;justify-content:flex-end;padding:0 0 10px}
-.hdr-zone .hdr-bal-row .bal-pill{flex:0 0 auto;min-width:0;max-width:100%}
+.hdr-zone .hdr-bal-row{position:relative;display:flex;justify-content:flex-end;padding:0 0 10px;width:100%}
+.hdr-zone .hdr-bal-row .bal-pill{flex:0 0 auto;min-width:0;max-width:100%;border-radius:0}
 .hdr-zone .hdr-bal-row .bal-pill>div{min-width:0}
 .hdr-zone .hdr-bal-row .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:640px){
