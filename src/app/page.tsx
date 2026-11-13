@@ -1,5 +1,5 @@
 // Homepage — v48: hero, games grid (31 games, 6 shown + "Show all games"
-// on phone), Top Players podium + live wins feed, how-it-works,
+// links to /games), Top Players podium + live wins feed, how-it-works,
 // promotions, footer.
 
 "use client";
@@ -26,7 +26,6 @@ const initials = (name: string) =>
 const fmtPodium = (n: number) => `GH₵ ${n.toLocaleString("en-GH")}`;
 
 export default function Home() {
-  const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState<"all" | "cash" | "coins" | "crash">("all");
   const shown = TILE_GAMES.filter((g) =>
     filter === "all" ? true : filter === "crash" ? g.meta.tag === "crash" : g.currency === filter
@@ -48,9 +47,8 @@ export default function Home() {
                 {f === "all" ? "All games" : f === "cash" ? "Cash · GH₵" : f === "coins" ? "Coins" : "Crash"}
               </button>
             ))}
-            <Link className="fchip fchip-link" href="/games">Open all {TILE_GAMES.length} →</Link>
           </div>
-          <div className={`games${expanded ? " expanded" : ""}`}>
+          <div className="games">
             {shown.map((g, i) => (
               // The Bottle tile always shows and never counts toward the
               // six — the artifact's rule (v48: "the first FOUR visible
@@ -63,9 +61,9 @@ export default function Home() {
             ))}
           </div>
           {shown.length > 6 && (
-            <button className="btn btn-ghost games-more" type="button" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? "Show fewer games" : "Show all games"}
-            </button>
+            <Link className="btn btn-ghost games-more" href="/games">
+              Show all games
+            </Link>
           )}
         </div>
       </section>
