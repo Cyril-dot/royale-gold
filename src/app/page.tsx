@@ -72,20 +72,15 @@ export default function Home() {
       </section>
 
       {/* Spin Da' Bottle, playable on the homepage — the artifact's
-          #bottle saloon showcase, right after the games grid. The room
-          below is the same BottleRoom as /games/spin-da-bottle; the
-          section head carries the artifact's copy and the room's
-          balance + REAL/SIM bar doubles as the section's mode bar
-          (home-bottle.css hides the room's back link, title and v48
-          pill here, which the section head already covers). */}
+          #bottle saloon showcase, right after the games grid. Round 8:
+          the homepage version is the bare variant — NO section header
+          (the tile above already names the game) and NO mode bar (the
+          header already carries the mode switch). The room below is the
+          same BottleRoom as /games/spin-da-bottle, same logic, same
+          payouts — only the chrome differs. */}
       <section className="block bottle-sec" id="bottle">
         <div className="wrap">
-          <div className="sec-head">
-            <span className="sec-tag">Saloon showcase · playable</span>
-            <h2>Spin Da&rsquo; <em>Bottle</em></h2>
-            <p>Pick UP or DOWN, set your stake, and spin. The bottle carries real momentum and settles where it settles — land your side and it pays ×2, straight into your header balance. Demo money on this sample.</p>
-          </div>
-          <BottleRoom game={BOTTLE_GAME} />
+          <BottleRoom game={BOTTLE_GAME} variant="home" />
         </div>
       </section>
 

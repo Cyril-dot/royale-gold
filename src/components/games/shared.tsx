@@ -138,12 +138,13 @@ export function HistoryList({ history, currency }: { history: GameHistoryRow[]; 
   );
 }
 
-export function RoomShell({ game, subtitle, children, stats, history }: {
+export function RoomShell({ game, subtitle, children, stats, history, bare }: {
   game: GameDef;
   subtitle: string;
   children: React.ReactNode;
   stats: GameStat | null;
   history: GameHistoryRow[];
+  bare?: boolean;
 }) {
   const { mode, setMode, muted, toggleMute, user, wallet, simSession } = useStore();
   const isCoin = game.currency === "coins";
@@ -153,6 +154,11 @@ export function RoomShell({ game, subtitle, children, stats, history }: {
 
   return (
     <div className="xgame-room">
+      {/* Round 8: bare variant (homepage Bottle section) renders no
+          xg-bar at all — no back link, no title, no balance, no REAL/SIM
+          bar, no mute, no v48 pill. The homepage is not supposed to
+          have those; the header already carries the mode switch. */}
+      {!bare && (
       <div className="xg-bar">
         <div className="wrap xg-bar-in">
           <Link className="xg-back xg-back-icon" href="/games" aria-label="Back to all games">←</Link>
@@ -174,6 +180,7 @@ export function RoomShell({ game, subtitle, children, stats, history }: {
         </div>
         <span className="xg-ver" aria-hidden="true">v48</span>
       </div>
+      )}
       <div className="wrap">
         <p className="xg-sub">{subtitle}</p>
         {children}

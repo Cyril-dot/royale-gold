@@ -33,12 +33,12 @@ function useSimple(game: GameDef, subtitle: string, intro?: string) {
   return { room, stake, setStake, msg, setMsg };
 }
 
-function Shell({ game, subtitle, stake, setStake, msg, children }: {
-  game: GameDef; subtitle: string; stake: number; setStake: (n: number) => void; msg: string; children: React.ReactNode;
+function Shell({ game, subtitle, stake, setStake, msg, variant = "room", children }: {
+  game: GameDef; subtitle: string; stake: number; setStake: (n: number) => void; msg: string; variant?: "room" | "home"; children: React.ReactNode;
 }) {
   const room = useGameRoom(game);
   return (
-    <RoomShell game={game} subtitle={subtitle} stats={room.stats} history={room.history}>
+    <RoomShell game={game} subtitle={subtitle} stats={room.stats} history={room.history} bare={variant === "home"}>
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency={game.currency} />
         {children}
@@ -476,7 +476,7 @@ export function MiniRouletteRoom({ game }: { game: GameDef }) {
 // exactly up (+90°) or down (270°) after 4–6 full turns over 3.4s.
 // The old room rendered the tile cover art as a small img on a bare
 // orange stage, with a text "↑" for a bottle.
-export function BottleRoom({ game }: { game: GameDef }) {
+export function BottleRoom({ game, variant = "room" }: { game: GameDef; variant?: "room" | "home" }) {
   const { room, stake, setStake, msg, setMsg } = useSimple(game, "UP or DOWN — the bottle decides. Right call pays ×2.", "Pick a side, then spin — the bottle decides.");
   const [pick, setPick] = useState<"up" | "down">("up");
   const [angle, setAngle] = useState(0);
@@ -548,7 +548,7 @@ export function BottleRoom({ game }: { game: GameDef }) {
     }, reduced ? 120 : 3450);
   };
   return (
-    <Shell game={game} subtitle="UP or DOWN — the bottle decides. Right call pays ×2." stake={stake} setStake={setStake} msg={msg}>
+    <Shell game={game} subtitle="UP or DOWN — the bottle decides. Right call pays ×2." stake={stake} setStake={setStake} msg={msg} variant={variant}>
       <div className={`bottle-stage${lost ? " lost" : ""}`} ref={stageRef}>
         <div className="wood-table" aria-hidden="true" />
         <span className="deco-chip" style={{ left: "3.5%", top: "14%", width: 44, height: 44, background: "#6D28B8" }} aria-hidden="true" />
@@ -576,8 +576,8 @@ export function BottleRoom({ game }: { game: GameDef }) {
       </div>
       <div className="bottle-controls">
         <div className="pick-row" role="group" aria-label="Pick a side">
-          <button className="pick-btn" type="button" aria-pressed={pick === "up"} onClick={() => setPick("up")}>▲ UP<small>Bottle neck finishes up · pays ×2</small></button>
-          <button className="pick-btn" type="button" aria-pressed={pick === "down"} onClick={() => setPick("down")}>▼ DOWN<small>Bottle neck finishes down · pays ×2</small></button>
+          <button className="pick-btn pick-up" type="button" aria-pressed={pick === "up"} onClick={() => setPick("up")}>▲ UP<small>Bottle neck finishes up · pays ×2</small></button>
+          <button className="pick-btn pick-down" type="button" aria-pressed={pick === "down"} onClick={() => setPick("down")}>▼ DOWN<small>Bottle neck finishes down · pays ×2</small></button>
         </div>
         <button className="btn btn-gold xg-action bottle-spin-btn" type="button" onClick={() => void spin()} disabled={spinning}>
           {spinning ? "Spinning…" : isPhone ? "Spin" : `Spin — win ${fmtCash(stake * 2).replace(".00", "")}`}

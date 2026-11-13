@@ -1,0 +1,21 @@
+/* Round 8 — Spin Da Bottle: plain bubbly UP/DOWN buttons, no border,
+   no containing box; two versions of the room (variant prop on
+   BottleRoom — the homepage version renders no xg-bar, so the old
+   home-bottle.css hides are deleted). Loaded after v48.css; the doubled
+   class beats v48.css at every width, including its max-width:640px
+   phone rule (border-radius:20px, border-width:2px). No inline <style>
+   (React #418) and no CSS Modules (broken in this repo) — same pattern
+   as hdr-menu.css / cards-v5.css. */
+
+/* Un-box the controls panel: plain stack, no background, no border, no
+   panel shadow. Spacing (margin/padding/gap) is unchanged. */
+.bottle-controls.bottle-controls{background:none;border:none;box-shadow:none}
+
+/* Plain bubbly pills: no border on the pair, pill radius at every width,
+   soft solid fill in the wheel's own colours (UP green #3FA33A, DOWN
+   orange #F08A1D), puffy shadow, and the artifact's gloss highlight
+   (.pick-btn::after in v48.css, kept) on top. */
+.pick-btn.pick-btn{border:none;border-radius:999px}
+.pick-btn.pick-up{background:linear-gradient(180deg,#4CB84A,#2E8F2C);box-shadow:0 10px 22px rgba(0,0,0,.45),inset 0 2px 0 rgba(255,255,255,.35),inset 0 -8px 14px rgba(0,0,0,.22)}
+.pick-btn.pick-down{background:linear-gradient(180deg,#F5A83D,#DE7A12);box-shadow:0 10px 22px rgba(0,0,0,.45),inset 0 2px 0 rgba(255,255,255,.35),inset 0 -8px 14px rgba(0,0,0,.22)}
+.pick-btn.pick-btn[aria-pressed="true"]{filter:brightness(1.14) saturate(1.12);transform:translateY(-3px) scale(1.03);box-shadow:0 16px 30px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.45),inset 0 -8px 14px rgba(0,0,0,.2)}
