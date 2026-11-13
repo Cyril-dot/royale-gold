@@ -56,6 +56,23 @@ several accounts resolves to nobody — those users sign in by email.
 { "user": { "...": "..." } }
 ```
 
+### PATCH /api/auth/me
+```json
+// request — name and/or emailOrPhone (one contact only: an email, lowercased
+// and unique, or a phone; switching type clears the other field)
+{ "name": "New Name", "emailOrPhone": "new@example.com" }
+// response 200 — { "user": { "...": "..." } }
+// errors: empty name/contact 400; bad email/phone 400; email taken 409
+```
+
+### POST /api/auth/change-password
+```json
+// request — current password is verified first; new password >= 6 chars
+{ "currentPassword": "oldpass", "newPassword": "newpass123" }
+// response 200 — { "ok": true }
+// errors: wrong current password 403; new password too short/same 400
+```
+
 ---
 
 ## Wallet
@@ -139,6 +156,39 @@ amounts** per the table — settle them with those exact payouts.
 ```
 Settles in one transaction: debit stake, credit payout, record a
 `GameResult`, +2 XP. A loss is `payout: 0`.
+
+Play-gated games (currently: `royale-roulette`) are REJECTED here — they
+settle only through `POST /api/games/play`, where the server draws the
+outcome. Settling one here would let a client skip the draw and invent
+a win.
+
+### GET /api/games/economy
+```json
+// response 200 — the signed-in user's SIM-vs-LIVE economy snapshot
+{ "userId": "...", "lifetimeDeposited": 500, "liveFactor": 0.75,
+  "liveFactorFloor": 0.5, "simBoost": 2, "simWinProbCap": 0.9,
+  "decayPerStep": 0.05, "decayStepGhs": 100 }
+// liveFactor = max(0.5, 1 - 0.05 * floor(lifetimeDeposited / 100)).
+// SIM win probability is natural x 2 (capped at 0.9). Coin games: factor 1.
+```
+
+### POST /api/games/play
+```json
+// request — server-decided play for play-gated games (v1: royale-roulette
+// only). The server draws the outcome with the economy factor applied and,
+// in REAL mode, settles atomically in the same request (every draw costs
+// the stake — no fishing for wins). The client animates to the returned
+// pocket and displays the returned payout; it never decides anything.
+// SIM mode draws only (no money moves); a SIM outcome can never settle
+// for real cash. Crash games are never here (provably-fair HMAC point).
+{ "game": "royale-roulette", "currency": "cash", "stake": 10,
+  "mode": "REAL", "choice": { "betKind": "straight", "pick": 7 } }
+// response 200 (REAL — includes new balances; SIM — no balances)
+{ "game": "royale-roulette", "currency": "cash", "stake": 10, "payout": 0,
+  "pocket": 23, "won": false, "mult": 0, "factor": 0.75, "mode": "REAL",
+  "lifetimeDeposited": 500, "cash": 340, "coins": 15, "sim": 1000,
+  "xp": 2, "level": 1, "gameResultId": "..." }
+```
 
 ### POST /api/games/crash/round
 ```json

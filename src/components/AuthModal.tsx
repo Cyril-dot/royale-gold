@@ -21,6 +21,15 @@ export default function AuthModal() {
     if (authMode === "register" && refPrefill) setRef(refPrefill);
   }, [authMode, authOpen, refPrefill]);
 
+  // Escape closes the modal (round 6 check: it did not, and the open
+  // scrim then blocked the header button behind it).
+  useEffect(() => {
+    if (!authOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeAuth(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [authOpen, closeAuth]);
+
   if (!authOpen) return null;
 
   const doLogin = async (e: React.FormEvent) => {
@@ -64,8 +73,8 @@ export default function AuthModal() {
           <h3>{tab === "login" ? <>Welcome <em>back</em></> : <>Create your <em>account</em></>}</h3>
           <p className="sub">Log in to play coin games, track your referrals and claim your daily coins.</p>
           <div className="rg48-tabs" role="group" aria-label="Login or register">
-            <button type="button" aria-pressed={tab === "login"} onClick={() => setTab("login")}>Log in</button>
-            <button type="button" aria-pressed={tab === "register"} onClick={() => setTab("register")}>Register</button>
+            <button type="button" aria-pressed={tab === "login"} onClick={() => { setTab("login"); setErr(""); }}>Log in</button>
+            <button type="button" aria-pressed={tab === "register"} onClick={() => { setTab("register"); setErr(""); }}>Register</button>
           </div>
           {tab === "login" ? (
             <form onSubmit={doLogin} autoComplete="off">

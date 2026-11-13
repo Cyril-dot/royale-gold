@@ -5,9 +5,23 @@
 "use client";
 
 import { useState } from "react";
-import { fmtCash } from "../../lib/api";
+import { api, fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import { playSfx, useStore } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
+
+/** What POST /api/games/play returns for a roulette round. */
+interface PlayResult {
+  pocket: number;
+  won: boolean;
+  mult: number;
+  payout: number;
+  factor: number;
+  mode: "REAL" | "SIM";
+  cash?: number;
+  coins?: number;
+  sim?: number;
+}
 
 // ---------- cards (v48 port) ----------
 export interface Card { rank: number; suit: number; sym: string; red: boolean }
@@ -209,6 +223,7 @@ const RED_NUMS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30,
 type BetKind = "straight" | "red" | "black" | "even" | "odd";
 export function RouletteRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
+  const { setWallet, setSimSession, simSession, toast, openAuth } = useStore();
   const [stake, setStake] = useState(10);
   const [msg, setMsg] = useState("Pick red, black, even, odd or a straight-up number, set your stake and spin. Straight-up pays ×36, red/black and even/odd pay ×2.");
   const [betKind, setBetKind] = useState<BetKind>("straight");
@@ -216,24 +231,44 @@ export function RouletteRoom({ game }: { game: GameDef }) {
   const [spun, setSpun] = useState<number | null>(null);
   const [spinning, setSpinning] = useState(false);
 
+  // Server-decided spin (round 6 economy): the server draws the pocket
+  // with the SIM/LIVE win-chance factor applied and settles the round
+  // atomically in REAL mode. The wheel animates while the draw runs and
+  // lands on the server's pocket — the client never decides the outcome.
   const spin = async () => {
     if (spinning) return;
+    if (!room.user) { openAuth("login"); return; }
+    if (room.balance < stake) { toast(`Not enough ${room.simMode ? "SIM" : "cash"} — top up to play`, "lose"); return; }
     setSpinning(true);
-    const out = Math.floor(Math.random() * 37);
-    setTimeout(async () => {
+    try {
+      const playP = api<PlayResult>("/api/games/play", {
+        method: "POST",
+        body: JSON.stringify({ game: game.slug, currency: "cash", stake, mode: room.simMode ? "SIM" : "REAL", choice: { betKind, pick } }),
+      });
+      const [res] = await Promise.all([playP, new Promise((r) => setTimeout(r, 1100))]);
+      const out = res.pocket;
       setSpun(out);
       setSpinning(false);
-      let mult = 0;
-      if (betKind === "straight" && out === pick) mult = 36;
-      else if (betKind === "red" && RED_NUMS.has(out)) mult = 2;
-      else if (betKind === "black" && out !== 0 && !RED_NUMS.has(out)) mult = 2;
-      else if (betKind === "even" && out !== 0 && out % 2 === 0) mult = 2;
-      else if (betKind === "odd" && out % 2 === 1) mult = 2;
-      const payout = Math.round(stake * mult * 100) / 100;
       const colour = out === 0 ? "green" : RED_NUMS.has(out) ? "red" : "black";
-      setMsg(mult > 0 ? `Landed ${out} ${colour} — ×${mult}! ${fmtCash(payout)}` : `Landed ${out} ${colour} — no win.`);
-      await room.settle(stake, payout, { bet: betKind, pick, out });
-    }, 1100);
+      setMsg(res.mult > 0 ? `Landed ${out} ${colour} — ×${res.mult}! ${fmtCash(res.payout)}` : `Landed ${out} ${colour} — no win.`);
+      if (room.simMode) {
+        setSimSession((simSession ?? 0) - stake + res.payout);
+        room.pushHistory({ id: `sim-${Date.now()}`, game: game.slug, currency: "cash", stake, payout: res.payout, result: { bet: betKind, pick, out }, createdAt: new Date().toISOString() });
+      } else if (res.cash !== undefined && res.coins !== undefined && res.sim !== undefined) {
+        setWallet({ cash: res.cash, coins: res.coins, sim: res.sim });
+        // Server history/stats only exist for REAL rounds. Refreshing here
+        // in SIM mode would fetch the (empty) server history and wipe the
+        // local SIM row just added above.
+        await room.refreshStats();
+      }
+      const won = res.payout > stake;
+      const simTag = room.simMode ? " (SIM)" : "";
+      toast(won ? `You won ${fmtCash(res.payout)}${simTag}` : res.payout > 0 ? `${fmtCash(res.payout)} back${simTag}` : `You lost ${fmtCash(stake)}${simTag}`, won ? "win" : "lose");
+      if (won) playSfx("cheer", room.muted); else if (res.payout === 0) playSfx("groan", room.muted);
+    } catch (ex) {
+      setSpinning(false);
+      toast(ex instanceof Error ? ex.message : "Spin failed", "lose");
+    }
   };
   return (
     <RoomShell game={game} subtitle="European wheel, 0–36. Straight-up pays ×36, red/black and even/odd pay ×2." stats={room.stats} history={room.history}>

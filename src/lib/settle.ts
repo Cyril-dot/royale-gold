@@ -3,6 +3,7 @@ import { prisma } from "./prisma";
 import { getGame } from "./games";
 import { dec, round2, toDecimal } from "./money";
 import { getCrashRound } from "./crash";
+import { PLAY_GATED_GAMES } from "./play";
 
 /** Slugs that settle against a server-issued crash round. */
 export const CRASH_GAME_SLUGS = new Set(["aviator-gold", "jet-fly", "car-crash"]);
@@ -25,10 +26,17 @@ export async function settleGame(
   stake: number,
   payout: number,
   result?: Record<string, unknown> | null,
-  opts?: { roundId?: string },
+  opts?: { roundId?: string; viaPlay?: boolean },
 ) {
   const game = getGame(gameSlug);
   if (!game) throw new Error(`Unknown game: ${gameSlug}`);
+  // Play-gated games settle ONLY through POST /api/games/play, where the
+  // server draws the outcome (SIM/LIVE economy factor applied). Settling
+  // one here would let a client skip the draw and invent a win. The /play
+  // route itself calls settleGame with viaPlay: true.
+  if (PLAY_GATED_GAMES.has(gameSlug) && !opts?.viaPlay) {
+    throw new Error(`${game.name} settles through /api/games/play only`);
+  }
   if (game.currency !== currency) {
     throw new Error(`${game.name} is a ${game.currency} game — settle in ${game.currency} only`);
   }

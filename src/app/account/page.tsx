@@ -89,6 +89,7 @@ export default function AccountPage() {
         </section>
         <section className="admin-sec">
           <h3>Session</h3>
+          <p><Link className="linklike" href="/settings">Settings — profile, password, preferences →</Link></p>
           {(user.role === "admin" || user.role === "owner") && <p><Link className="linklike" href="/admin">Open admin panel →</Link></p>}
           {user.role === "owner" && <p><Link className="linklike" href="/owner">Open owner panel →</Link></p>}
           <button className="btn btn-ghost" type="button" onClick={() => void logout()}>Log out</button>

@@ -177,6 +177,7 @@ export default function Header() {
                   {menuOpen && (
                     <div className="acct-menu" role="menu">
                       <Link href="/account" onClick={() => setMenuOpen(false)}>My account</Link>
+                      <Link href="/settings" onClick={() => setMenuOpen(false)}>Settings</Link>
                       {(user.role === "admin" || user.role === "owner") && <Link href="/admin" onClick={() => setMenuOpen(false)}>Admin panel</Link>}
                       {user.role === "owner" && <Link href="/owner" onClick={() => setMenuOpen(false)}>Owner panel</Link>}
                       <button type="button" onClick={() => { setMenuOpen(false); void logout(); }}>Log out</button>

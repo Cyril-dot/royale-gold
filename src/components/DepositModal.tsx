@@ -27,6 +27,14 @@ export default function DepositModal() {
     return () => { live = false; };
   }, [depositOpen, user?.referralCodeUsed]);
 
+  // Escape closes the modal (same fix as AuthModal, round 6).
+  useEffect(() => {
+    if (!depositOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDepositOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [depositOpen, setDepositOpen]);
+
   if (!depositOpen) return null;
 
   const submit = async (e: React.FormEvent) => {

@@ -85,7 +85,12 @@ export function useGameRoom(game: GameDef) {
     }
   }, [user, balance, isCoin, simMode, simSession, game.slug, toast, muted, setWallet, setSimSession, openAuth, loadStats]);
 
-  return { user, wallet, mode, muted, stats, history, busy, balance, balText, simMode, isCoin, settle, refreshStats: loadStats, refresh };
+  /** Prepend a local history row (SIM rounds have no server row). */
+  const pushHistory = useCallback((row: GameHistoryRow) => {
+    setHistory((h) => [row, ...h].slice(0, 20));
+  }, []);
+
+  return { user, wallet, mode, muted, stats, history, busy, balance, balText, simMode, isCoin, settle, pushHistory, refreshStats: loadStats, refresh };
 }
 
 export function StakeChips({ stake, setStake, currency, disabled }: { stake: number; setStake: (n: number) => void; currency: "cash" | "coins"; disabled?: boolean }) {
