@@ -1,0 +1,20 @@
+/* ============ Admin referral section (round 10, corrected) ============
+   The referral section, made prominent: a gold-edged felt card with the
+   share link on its own line and a Copy button for the code AND the link
+   — each flips to a gold "Copied ✓" for 1.6s after a successful copy.
+   Own file so v48.css / globals.css stay untouched; imported last in
+   layout.tsx. The .btn.done state is shared with the owner page's
+   per-admin copy button. */
+.admin-sec.referral-sec{border-color:rgba(242,194,48,.55);background:linear-gradient(180deg,rgba(242,194,48,.09),rgba(12,43,34,.35) 70%),var(--steel,#141828);box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.admin-sec.referral-sec h3{font-size:20px}
+.referral-sub{margin:0 0 6px;color:var(--muted,rgba(255,246,216,.7));font-size:13.5px;line-height:1.5}
+.referral-sub b{color:var(--gold-2,#F2C230)}
+.code-row.referral-row{align-items:center}
+.code-row.referral-row .code-link{flex:1 1 100%;font-size:13px;color:#FFE89A}
+.referral-copy{display:flex;gap:8px;flex-wrap:wrap}
+.btn.done{background:#F2C230;color:#231600;border-color:#F2C230}
+@media (max-width:640px){
+  .admin-sec.referral-sec{padding:16px 14px}
+  .admin-sec.referral-sec h3{font-size:18px}
+  .referral-copy .btn{padding:8px 10px;font-size:12.5px}
+}

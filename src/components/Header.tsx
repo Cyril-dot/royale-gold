@@ -214,6 +214,27 @@ export default function Header() {
       </header>
       {toolsOpen && (
         <div ref={toolsPanelRef} className="hdr-tools-menu" id="hdrToolsMenu" role="menu" aria-label="More options">
+          {user && (
+            <>
+              <div className="htm-row" role="menuitem">
+                <span className="bal-coin htm-ico" aria-hidden="true">₵</span>
+                <span className="htm-lab">{mode === "SIM" ? "SIM balance" : "Balance"}</span>
+                <span className="htm-ctl">
+                  <span className="htm-val">{balText}</span>
+                  <button className="icon-btn" type="button" aria-label={balHidden ? "Show balance" : "Hide balance"} onClick={() => setBalHidden((v) => !v)}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5C6.5 5 2 12 2 12s4.5 7 10 7 10-7 10-7-4.5-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" /></svg>
+                  </button>
+                </span>
+              </div>
+              <div className="htm-row" role="menuitem">
+                <span className="cp-ico htm-ico" aria-hidden="true">◉</span>
+                <span className="htm-lab">Coins</span>
+                <span className="htm-ctl">
+                  <span className="htm-val coin">{fmtCoins(coins)}</span>
+                </span>
+              </div>
+            </>
+          )}
           <button type="button" className="htm-row" role="menuitem" onClick={() => { setToolsOpen(false); setSearchOpen(true); }}>
             <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z" /></svg>
             <span className="htm-lab">Search games</span>

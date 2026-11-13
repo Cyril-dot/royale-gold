@@ -113,14 +113,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
     refresh().finally(() => setLoading(false));
-    // ?ref= prefill for register
-    try {
-      const q = new URLSearchParams(window.location.search);
-      const ref = q.get("ref");
-      if (ref) setRefPrefill(ref.toUpperCase());
-    } catch {
-      /* ignore */
-    }
   }, [refresh]);
 
   const setMode = useCallback((m: Mode) => {
@@ -174,6 +166,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setAuthOpen(true);
   }, []);
   const closeAuth = useCallback(() => setAuthOpen(false), []);
+
+  // Referral landing: a shared link (/?ref=CODE) opens the register
+  // modal with the code already filled in, signed-out users only. The
+  // old /register?ref= link 404s — there is no /register route — so
+  // shared links use /?ref=CODE (see AdminPanel.shareLink).
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      if (ref) {
+        setRefPrefill(ref.toUpperCase());
+        if (window.localStorage.getItem("rg-session") !== "1") openAuth("register");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [openAuth]);
 
   const value = useMemo<Store>(
     () => ({

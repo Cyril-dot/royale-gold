@@ -13,6 +13,10 @@
   header#siteHdr .hdr-main .hdr-row-1{display:none}
   /* line 1: money row, full width */
   header#siteHdr .hdr-main .hdr-row-2{order:1;flex:1 1 100%}
+  /* round 10: balance + coins live in the submenu when signed in —
+     the phone header keeps Deposit only, stretched full width */
+  header#siteHdr .hdr-main .hdr-row-2 .bal-pill,header#siteHdr .hdr-main .hdr-row-2 .coin-pill{display:none}
+  header#siteHdr .hdr-main .hdr-row-2 .btn-dep{flex:1 1 auto}
   /* line 2: brand coin + auth row share the line */
   header#siteHdr .hdr-main .brand{order:2;align-self:center}
   header#siteHdr .hdr-main .hdr-row-3{order:2;flex:1 1 auto}
@@ -30,6 +34,15 @@
   .hdr-zone .hdr-tools-menu .htm-lab{flex:1 1 auto}
   .hdr-zone .hdr-tools-menu .htm-ctl{flex:0 0 auto;display:flex;align-items:center;gap:8px}
   .hdr-zone .hdr-tools-menu .htm-ctl .icon-btn{width:32px;height:32px}
+  /* round 10: signed-in wallet rows at the top of the submenu — the
+     pill icons reused at 28px, values in gold mono like the pill's
+     strong; the value ellipsises rather than pushing the row wide on
+     a seven-figure balance at 320px */
+  .hdr-zone .hdr-tools-menu .htm-ico{width:28px;height:28px;flex:none;font-size:13px}
+  .hdr-zone .hdr-tools-menu .htm-ico.cp-ico{font-size:15px}
+  .hdr-zone .hdr-tools-menu .htm-ctl{min-width:0}
+  .hdr-zone .hdr-tools-menu .htm-val{font-family:var(--mono);font-size:15px;font-weight:800;color:#F2C230;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+  .hdr-zone .hdr-tools-menu .htm-val.coin{color:#FFE89A}
 }
 @media (min-width:641px){
   header#siteHdr .hdr-menu-btn,.hdr-zone .hdr-tools-menu{display:none!important}

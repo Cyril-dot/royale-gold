@@ -7,7 +7,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, fmtCash } from "../lib/api";
 import { useStore } from "../lib/store";
@@ -35,7 +35,16 @@ interface UserDetail {
 export function todayStr() { return new Date().toISOString().slice(0, 10); }
 
 export function copyText(t: string) {
-  if (navigator.clipboard) return navigator.clipboard.writeText(t);
+  if (navigator.clipboard) {
+    return navigator.clipboard.writeText(t).catch(() => {
+      const ta = document.createElement("textarea");
+      ta.value = t;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    });
+  }
   const ta = document.createElement("textarea");
   ta.value = t;
   document.body.appendChild(ta);
@@ -56,6 +65,17 @@ export default function AdminPanel({ previewAdminId, previewName }: { previewAdm
   const [userDetail, setUserDetail] = useState<UserDetail | null>(null);
   const [newCode, setNewCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<{ id: string; kind: "code" | "link" } | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copyRef = (id: string, kind: "code" | "link", text: string, doneMsg: string) => {
+    void copyText(text).then(() => {
+      setCopied({ id, kind });
+      toast(doneMsg, "win");
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(null), 1600);
+    }).catch(() => toast("Copy failed — long-press the text to copy it", "lose"));
+  };
 
   const load = useCallback(async () => {
     try {
@@ -120,7 +140,7 @@ export default function AdminPanel({ previewAdminId, previewName }: { previewAdm
   }
   if (!ov) return <main className="rg48-page-main"><div className="wrap"><p>Loading admin panel…</p></div></main>;
 
-  const shareLink = (code: string) => `${typeof window !== "undefined" ? window.location.origin : ""}/register?ref=${code}`;
+  const shareLink = (code: string) => `${typeof window !== "undefined" ? window.location.origin : ""}/?ref=${code}`;
 
   return (
     <main className="rg48-page-main">
@@ -139,14 +159,22 @@ export default function AdminPanel({ previewAdminId, previewName }: { previewAdm
 
         {tab === "codes" && (
           <>
-            <section className="admin-sec">
-              <h3>Your referral codes</h3>
-              {ov.codes.length === 0 && <p>No codes yet — create one below.</p>}
+            <section className="admin-sec referral-sec">
+              <h3>Referral — share your link</h3>
+              <p className="referral-sub">Anyone who registers with your link joins under you and earns you <b>{ov.admin.commissionPct}% commission</b> on their deposits. New players get <b>5 extra coins</b>.</p>
+              {ov.codes.length === 0 && <p>No codes yet — create one below and it will appear here with its share link.</p>}
               {ov.codes.map((c) => (
-                <div key={c.id} className="code-row">
+                <div key={c.id} className="code-row referral-row">
                   <b className="code-chip">{c.code}</b>
                   <span className="code-state">{c.active ? "Active" : "Inactive"}</span>
-                  <button className="btn btn-ghost btn-sm" type="button" onClick={() => { void copyText(shareLink(c.code)); toast("Share link copied", "win"); }}>Copy share link</button>
+                  <span className="referral-copy">
+                    <button className={`btn btn-ghost btn-sm${copied?.id === c.id && copied?.kind === "code" ? " done" : ""}`} type="button" onClick={() => copyRef(c.id, "code", c.code, "Referral code copied")}>
+                      {copied?.id === c.id && copied?.kind === "code" ? "Copied ✓" : "Copy code"}
+                    </button>
+                    <button className={`btn btn-ghost btn-sm${copied?.id === c.id && copied?.kind === "link" ? " done" : ""}`} type="button" onClick={() => copyRef(c.id, "link", shareLink(c.code), "Referral link copied")}>
+                      {copied?.id === c.id && copied?.kind === "link" ? "Copied ✓" : "Copy link"}
+                    </button>
+                  </span>
                   <span className="code-link">{shareLink(c.code)}</span>
                 </div>
               ))}

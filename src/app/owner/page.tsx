@@ -5,11 +5,11 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, fmtCash } from "../../lib/api";
 import { useStore } from "../../lib/store";
-import AdminPanel, { todayStr } from "../../components/AdminPanel";
+import AdminPanel, { copyText, todayStr } from "../../components/AdminPanel";
 
 interface AdminRow {
   id: string; name: string; email: string; role: string; commissionPct: number | null; active: boolean;
@@ -29,6 +29,22 @@ export default function OwnerPage() {
   const [dayAdmins, setDayAdmins] = useState<OwnerDayAdmin[] | null>(null);
   const [dayTotals, setDayTotals] = useState<{ deposits: number; totalAmount: number; totalCommission: number } | null>(null);
   const [preview, setPreview] = useState<AdminRow | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Per-admin referral link copy (first active code) — the preview panel
+  // itself shows the full Referral section via AdminPanel.
+  const copyAdminLink = (a: AdminRow) => {
+    const c = a.codes.find((x) => x.active) ?? a.codes[0];
+    if (!c) return;
+    const link = `${window.location.origin}/?ref=${c.code}`;
+    void copyText(link).then(() => {
+      setCopiedId(a.id);
+      toast("Referral link copied", "win");
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopiedId(null), 1600);
+    }).catch(() => toast("Copy failed — long-press the link to copy it", "lose"));
+  };
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -161,6 +177,11 @@ export default function OwnerPage() {
                 <label>% <input type="number" min={0} max={100} defaultValue={a.commissionPct ?? 0} onChange={(e) => setEditing((ed) => ({ ...ed, [a.id]: Number(e.target.value) }))} /></label>
                 <button className="btn btn-ghost btn-sm" type="button" onClick={() => void savePct(a.id)}>Save %</button>
                 <button className="btn btn-ghost btn-sm" type="button" onClick={() => void toggleActive(a)}>{a.active ? "Deactivate" : "Reactivate"}</button>
+                {a.codes.length > 0 && (
+                  <button className={`btn btn-ghost btn-sm${copiedId === a.id ? " done" : ""}`} type="button" onClick={() => copyAdminLink(a)}>
+                    {copiedId === a.id ? "Copied ✓" : "Copy referral link"}
+                  </button>
+                )}
                 <button className="btn btn-gold btn-sm" type="button" onClick={() => setPreview(a)}>Preview panel</button>
               </div>
             </div>
