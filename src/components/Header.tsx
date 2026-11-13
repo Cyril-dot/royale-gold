@@ -214,12 +214,13 @@ export default function Header() {
           of above it; it is in normal flow, so page content starts
           below the tab and nothing is covered. Round 14d: JUST the
           balance — the coin icon and the eye (hide/show) are gone, the
-          tab keeps only the label + value text in the Link to /wallet. */}
+          tab keeps only the label + value text in the Link to /wallet.
+          Round 14e: the label is gone too — the tab shows ONLY the
+          value text (SIM 1,000 in SIM mode, GH₵ in REAL mode). */}
       <div className="wrap hdr-bal-row">
         <div className="bal-pill" aria-label="Wallet balance">
           <Link href="/wallet" className="bal-link" aria-label="Open wallet">
             <div>
-              <small>{mode === "SIM" ? "SIM BALANCE" : "BALANCE"}</small>
               <strong>{balText}</strong>
             </div>
           </Link>
