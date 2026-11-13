@@ -95,9 +95,56 @@ export function useGameRoom(game: GameDef) {
 
 export function StakeChips({ stake, setStake, currency, disabled }: { stake: number; setStake: (n: number) => void; currency: "cash" | "coins"; disabled?: boolean }) {
   const chips = currency === "coins" ? [1, 5, 10] : [5, 10, 25];
+  // Round 13: a typed stake input, first in the row, then the quick chips.
+  // The typed value lives in local text state so the user can clear the
+  // field mid-type (empty never commits) and "7." stays editable while
+  // they type the decimals. Chips write through setStake and the effect
+  // below re-syncs the text, so input and chips never disagree.
+  const [text, setText] = useState(String(stake));
+  useEffect(() => { setText(String(stake)); }, [stake]);
+
+  const canonical = (raw: string): number | null => {
+    if (raw.trim() === "") return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    let v = currency === "coins" ? Math.round(n) : Math.round(n * 100) / 100;
+    if (v < 1) v = 1;
+    return v;
+  };
+  const onChange = (raw: string) => {
+    setText(raw);
+    const v = canonical(raw);
+    // Commit while typing only when the text is already the canonical
+    // form — "7." would otherwise snap to "7" and the next digit lands
+    // in the wrong place. Anything else (empty, "07", "2.5" coins)
+    // waits for blur.
+    if (v !== null && String(v) === raw) setStake(v);
+  };
+  const onBlur = () => {
+    const v = canonical(text);
+    if (v === null) { setStake(1); setText("1"); return; }
+    setStake(v);
+    setText(String(v));
+  };
+
   return (
     <div className="stake-row" role="group" aria-label="Stake">
       <span className="stake-lab">Stake {currency === "coins" ? "coins" : "GH₵"}</span>
+      <span className="stake-input">
+        <span className="stake-cur" aria-hidden="true">{currency === "coins" ? "◉" : "GH₵"}</span>
+        <input
+          type="number"
+          min={1}
+          step={1}
+          inputMode={currency === "coins" ? "numeric" : "decimal"}
+          enterKeyHint="done"
+          aria-label={currency === "coins" ? "Stake in coins" : "Stake in Ghana cedis"}
+          value={text}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          disabled={disabled}
+        />
+      </span>
       {chips.map((c) => (
         <button key={c} type="button" className="stake-chip" aria-pressed={stake === c} onClick={() => setStake(c)} disabled={disabled}>{c}</button>
       ))}
