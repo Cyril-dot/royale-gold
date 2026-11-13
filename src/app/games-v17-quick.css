@@ -3,3 +3,191 @@
    penalty.tsx, mines.tsx, plinko.tsx). Loaded last so these rules beat
    globals.css / v48.css. Brand tokens only: midnight #070812, felt
    #0C2B22, gold #F2C230, cream #FFF6D8, red #E5322D. */
+
+/* --- Coin flip: the star/crown SVG faces inside the 110px coin --- */
+.cf-coin svg{width:62px;height:62px;display:block}
+.cf-coin svg path{vector-effect:non-scaling-stroke}
+
+/* --- Pick-a-Box: state label under the chest art --- */
+.chest-state{display:block;line-height:1.2;letter-spacing:.04em}
+
+/* --- Royale Roulette: the full betting table, always visible --- */
+.rr-table{
+  display:grid;
+  grid-template-columns:44px repeat(12,minmax(0,1fr));
+  gap:4px;
+  max-width:640px;
+  margin:12px auto 0;
+}
+.rr-cell{
+  min-height:44px;
+  min-width:0;
+  border-radius:8px;
+  border:1px solid rgba(242,194,48,.35);
+  background:#10142B;
+  color:#FFF6D8;
+  font:800 15px/1 Outfit,sans-serif;
+  cursor:pointer;
+  padding:0;
+  touch-action:manipulation;
+}
+.rr-cell.red{background:linear-gradient(180deg,#C22420,#7A1210)}
+.rr-cell.black{background:linear-gradient(180deg,#232842,#0A0C1C)}
+.rr-cell.zero{
+  grid-row:1 / 4;
+  grid-column:1;
+  background:linear-gradient(180deg,#0E7A38,#065A28);
+  font-size:17px;
+}
+.rr-cell.on{outline:2px solid #F2C230;outline-offset:-2px;box-shadow:0 0 12px rgba(242,194,48,.55)}
+.rr-cell.landed{box-shadow:0 0 0 2px #FFF6D8 inset,0 0 14px rgba(255,246,216,.6)}
+.rr-pickline{margin:10px 0 0;text-align:center;color:#FFF6D8;font-weight:700;font-size:14px}
+@media (max-width:420px){
+  .rr-table{grid-template-columns:36px repeat(12,minmax(0,1fr));gap:3px}
+  .rr-cell{min-height:40px;font-size:13px}
+  .rr-cell.zero{font-size:15px}
+}
+
+/* --- Mines — reveal pop + boom pulse (round 17 realism) --- */
+@keyframes mn-pop {
+  0% { transform: scale(.55); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes mn-boom {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.18); }
+  60% { transform: scale(.94); }
+  100% { transform: scale(1); }
+}
+/* Pop runs once when a tile flips to safe/mine (dimmed reveal-all tiles
+   are excluded, so the pop never replays on the full-board reveal). */
+.mn-tile.safe:not(.dim) svg,
+.mn-tile.mine:not(.dim) svg { animation: mn-pop .3s ease-out; }
+.mn-tile.boom { animation: mn-boom .38s ease-out; }
+
+/* --- Mines — premium stage (round 17 impress) --- */
+.mn-stage{
+  background:radial-gradient(120% 100% at 50% 0%, #0E3A2C 0%, #0A1A16 55%, #070812 100%);
+  border:1px solid rgba(242,194,48,.38);
+  border-radius:22px;
+  padding:14px;
+  box-shadow:0 24px 48px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.mn-stage .mn-board{
+  background:rgba(0,0,0,.28);
+  border:1px solid rgba(255,246,216,.08);
+  border-radius:16px;
+  padding:10px;
+  box-shadow:inset 0 4px 18px rgba(0,0,0,.5);
+}
+.mn-tile.safe{
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.18), 0 0 22px rgba(62,217,126,.45);
+}
+.mn-tile.boom{
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.14), 0 0 26px rgba(229,50,45,.55);
+}
+
+/* ============ Round 17 — impress: premium room chrome ============
+   One block lifts EVERY room (all rooms render through RoomShell):
+   a felt-table backdrop, a gold-lit stats strip, a gold stake pill,
+   a proper result-message card and a warmer control panel. Scoped
+   under .xgame-room so v48.css / globals.css are untouched — these
+   rules win on specificity, and the round-21 header is not touched. */
+.xgame-room{
+  background:
+    radial-gradient(120% 55% at 50% 0%, rgba(12,43,34,.6), rgba(7,8,18,0) 70%),
+    radial-gradient(closest-side at 50% 28%, #0C2B22 0%, #081018 62%, #070812 100%);
+}
+.xgame-room .xg-sub{
+  color:#E8D9A8;
+  font-size:12px;
+  letter-spacing:.03em;
+}
+.xgame-room .xg-stats{
+  background:linear-gradient(180deg, #1A2138, #0E1226);
+  border:1px solid rgba(242,194,48,.38);
+  border-radius:16px;
+  padding:10px;
+  box-shadow:0 12px 26px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.xgame-room .xg-stat{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,246,216,.12);
+}
+.xgame-room .xg-stat b{ font-size:19px; }
+.xgame-room .xg-stat.win b{ color:#3ED97E; }
+.xgame-room .xg-stat.lose b{ color:#FF7A6E; }
+.xgame-room .xg-stat:last-child b{ color:#F2C230; }
+.xgame-room .xg-history{
+  background:linear-gradient(180deg, #141A30, #0D1122);
+  border-color:rgba(242,194,48,.3);
+}
+.xgame-room .stake-input{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:#0B0F1F;
+  border:1px solid rgba(242,194,48,.5);
+  border-radius:999px;
+  padding:6px 14px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.55);
+}
+.xgame-room .stake-input:focus-within{
+  border-color:#F2C230;
+  box-shadow:0 0 0 3px rgba(242,194,48,.22), inset 0 2px 6px rgba(0,0,0,.55);
+}
+.xgame-room .stake-cur{ color:#F2C230; font-weight:800; }
+.xgame-room .stake-input input{
+  background:transparent;
+  border:0;
+  color:#FFF6D8;
+  font-weight:800;
+  font-size:17px;
+  width:92px;
+  text-align:center;
+  outline:none;
+  padding:0;
+}
+.xgame-room .xg-msg{
+  background:linear-gradient(180deg, rgba(242,194,48,.13), rgba(242,194,48,.05));
+  border:1px solid rgba(242,194,48,.35);
+  border-left:3px solid #F2C230;
+  border-radius:14px;
+  padding:12px 16px;
+  color:#FFF6D8;
+  font-size:14px;
+  line-height:1.55;
+}
+.xgame-room .xg-controls{
+  border-color:rgba(242,194,48,.38);
+  box-shadow:0 20px 44px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.07);
+}
+.xgame-room .xg-action:hover{
+  transform:translateY(-1px);
+  box-shadow:0 18px 34px rgba(242,194,48,.45), inset 0 2px 0 rgba(255,255,255,.7);
+}
+/* Shared HUD pills (Mines, crash games, coin games): gold-lit. */
+.xgame-room .xg-chip{
+  background:linear-gradient(180deg, #1B2340, #10142A);
+  border:1px solid rgba(242,194,48,.42);
+  box-shadow:0 6px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.xgame-room .xg-chip b{ color:#FFE9A8; }
+
+/* --- Mobile-native touch rules for the v17 rooms --- */
+.xg-action,.xg-pick,.mn-tile,.chest,.rr-cell,.pk-table span{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+.xg-action,.xg-pick,.rr-cell{
+  min-height:44px;
+}
+.xg-action:active,.xg-pick:active,.rr-cell:active{transform:scale(.97)}
+.xg-controls,.qg-stage,.mn-stage,.pk-stage,.pn-stage,.mr-stage,.lw-stage{
+  user-select:none;
+  -webkit-user-select:none;
+}
+.xg-controls input,.xg-msg,.pn-hint{user-select:text;-webkit-user-select:text}
+/* 16px inputs keep iOS from zooming on focus */
+.xg-controls input[type="number"],.xg-controls input[type="text"]{font-size:16px}

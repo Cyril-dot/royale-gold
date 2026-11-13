@@ -44,6 +44,18 @@ export const CASH_GAMES: GameDef[] = [
   { slug: "spin-da-bottle", name: "Spin Da Bottle", currency: "cash", maxMultiplier: 2, note: "v1 ceiling ×2" },
   { slug: "blackjack-vip", name: "Blackjack VIP", currency: "cash", maxMultiplier: 2.5, note: "Blackjack 3:2" },
   { slug: "royale-roulette", name: "Royale Roulette", currency: "cash", maxMultiplier: 36, note: "Straight-up ×36" },
+  // Round 18 — 9 new cash games (46 total). Payouts are total-return
+  // multipliers (a ×2 win returns twice the stake); every payout is
+  // capped server-side by maxMultiplier (see /api/games/settle).
+  { slug: "balloon-burst", name: "Balloon Burst", currency: "cash", maxMultiplier: 50, note: "Crash engine, display cap ×50" },
+  { slug: "golden-reels", name: "Golden Reels", currency: "cash", maxMultiplier: 20, note: "3-reel slot, 777 pays ×20" },
+  { slug: "baccarat", name: "Baccarat", currency: "cash", maxMultiplier: 9, note: "Player/Banker ×2, Tie ×9" },
+  { slug: "three-card-poker", name: "Three Card Poker", currency: "cash", maxMultiplier: 5, note: "Pair Plus: Trips ×5" },
+  { slug: "sic-bo", name: "Sic Bo", currency: "cash", maxMultiplier: 6, note: "Big/Small ×2, totals to ×6" },
+  { slug: "tower-climb", name: "Tower Climb", currency: "cash", maxMultiplier: 10, note: "Climb the tower, cash out anytime; Hard top ×10" },
+  { slug: "golden-catch", name: "Golden Catch", currency: "cash", maxMultiplier: 10, note: "Catch fish, pot capped ×10" },
+  { slug: "gold-rush-derby", name: "Gold Rush Derby", currency: "cash", maxMultiplier: 4, note: "Pick the winner, pays ×4" },
+  { slug: "jacks-or-better", name: "Jacks or Better", currency: "cash", maxMultiplier: 10, note: "Royal Flush pays ×10" },
 ];
 
 export const COIN_GAMES: GameDef[] = [
@@ -59,6 +71,15 @@ export const COIN_GAMES: GameDef[] = [
   { slug: "trivia", name: "Trivia", currency: "coins", maxMultiplier: 5, note: "Entry 5; 7→10, 9→15, 10→25 coins (max ×5)" },
   { slug: "snake", name: "Snake", currency: "coins", maxMultiplier: 8, note: "Entry 5; 100+→10, 200+→20, 300+→40 coins" },
   { slug: "2048", name: "2048", currency: "coins", maxMultiplier: 10, note: "Entry 5; 256→10, 512→20, 1024→50 coins" },
+  // Round 18 — 6 new coin games. Same convention: payouts are
+  // stake multipliers; flat-score tiers are expressed as multipliers
+  // of the stake (coin games settle in whole coins).
+  { slug: "bingo-blitz", name: "Bingo Blitz", currency: "coins", maxMultiplier: 5, note: "A line ×2, two lines ×3, full house ×5" },
+  { slug: "brick-breaker", name: "Brick Breaker", currency: "coins", maxMultiplier: 5, note: "Clear the wall ×5; 80%+ ×3, 50%+ ×2" },
+  { slug: "stack-tower", name: "Stack Tower", currency: "coins", maxMultiplier: 5, note: "10 blocks ×5, 0.5× a block" },
+  { slug: "bubble-shooter", name: "Bubble Shooter", currency: "coins", maxMultiplier: 5, note: "Pop 30 ×3, clear the board ×5" },
+  { slug: "bullseye-darts", name: "Bullseye Darts", currency: "coins", maxMultiplier: 5, note: "3 darts; 100+ pts ×5, 70+ ×3, 40+ ×2" },
+  { slug: "connect-four", name: "Connect Four", currency: "coins", maxMultiplier: 2, note: "Beat the house ×2, draw ×1" },
 ];
 
 export const ALL_GAMES: GameDef[] = [...CASH_GAMES, ...COIN_GAMES];

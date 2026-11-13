@@ -1,0 +1,55 @@
+/* ============ Round 17 — games page (all games visible) ============
+   Owned by the round-17 games-page worker. Loaded last so these rules
+   beat globals.css / v48.css. Brand tokens only: midnight #070812, felt
+   #0C2B22, gold #F2C230, cream #FFF6D8, red #E5322D.
+
+   THE FIX (measured on the served preview at 390px, before this file):
+   every game was in the DOM and every row scrolled, but a row showed
+   only 2 of its cards — 12 of the catalogue visible at load, the rest
+   off the right edge behind a sideways swipe per row, with the scrollbar
+   hidden and no fade, arrow or "show all" affordance. That is what
+   "not showing all the games" looked like. So on THIS page the rows are
+   wrapping grids, not horizontal scrollers: every game in a row is
+   visible by normal vertical scrolling, the way the v48 artifact's own
+   games page laid them out (.gp-grid). Same cards, same order, same row
+   titles and counts, same filters/search/count — only the row geometry
+   changes. The homepage (.games grid) is untouched: these rules are
+   scoped to .gpage. */
+
+.gpage .gp-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;overflow:visible;scroll-snap-type:none;touch-action:auto;padding:0 0 4px}
+.gpage .gp-row .gp-card{flex:none;scroll-snap-align:none}
+@media (min-width:641px){
+  .gpage .gp-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+}
+@media (min-width:1024px){
+  .gpage .gp-row{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+/* Desktop has no dock, but the last row still gets breathing room at the
+   foot of the page (phone keeps the 120px dock clearance from
+   games-v11.css). */
+@media (min-width:761px){
+  .gpage{padding-bottom:48px}
+}
+
+/* ============ Round 17 — impress: premium games page ============
+   The cards already have the gold shimmer treatment for beginners
+   (v48.css); extend the gold rim, lift and glow to EVERY card on this
+   page, and make the counts read in gold. Scoped to .gpage only —
+   the homepage grid is untouched. */
+.gpage .gp-card{
+  border-color:rgba(242,194,48,.24);
+  box-shadow:0 12px 26px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  transition:transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.gpage .gp-card:hover{
+  transform:translateY(-3px);
+  border-color:rgba(242,194,48,.65);
+  box-shadow:0 22px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(242,194,48,.35), 0 0 28px rgba(242,194,48,.18);
+}
+.gpage .gp-count{
+  color:#F2C230;
+  font-weight:800;
+  letter-spacing:.04em;
+}
+.gpage .gp-row-title{ color:#FFF6D8; }
+.gpage .gp-row-title span{ color:#F2C230; }

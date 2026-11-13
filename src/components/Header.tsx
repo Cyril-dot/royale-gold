@@ -109,6 +109,11 @@ export default function Header() {
     setSearchOpen(false);
   };
 
+  // Round 21: game rooms get their own header (GameRoomHeader) — the
+  // site header stays off /games/<slug>. The list page (/games) and
+  // every other page keep it.
+  if (pathname?.startsWith("/games/")) return null;
+
   return (
     <div className="hdr-zone" style={{ transform: hidden ? "translateY(-110%)" : "translateY(0)", transition: "transform .3s ease", position: "sticky", top: 0, zIndex: 60 }}>
       <header className="site" id="siteHdr">

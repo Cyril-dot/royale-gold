@@ -54,3 +54,39 @@ a.gp-bal:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-r
   .stake-input{height:48px;padding:0 10px;flex:1 1 150px}
   .stake-input input{width:100%}
 }
+
+/* Round 21 — game-room header (GameRoomHeader). The site header is
+   hidden on /games/<slug>, so rooms get their own premium header:
+   back coin, the cash balance AND the coins balance, REAL/SIM toggle,
+   mute. Felt gradient + gold bottom line with a sheen, same polish as
+   the site header. The two balance pills are the bold element — solid
+   gold cash pill, gold-outlined coins pill. Phone (≤640px) is two
+   rows: back + both pills, then toggle + top-up + mute right-aligned,
+   so a 7-figure balance never clips. 16px inputs rule (mobile-native
+   §4) does not apply here — no inputs in the header. Hover gated to
+   capable pointers (mobile-native §1). */
+.grh{position:relative;background:linear-gradient(180deg,#0C2B22 0%,#081711 100%);border-bottom:1px solid var(--line-gold);box-shadow:0 1px 0 rgba(242,194,48,.25),0 10px 24px rgba(0,0,0,.35)}
+.grh::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(242,194,48,.65),transparent);pointer-events:none}
+.grh-in{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-top:calc(8px + env(safe-area-inset-top));padding-bottom:10px}
+.grh-top{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
+.grh-back{flex:none}
+.grh-pill{flex:1 1 0;min-width:0;max-width:220px;display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:5px 12px;border-radius:12px;text-decoration:none;font-variant-numeric:tabular-nums;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.grh-pill small{font-size:8px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.85;line-height:1.3}
+.grh-pill b{font-size:14px;font-weight:800;line-height:1.25;white-space:nowrap}
+.grh-cash{background:linear-gradient(180deg,var(--gold-2),var(--gold) 55%,#D9A41C);color:#231600;box-shadow:0 4px 12px rgba(242,194,48,.35)}
+.grh-coins{background:rgba(4,10,8,.55);border:1px solid var(--line-gold);color:var(--gold-2)}
+.grh-tools{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}
+.grh-mute{flex:none}
+@media (max-width:640px){
+  .grh-top{flex:1 1 100%}
+  .grh-tools{margin-left:auto}
+  .grh-pill b{font-size:13px}
+}
+@media (hover:hover) and (pointer:fine){
+  .grh-pill:hover{filter:brightness(1.07)}
+  .grh-back:hover{transform:translateY(-1px)}
+}
+.grh-pill:focus-visible,.grh-back:focus-visible,.grh-mute:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  .grh-back{transition:none}
+}

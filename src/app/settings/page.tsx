@@ -34,7 +34,7 @@ export default function SettingsPage() {
 
   if (!user) {
     return (
-      <main className="rg48-page-main"><div className="wrap">
+      <main className="rg48-page-main rg23"><div className="wrap">
         <h2><em>Settings</em></h2>
         <p>Log in to change your settings.</p>
         <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>Log in</button>
@@ -83,7 +83,7 @@ export default function SettingsPage() {
   const sim = wallet?.sim ?? user.sim;
 
   return (
-    <main className="rg48-page-main">
+    <main className="rg48-page-main rg23">
       <div className="wrap">
         <div className="rg48-hbar-in">
           <Link className="gp-back" href="/account" aria-label="Back to account"><span className="gp-back-coin">←</span></Link>

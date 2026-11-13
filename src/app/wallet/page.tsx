@@ -9,6 +9,7 @@ import Link from "next/link";
 import { fmtCash, fmtCoins } from "../../lib/api";
 import { useStore } from "../../lib/store";
 import WalletCard from "../../components/WalletCard";
+import CoinCard from "../../components/CoinCard";
 import CoinConverter from "../../components/CoinConverter";
 
 export default function WalletPage() {
@@ -34,6 +35,11 @@ export default function WalletPage() {
   const coins = wallet?.coins ?? user.coins ?? 0;
   // Wallet id, not a payment card — the last 4 of the user id, uppercased.
   const last4 = (user.id || "").replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase() || "0000";
+  // Round 20: the Visa card shows the cash balance for the active mode —
+  // REAL = cash, SIM = the SIM balance labelled SIM. The coins live on
+  // their own coin card below, not in a pill tab.
+  const cardBalance = mode === "SIM" ? fmtCash(sim) : fmtCash(cash);
+  const cardLabel = mode === "SIM" ? "SIM Balance" : "Balance";
 
   return (
     <main className="rg48-page-main">
@@ -42,11 +48,13 @@ export default function WalletPage() {
           <Link className="gp-back" href="/" aria-label="Back"><span className="gp-back-coin">←</span></Link>
           <h2>Wallet</h2>
         </div>
-        <WalletCard holder={user.name} last4={last4} />
-        <div className="sum-cards wallet-bals">
-          <div className="sum-card"><span>Cash</span><b>{fmtCash(cash)}</b></div>
-          <div className="sum-card"><span>SIM</span><b>{fmtCash(sim)}</b></div>
-          <div className="sum-card"><span>Coins</span><b>{fmtCoins(coins)}</b></div>
+        {/* Round 20: two cards — the Visa card carries the cash balance
+            for the active mode, the coin card carries the coins. Round
+            20b: the last pill tab (SIM) is gone too — zero pill tabs on
+            this page; the SIM balance lives on the Visa card in SIM mode. */}
+        <div className="wallet-cards">
+          <WalletCard holder={user.name} last4={last4} balance={cardBalance} balanceLabel={cardLabel} />
+          <CoinCard holder={user.name} coins={fmtCoins(coins)} />
         </div>
         {/* Round 12: SIM mode is demo-only — the action is an instant
             SIM top-up, never a real-money deposit. */}

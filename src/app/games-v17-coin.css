@@ -1,4 +1,147 @@
 /* ============ Round 17 — coin games (Scratch Card, Keno, Memory Match, Whack-a-Mole) ============
    Owned by the round-17 coin worker. Loaded last so these rules beat
    globals.css / v48.css. Brand tokens only: midnight #070812, felt
-   #0C2B22, gold #F2C230, cream #FFF6D8, red #E5322D. */
+   #0C2B22, gold #F2C230, cream #FFF6D8, red #E5322D.
+   Restore vs the v48 artifact — no redesign. Touch: 44px+ targets,
+   touch-action on gesture surfaces, pointer events (touch + mouse). */
+
+.xg-controls button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* One 1fr track: a grid item with no in-flow content (the whack holes —
+   their moles are absolutely positioned) otherwise sizes its auto track
+   to ~2px and the whole 3×3 collapses. v48's rooms sat in .qg-stage,
+   not .xg-controls, so the artifact never hit this. */
+.xg-coin { grid-template-columns: minmax(0, 1fr); }
+.xg-coin > * { min-width: 0; }
+/* v48 gives the grids margin:0 auto, which sizes a grid item to
+   max-content instead of stretching it. Force our grids to fill the
+   1fr track (the whack grid's max-content is only 30px — its holes
+   have no in-flow content, their moles are absolutely positioned). */
+.xg-coin > .whack-grid,
+.xg-coin > .mem-grid,
+.xg-coin > .keno-grid,
+.xg-coin > .scratch-grid { width: 100%; margin-left: 0; margin-right: 0; }
+
+/* ---------- Scratch Card: real foil (v48 .scratch-cell / canvas.foil) ---------- */
+.scratch-cell canvas.foil {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  border-radius: 12px;
+  transition: opacity .35s ease;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30'%3E%3Ccircle cx='15' cy='15' r='12' fill='%23F2C230' stroke='%239A7410' stroke-width='2'/%3E%3Ctext x='15' y='20' text-anchor='middle' font-size='13' font-weight='900' fill='%237A5200' font-family='monospace'%3E%E2%82%B5%3C/text%3E%3C/svg%3E") 15 15, crosshair;
+}
+.scratch-cell canvas.foil.done { opacity: 0; pointer-events: none; }
+.scratch-cell.burst { animation: cellBurst34 .6s ease; }
+.scratch-grid.burst-all .scratch-cell { animation: cellBurst34 .7s ease; }
+.scratch-cell .sym {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.scratch-cell .sym .sc-lab {
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  color: #7A5200;
+  font-family: var(--mono);
+}
+.sc-strip {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  color: var(--gold-2, #FFD964);
+}
+
+/* ---------- Keno: staggered balls + Quick pick ---------- */
+.keno-num {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 44px;
+}
+.keno-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.keno-actions .xg-action {
+  min-height: 52px;
+  padding: 0 20px;
+  font-size: 16px;
+  flex: 1 1 140px;
+  max-width: 220px;
+}
+.keno-balls { min-height: 44px; }
+
+/* ---------- Memory Match: chip HUD, SVG faces ---------- */
+.mem-hud {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.mem-card {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.mem-face, .mm-back {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+.mem-face svg, .mm-back svg { width: 55%; height: 55%; }
+
+/* ---------- Whack-a-Mole: dirt holes + sliding moles ---------- */
+.whack-grid { touch-action: manipulation; }
+.hole {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 92px;
+}
+.hole:focus-visible { outline: 2px solid var(--gold, #F2C230); outline-offset: 2px; }
+.hole:disabled { cursor: default; }
+.wm-hud { align-items: center; }
+
+/* ---------- Reduced motion: entrances must never hide content ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .scratch-cell.burst,
+  .scratch-grid.burst-all .scratch-cell,
+  .mem-card.up,
+  .mem-card.done,
+  .mole.up,
+  .keno-ball,
+  .keno-num.hit { animation: none !important; }
+}
+
+/* ============ Round 17 — impress: premium coin boards ============
+   Scratch Card gets a gold-framed dark-gold table and a gold strip;
+   the foil + medallions (already realistic) sit inside it. */
+.scratch-grid{
+  border:1px solid rgba(242,194,48,.38);
+  border-radius:20px;
+  padding:12px;
+  background:radial-gradient(120% 100% at 50% 0%, #2A1F08 0%, #14100A 60%, #070812 100%);
+  box-shadow:0 20px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.07);
+}
+.sc-strip{
+  color:#F2C230;
+  letter-spacing:.14em;
+}

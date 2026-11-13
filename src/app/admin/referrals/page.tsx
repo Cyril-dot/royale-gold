@@ -14,7 +14,7 @@ import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../.
 
 export default function AdminReferralsPage() {
   return (
-    <main className="rg48-page-main">
+    <main className="rg48-page-main rg23">
       <div className="wrap">
         <Suspense fallback={null}>
           <AdminReferralsInner />

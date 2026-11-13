@@ -13,6 +13,13 @@ import { KenoRoom, MemoryRoom, WhackRoom, ScratchRoom } from "./coin";
 import { BlackjackRoom, PokerRoom, RouletteRoom } from "./table";
 import { CarCrashRoom, RocketShooterRoom, FruitNinjaRoom } from "./arcade";
 import { CandyRoom, TetrisRoom, TriviaRoom, SnakeRoom, Game2048Room } from "./skill";
+// Round 18 — new games live in their own files; the existing 31 rooms
+// are untouched.
+import { BalloonBurstRoom } from "./new18-crash";
+import { GoldenReelsRoom } from "./new18-slots";
+import { BaccaratRoom, ThreeCardPokerRoom, SicBoRoom, JacksOrBetterRoom } from "./new18-table";
+import { TowerClimbRoom, GoldenCatchRoom, GoldRushDerbyRoom } from "./new18-arcade";
+import { BingoBlitzRoom, BrickBreakerRoom, StackTowerRoom, BubbleShooterRoom, BullseyeDartsRoom, ConnectFourRoom } from "./new18-coins";
 
 export default function RoomPage({ slug }: { slug: string }) {
   const game = getGame(slug);
@@ -50,6 +57,22 @@ export default function RoomPage({ slug }: { slug: string }) {
     case "trivia": return <TriviaRoom game={game} />;
     case "snake": return <SnakeRoom game={game} />;
     case "2048": return <Game2048Room game={game} />;
+    // Round 18 — 15 new games.
+    case "balloon-burst": return <BalloonBurstRoom game={game} />;
+    case "golden-reels": return <GoldenReelsRoom game={game} />;
+    case "baccarat": return <BaccaratRoom game={game} />;
+    case "three-card-poker": return <ThreeCardPokerRoom game={game} />;
+    case "sic-bo": return <SicBoRoom game={game} />;
+    case "tower-climb": return <TowerClimbRoom game={game} />;
+    case "golden-catch": return <GoldenCatchRoom game={game} />;
+    case "gold-rush-derby": return <GoldRushDerbyRoom game={game} />;
+    case "jacks-or-better": return <JacksOrBetterRoom game={game} />;
+    case "bingo-blitz": return <BingoBlitzRoom game={game} />;
+    case "brick-breaker": return <BrickBreakerRoom game={game} />;
+    case "stack-tower": return <StackTowerRoom game={game} />;
+    case "bubble-shooter": return <BubbleShooterRoom game={game} />;
+    case "bullseye-darts": return <BullseyeDartsRoom game={game} />;
+    case "connect-four": return <ConnectFourRoom game={game} />;
     default: notFound();
   }
 }

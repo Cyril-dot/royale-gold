@@ -1,14 +1,16 @@
 // WalletCard — the /wallet card, styled like a VISA card (the user's
 // reference), 3D-based. Dark felt/gold to match the site. The number is
-// the wallet id's last 4 — never a real payment-card number. Tilt follows
-// the VerbTilt pattern: hover-capable pointers only, a gentle float on
-// touch, nothing moves under prefers-reduced-motion.
+// the wallet id's last 4 — never a real payment-card number. The card
+// shows the cash balance for the active mode (round 20): REAL = cash,
+// SIM = SIM balance labelled SIM. Tilt follows the VerbTilt pattern:
+// hover-capable pointers only, a gentle float on touch, nothing moves
+// under prefers-reduced-motion.
 
 "use client";
 
 import { useEffect, useRef } from "react";
 
-export default function WalletCard({ holder, last4 }: { holder: string; last4: string }) {
+export default function WalletCard({ holder, last4, balance, balanceLabel }: { holder: string; last4: string; balance: string; balanceLabel: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function WalletCard({ holder, last4 }: { holder: string; last4: s
 
   return (
     <div className="wallet-card-wrap">
-      <div className="wallet-card" ref={ref} role="img" aria-label={`Royale Gold wallet card for ${holder}, ending ${last4}`}>
+      <div className="wallet-card" ref={ref} role="img" aria-label={`Royale Gold wallet card for ${holder}, ${balanceLabel} ${balance}, ending ${last4}`}>
         <div className="wc-top">
           <svg className="wc-chip" viewBox="0 0 46 34" aria-hidden="true">
             <defs>
@@ -63,6 +65,10 @@ export default function WalletCard({ holder, last4 }: { holder: string; last4: s
             <rect x="14" y="12" width="18" height="10" rx="2" fill="none" stroke="#8A6A10" strokeWidth="1.4" />
           </svg>
           <span className="wc-brand">Royale Gold</span>
+        </div>
+        <div className="wc-bal">
+          <small>{balanceLabel}</small>
+          <b>{balance}</b>
         </div>
         <div className="wc-num">•••• •••• •••• {last4}</div>
         <div className="wc-bottom">

@@ -5,8 +5,11 @@ import { dec, round2, toDecimal } from "./money";
 import { getCrashRound } from "./crash";
 import { PLAY_GATED_GAMES } from "./play";
 
-/** Slugs that settle against a server-issued crash round. */
-export const CRASH_GAME_SLUGS = new Set(["aviator-gold", "jet-fly", "car-crash"]);
+/** Slugs that settle against a server-issued crash round. Balloon Burst
+ * is a crash game too (shared engine, roundId passed at settle) — it
+ * belongs here alongside Car Crash, or every one of its settles 400s
+ * with "roundId is only valid for crash games" (round 24 fix). */
+export const CRASH_GAME_SLUGS = new Set(["aviator-gold", "jet-fly", "car-crash", "balloon-burst"]);
 
 /**
  * The single server-side settlement path. Every balance change for a game

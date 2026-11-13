@@ -16,10 +16,10 @@ import { fmtCash, fmtCoins } from "../../lib/api";
 type Filter = "all" | "cash" | "coins" | "crash" | "table" | "arcade" | "live" | "beginner" | "slots";
 
 // One row per game: crash and live/table win over slots and beginner, so
-// a game appears in exactly one row. Crash 4, Live 2, Table 2, Slots 2,
-// Beginner 17, Arcade 4 = 31.
+// a game appears in exactly one row. (Row counts follow the live catalogue;
+// do not hardcode a total here — the catalogue grows.)
 function primaryCategory(g: TileGame): string {
-  const m = g.meta;
+  const m = g.meta ?? ({} as TileGame["meta"]);
   if (m.tag === "crash") return "crash";
   if (m.tag === "live") return "live";
   if (m.tag === "table") return "table";
@@ -65,9 +65,12 @@ function GamesInner() {
   const list = useMemo(() => {
     return GAMES_PAGE_GAMES.filter((g) => {
       if (filter === "cash" || filter === "coins") { if (g.currency !== filter) return false; }
-      else if (filter === "slots") { if (!g.meta.slots) return false; }
-      else if (filter === "crash" || filter === "table" || filter === "arcade" || filter === "live") { if (g.meta.tag !== filter) return false; }
-      else if (filter === "beginner") { if (!g.meta.beginner) return false; }
+      // Round 17: a category chip must show exactly the row of that name.
+      // The old predicates read the raw tile flags (meta.beginner / meta.tag),
+      // so Beginner showed 20 while its row holds 17, and Arcade showed 23
+      // while its row holds 4. Route filters through primaryCategory, the
+      // same routing the rows use, so chip and row always agree.
+      else if (filter === "slots" || filter === "crash" || filter === "table" || filter === "arcade" || filter === "live" || filter === "beginner") { if (primaryCategory(g) !== filter) return false; }
       if (q && !g.name.toLowerCase().includes(q.toLowerCase())) return false;
       return true;
     });

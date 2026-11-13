@@ -1,0 +1,48 @@
+/* Round 20 — wallet cards: the Visa card shows the cash balance, a new
+   coin card shows the coins balance, and the Cash/Coins pill tabs are
+   gone. Round 20b: the last pill tab (SIM) is gone too — zero pill tabs
+   on this page; the SIM balance lives on the Visa card in SIM mode.
+   Loaded after wallet-v11.css, so these rules win. No overflow:hidden
+   on either card — it would flatten the children's 3D depth; the sheen
+   + felt overlays carry the radius. */
+
+/* ---- The two cards ---- */
+.wallet-cards{display:grid;grid-template-columns:1fr;gap:18px;margin:18px auto 22px;max-width:860px}
+/* The wraps must STRETCH to fill their grid tracks (equal-width cards).
+   margin:auto or justify-self:center would shrink them to fit-content,
+   which is how the two cards ended up different widths. */
+.wallet-cards .wallet-card-wrap,.wallet-cards .coin-card-wrap{margin:0;max-width:none}
+@media (min-width:760px){
+  .wallet-cards{grid-template-columns:1fr 1fr}
+}
+
+/* ---- Visa card: the balance row (round 20) ---- */
+.wc-bal{display:flex;flex-direction:column;gap:2px;transform:translateZ(24px)}
+.wc-bal small{font-size:9px;letter-spacing:.2em;color:var(--muted);font-weight:800;text-transform:uppercase}
+.wc-bal b{font-family:var(--font-body,Outfit,sans-serif);font-size:clamp(22px,6.5vw,30px);font-weight:800;color:var(--gold-2,#FFD964);line-height:1.1;white-space:nowrap}
+
+/* ---- Coin card (round 20) — same premium card, coin-themed ---- */
+.coin-card-wrap{perspective:1100px;max-width:420px}
+.coin-card{position:relative;aspect-ratio:1.586/1;border-radius:20px;transform-style:preserve-3d;--mx:50%;--my:40%;--shx:0px;--shy:20px;box-shadow:var(--shx) var(--shy) 34px rgba(0,0,0,.55),0 0 0 1px rgba(242,194,48,.55),inset 0 1px 0 rgba(255,246,216,.22);background:radial-gradient(120% 90% at 88% 0%,rgba(242,194,48,.34),transparent 55%),radial-gradient(90% 70% at 5% 100%,rgba(12,43,34,.9),transparent 60%),linear-gradient(135deg,#241A05 0%,#0E2A20 55%,#071410 100%);color:#FFF6D8;padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between}
+.coin-card::before{content:"";position:absolute;inset:0;border-radius:20px;background:repeating-linear-gradient(115deg,rgba(255,246,216,.025) 0 2px,transparent 2px 7px);pointer-events:none}
+.coin-card::after{content:"";position:absolute;inset:0;border-radius:20px;background:radial-gradient(420px 260px at var(--mx) var(--my),rgba(255,246,216,.22),transparent 65%);pointer-events:none}
+.cc-ghost{position:absolute;right:10px;top:50%;transform:translateY(-50%) translateZ(10px);font-size:150px;line-height:1;color:rgba(242,194,48,.07);pointer-events:none}
+.cc-top{display:flex;align-items:center;justify-content:space-between;gap:12px;transform:translateZ(28px)}
+.cc-coin{width:46px;height:46px;flex:none;border-radius:50%;background:radial-gradient(circle at 32% 30%,#FFE89A,#F2C230 55%,#C99612);display:grid;place-items:center;color:#231600;font-size:26px;font-weight:900;line-height:1;box-shadow:inset 0 0 0 2px rgba(122,82,0,.55),inset 0 -3px 6px rgba(122,82,0,.5),0 2px 8px rgba(0,0,0,.45)}
+.cc-brand{font-size:12px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-2)}
+.cc-bal{display:flex;flex-direction:column;gap:2px;transform:translateZ(24px)}
+.cc-bal small{font-size:9px;letter-spacing:.2em;color:var(--muted);font-weight:800;text-transform:uppercase}
+.cc-bal b{font-family:var(--font-body,Outfit,sans-serif);font-size:clamp(26px,7.5vw,34px);font-weight:800;color:var(--gold-2,#FFD964);line-height:1.1;white-space:nowrap}
+.cc-coin-mark{font-size:.62em;color:var(--gold,#F2C230)}
+.cc-bottom{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;transform:translateZ(28px)}
+.cc-holder{display:flex;flex-direction:column;gap:3px;min-width:0}
+.cc-holder small{font-size:9px;letter-spacing:.2em;color:var(--muted);font-weight:800;text-transform:uppercase}
+.cc-holder b{font-size:14px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc-mark{font-size:26px;font-weight:900;color:var(--gold,#F2C230);line-height:1}
+/* touch: gentle float instead of tilt */
+@media (hover:none){
+  .coin-card{animation:wcFloat 6s ease-in-out infinite}
+}
+@media (prefers-reduced-motion:reduce){
+  .coin-card{animation:none}
+}

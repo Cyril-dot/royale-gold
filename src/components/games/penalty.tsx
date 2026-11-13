@@ -40,6 +40,11 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
   const [aimDot, setAimDot] = useState<{ x: number; y: number } | null>(null);
   const [showAim, setShowAim] = useState(false);
   const [bulge, setBulge] = useState<{ x: number; y: number; key: number } | null>(null);
+  // The artifact hides the drag hint after the first shot of the
+  // shootout (hasShot) and arms the stage while a round is live.
+  const [hasShot, setHasShot] = useState(false);
+  const [shaking, setShaking] = useState(false);
+  const [rippling, setRippling] = useState(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const goalRef = useRef<HTMLDivElement>(null);
@@ -65,6 +70,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     setPlaying(true);
     setGoals(0);
     setSavedAt(-1);
+    setHasShot(false);
     resetActors();
     setMsg(`Shootout live — ${fmtCash(stake)} riding on it. Press on the ball, drag toward the goal to draw your shot, and release to shoot. First goal pays ×${LADDER[0]}.`);
   };
@@ -83,6 +89,32 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     await finish(true, pay, `×${m}`);
   }, [playing, goals, stake, finish]);
 
+  // Goal confetti (the artifact's burst): coloured shards fly out of
+  // the goal mouth on every goal, more of them from the third goal on.
+  const burst = useCallback((x: number, y: number, colors: string[], n: number) => {
+    const stage = stageRef.current;
+    if (!stage || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement("span");
+      s.className = "pn-burst";
+      s.style.background = colors[i % colors.length];
+      if (i % 3 === 0) { s.style.borderRadius = "1.5px"; s.style.width = "6px"; s.style.height = "11px"; }
+      s.style.left = `${x}px`;
+      s.style.top = `${y}px`;
+      stage.appendChild(s);
+      const ang = Math.random() * Math.PI * 2, dist = 40 + Math.random() * 90;
+      const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist - 24;
+      try {
+        const a = s.animate([
+          { transform: "translate(-50%,-50%) scale(1) rotate(0deg)", opacity: 1 },
+          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.3) rotate(200deg)`, opacity: 0 },
+        ], { duration: 760, easing: "cubic-bezier(.2,.8,.3,1)" });
+        a.onfinish = () => s.remove();
+      } catch { /* no WAAPI — the shard is removed below anyway */ }
+      setTimeout(() => s.remove(), 850);
+    }
+  }, []);
+
   const resolveShot = useCallback((saved: boolean, aim: Aim) => {
     const { fx, fy } = aim;
     if (!saved) {
@@ -91,6 +123,13 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       setBulge({ x: fx * 100, y: fy * 100, key: Date.now() });
       setKeeperPose("beaten");
       setStrikerPose("celebrate");
+      // Net ripple + stage shake + confetti, all from the artifact.
+      setRippling(true);
+      setTimeout(() => setRippling(false), 500);
+      setShaking(true);
+      setTimeout(() => setShaking(false), 500);
+      burst(aim.x, aim.y, ["#F2C230", "#FFD964", "#3ED97E", "#FFF6D8"], g >= 3 ? 26 : 16);
+      if (g >= 3) burst(aim.x, aim.y, ["#F2C230", "#FFF6D8"], 14);
       if (g >= 5) {
         setTimeout(() => { resetActors(); void cashOut(true); }, 460);
         return;
@@ -100,17 +139,29 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     } else {
       setKeeperPose("hero");
       setSavedAt(goals);
+      // The gloves meet it: the ball parries away from the goal mouth.
+      const dir = fx < 0.5 ? -1 : 1;
+      const dxTotal = aim.x - aim.sx, dyTotal = aim.y - aim.sy;
+      const ex = dxTotal + dir * 105, ey = dyTotal + 66;
+      try {
+        ballRef.current?.animate([
+          { transform: `translate(${dxTotal}px,${dyTotal}px) scale(.42) rotate(560deg)`, opacity: 1 },
+          { transform: `translate(${ex}px,${ey}px) scale(.36) rotate(760deg)`, opacity: 0.85 },
+        ], { duration: 380, easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" });
+      } catch { /* no WAAPI — the style below still lands the parry */ }
+      setBallStyle({ transform: `translate(${ex}px,${ey}px) scale(.36)`, opacity: 1 });
       setMsg(`SAVED — the keeper read the ${describeAim(fx, fy)} all the way and parried it. The ${fmtCash(stake)} stake is gone.`);
       setTimeout(() => {
         resetActors();
         void finish(false, 0, "SAVED");
       }, 900);
     }
-  }, [goals, stake, cashOut, finish, resetActors]);
+  }, [goals, stake, cashOut, finish, resetActors, burst]);
 
   const shoot = useCallback((aim: Aim) => {
     if (!stateRef.current.playing || stateRef.current.busy) return;
     setBusy(true);
+    setHasShot(true);
     setShowAim(false);
     const { fx, fy } = aim;
     const saved = Math.random() < 0.4;
@@ -123,7 +174,10 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     setStrikerPose("runup");
     setTimeout(() => {
       setStrikerPose("kick");
-      setTimeout(() => setStrikerPose("follow"), 240);
+      setTimeout(() => {
+        setStrikerPose("follow");
+        setTimeout(() => setStrikerPose(""), 340);
+      }, 240);
       // Keeper dive from the SAME snapshot
       const gw = aim.gw;
       const kx = (kfx - 0.5) * gw * 0.66;
@@ -131,10 +185,43 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       const ky = (kfy - 0.5) * 38;
       setKeeperStyle({ transform: `translateX(calc(-50% + ${kx}px)) translateY(${ky}px) rotate(${kRot}deg)` });
       setKeeperPose("diving");
-      // Ball flight along the dragged quadratic curve
-      const dx = aim.x - aim.sx, dy = aim.y - aim.sy;
-      setBallStyle({ transform: `translate(${dx}px, ${dy}px) scale(.42) rotate(560deg)`, opacity: 1, transition: "transform .48s cubic-bezier(.2,.7,.3,1)" });
-      setTimeout(() => resolveShot(saved, aim), 480);
+      // Ball flight along the dragged quadratic curve — rAF, like the
+      // artifact, so a fading trail can be left behind it.
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const dur = 480, t0 = performance.now();
+      let lastTrail = 0;
+      const bez = (t: number) => {
+        const u = 1 - t;
+        return { x: u * u * aim.sx + 2 * u * t * aim.cx + t * t * aim.x, y: u * u * aim.sy + 2 * u * t * aim.cy + t * t * aim.y };
+      };
+      const flight = (now: number) => {
+        const t = Math.min(1, (now - t0) / dur);
+        const p = bez(t);
+        setBallStyle({ transform: `translate(${p.x - aim.sx}px,${p.y - aim.sy}px) scale(${1 - 0.58 * t}) rotate(${560 * t}deg)`, opacity: 1 });
+        if (!reduced && now - lastTrail > 52 && t < 0.92) {
+          lastTrail = now;
+          const stage = stageRef.current;
+          if (stage) {
+            const s = document.createElement("span");
+            s.className = "pn-trail";
+            const sz = 30 * (1 - 0.5 * t);
+            s.style.width = `${sz}px`; s.style.height = `${sz}px`;
+            s.style.left = `${p.x - sz / 2}px`; s.style.top = `${p.y - sz / 2}px`; s.style.opacity = ".5";
+            stage.appendChild(s);
+            try {
+              const a = s.animate([{ opacity: 0.5 }, { opacity: 0 }], { duration: 420, easing: "ease-out" });
+              a.onfinish = () => s.remove();
+            } catch { /* no WAAPI */ }
+            setTimeout(() => s.remove(), 460);
+          }
+        }
+        if (t < 1) requestAnimationFrame(flight);
+        else resolveShot(saved, aim);
+      };
+      if (reduced) {
+        setBallStyle({ transform: `translate(${aim.x - aim.sx}px,${aim.y - aim.sy}px) scale(.42)`, opacity: 1 });
+        resolveShot(saved, aim);
+      } else requestAnimationFrame(flight);
     }, 290);
   }, [resolveShot]);
 
@@ -151,25 +238,40 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     shoot({ sx, sy, x, y, cx: (sx + x) / 2, cy: (sy + y) / 2, fx, fy, gl: gr.left - sr.left, gt: gr.top - sr.top, gw: gr.width, gh: gr.height });
   };
 
-  // Drag aiming — v45: ONE measurement of stage + goal rects at release.
+  // Drag aiming — the artifact's protocol, restored in full:
+  //  1. the press must land within 130px of the ball,
+  //  2. curAim is seeded on the press itself,
+  //  3. the aim point is clamped INTO the goal frame while dragging,
+  //  4. a drag shorter than 30px is not a shot,
+  //  5. the release snapshot is fed back through the aim curve, so
+  //     the drawn curve ends at the classification point — a fast
+  //     flick can no longer read one band low.
   const relPos = (e: React.PointerEvent) => {
     const r = stageRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
-  const onDown = (e: React.PointerEvent) => {
-    if (!playing || busy) return;
-    dragging.current = true;
-    dragPts.current = [relPos(e)];
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  const ballCentre = () => {
+    const sr = stageRef.current!.getBoundingClientRect();
+    const b = ballRef.current!.getBoundingClientRect();
+    return { x: b.left + b.width / 2 - sr.left, y: b.top + b.height / 2 - sr.top };
   };
-  const onMove = (e: React.PointerEvent) => {
-    if (!dragging.current || !stageRef.current || !ballRef.current) return;
-    const p = relPos(e);
-    dragPts.current.push(p);
+  // Clamp an aim point into the goal frame (10px inset).
+  const clampAim = (p: { x: number; y: number }) => {
+    if (!stageRef.current || !goalRef.current) return p;
     const sr = stageRef.current.getBoundingClientRect();
-    const b = ballRef.current.getBoundingClientRect();
-    const st = { x: b.left + b.width / 2 - sr.left, y: b.top + b.height / 2 - sr.top };
-    // Dotted trajectory (quadratic through drag midpoint bend)
+    const gr = goalRef.current.getBoundingClientRect();
+    const gl = gr.left - sr.left, gt = gr.top - sr.top;
+    return {
+      x: Math.max(gl + 10, Math.min(gl + gr.width - 10, p.x)),
+      y: Math.max(gt + 10, Math.min(gt + gr.height - 10, p.y)),
+    };
+  };
+  // Quadratic control point from the drag path's midpoint bend, then
+  // the aim state + dotted trajectory for a given end point.
+  const updateAim = (end: { x: number; y: number }) => {
+    if (!stageRef.current || !ballRef.current) return;
+    const st = ballCentre();
+    const p = clampAim(end);
     let bend = 0;
     if (dragPts.current.length > 3) {
       const mid = dragPts.current[Math.floor(dragPts.current.length / 2)];
@@ -185,33 +287,58 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     setAimDot({ x: p.x, y: p.y });
     setShowAim(true);
   };
+  const onDown = (e: React.PointerEvent) => {
+    if (!playing || busy || !stageRef.current || !ballRef.current) return;
+    const p = relPos(e);
+    const st = ballCentre();
+    // Press must start on/near the ball — a stray tap on the stage
+    // is not a shot.
+    if (Math.hypot(p.x - st.x, p.y - st.y) > 130) return;
+    dragging.current = true;
+    dragPts.current = [p];
+    stageRef.current.setPointerCapture?.(e.pointerId);
+    updateAim(p);
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!dragging.current || !stageRef.current || !ballRef.current) return;
+    const p = relPos(e);
+    dragPts.current.push(p);
+    updateAim(p);
+  };
   const onUp = (e: React.PointerEvent) => {
     if (!dragging.current) return;
     dragging.current = false;
     if (!playing || busy || !stageRef.current || !goalRef.current || !curAim.current) { setShowAim(false); return; }
-    // THE one measurement: stage rect + goal mouth's live rendered rect.
+    const p = relPos(e);
+    // A tap or a nudge under 30px is not a shot.
+    if (Math.hypot(p.x - dragPts.current[0].x, p.y - dragPts.current[0].y) < 30) { setShowAim(false); curAim.current = null; return; }
+    // Release snapshot through the aim curve: the curve, the ball
+    // flight and the announcement all use the same end point.
+    updateAim(p);
     const sr = stageRef.current.getBoundingClientRect();
     const gr = goalRef.current.getBoundingClientRect();
     const gl = gr.left - sr.left, gt = gr.top - sr.top;
-    const px = e.clientX - sr.left, py = e.clientY - sr.top;
-    const cx = Math.max(gl + 10, Math.min(gl + gr.width - 10, px));
-    const cy = Math.max(gt + 10, Math.min(gt + gr.height - 10, py));
-    const aim: Aim = { ...curAim.current, x: cx, y: cy, fx: (cx - gl) / gr.width, fy: (cy - gt) / gr.height, gl, gt, gw: gr.width, gh: gr.height };
+    const aim: Aim = { ...curAim.current, fx: (curAim.current.x - gl) / gr.width, fy: (curAim.current.y - gt) / gr.height, gl, gt, gw: gr.width, gh: gr.height };
     shoot(aim);
+  };
+  const onCancel = () => {
+    dragging.current = false;
+    setShowAim(false);
+    curAim.current = null;
   };
 
   useEffect(() => () => { dragPts.current = []; }, []);
 
   return (
     <RoomShell game={game} subtitle="5 shots · ladder to ×12.5 · cash out after any goal" stats={room.stats} history={room.history}>
-      <div className="pn-stage" id="pnStage" ref={stageRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} style={{ touchAction: "none" }}>
+      <div className={`pn-stage${playing ? " armed" : ""}${shaking ? " shake" : ""}`} id="pnStage" ref={stageRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} style={{ touchAction: "none" }}>
         <div className="pn-lights" aria-hidden="true">
           <div className="pn-pylon l"><i /><i /><i /><i /><i /><i /></div><div className="pn-pylon r"><i /><i /><i /><i /><i /><i /></div>
           <div className="pn-cone l" /><div className="pn-cone r" />
         </div>
         <div className="pn-crowd" aria-hidden="true" />
         <div className="pn-boards" aria-hidden="true"><span>ROYALE GOLD</span><span className="mid">PENALTY SHOOTOUT</span><span>TOP PRIZE ×12.5</span></div>
-        <div className="pn-goal" ref={goalRef} role="img" aria-label="The goal and its keeper — drag from the ball below to aim your shot">
+        <div className={`pn-goal${rippling ? " ripple" : ""}`} ref={goalRef} role="img" aria-label="The goal and its keeper — drag from the ball below to aim your shot">
           <div className="pn-net-back" aria-hidden="true" />
           <div className="pn-net-side l" aria-hidden="true" />
           <div className="pn-net-side r" aria-hidden="true" />
@@ -221,7 +348,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
         <div className="pn-grass"><span className="pn-spot" aria-hidden="true" /></div>
         <div className={`pn-striker ${strikerPose}`} aria-hidden="true"><StrikerSvg /></div>
         <div className="pn-ball" ref={ballRef} aria-hidden="true" style={ballStyle} />
-        <div className="pn-hint" hidden={!playing || busy}>Drag from the ball toward the goal — release to shoot</div>
+        <div className="pn-hint" hidden={!playing || busy || hasShot}>Drag from the ball toward the goal — release to shoot</div>
         {showAim && (
           <svg className="pn-aim" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
             <path d={aimPath} fill="none" stroke="#FFD964" strokeWidth={5} strokeLinecap="round" strokeDasharray="0.5 11" />

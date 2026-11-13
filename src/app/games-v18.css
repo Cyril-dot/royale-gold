@@ -1,0 +1,263 @@
+/* ============ Round 18 — 15 new games ============
+   All new-game styles live here, .v18- prefixed so nothing collides
+   with v48.css / globals.css / games-v17-*.css. Brand tokens only:
+   midnight #070812, felt #0C2B22, gold #F2C230, cream #FFF6D8,
+   red #E5322D. Touch: game surfaces use touch-action:none;
+   buttons use touch-action:manipulation. Hover is capability-gated. */
+
+.v18-stage { position: relative; width: 100%; max-width: 430px; margin: 0 auto; background: #070A18; border: 1px solid rgba(242,194,48,.4); border-radius: 16px; padding: 14px; }
+.v18-canvas { display: block; width: 100%; height: auto; border-radius: 12px; touch-action: none; -webkit-user-select: none; user-select: none; }
+.v18-hud { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; margin: 10px 0 4px; font-size: 13px; font-weight: 700; color: #FFF6D8; }
+.v18-hud b { color: #F2C230; font-weight: 900; }
+.v18-hud .win b { color: #3ED97E; }
+.v18-big { text-align: center; font-size: 34px; font-weight: 900; color: #F2C230; line-height: 1.1; margin: 6px 0; font-variant-numeric: tabular-nums; }
+.v18-sub { text-align: center; font-size: 13px; color: #FFF6D8; opacity: .85; margin: 2px 0 8px; }
+.v18-picks { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 10px 0; }
+.v18-picks button { flex: 1 1 30%; min-height: 48px; min-width: 88px; border-radius: 12px; border: 1px solid rgba(242,194,48,.45); background: rgba(7,8,18,.6); color: #FFF6D8; font-family: var(--font-body, Outfit, sans-serif); font-size: 15px; font-weight: 800; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; transition: transform .12s ease, background .15s ease, border-color .15s ease; }
+.v18-picks button[aria-pressed="true"], .v18-picks button.on { background: linear-gradient(180deg, #FFD964, #F2C230 55%, #D9A41C); color: #231600; border-color: #F2C230; }
+.v18-picks button:disabled { opacity: .45; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .v18-picks button:hover:not(:disabled) { transform: translateY(-1px); border-color: #FFD964; } }
+.v18-picks button:active:not(:disabled) { transform: scale(.97); }
+.v18-btnrow { display: flex; gap: 10px; justify-content: center; margin: 10px 0 2px; flex-wrap: wrap; }
+
+/* --- Golden Reels (slot machine) --- */
+.v18-reels { position: relative; display: flex; gap: 10px; justify-content: center; width: 100%; margin: 8px auto; max-width: 360px; }
+.v18-reel { flex: 1; height: 92px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #FFFDF4, #E7DFC6); border: 2px solid #C99612; position: relative; }
+.v18-reel-strip { display: flex; flex-direction: column; align-items: center; transition: transform .55s cubic-bezier(.2,.7,.3,1); will-change: transform; }
+.v18-sym { width: 100%; height: 92px; display: grid; place-items: center; flex: none; }
+.v18-sym svg { width: 58px; height: 58px; }
+.v18-reel.spinning .v18-reel-strip { transition: transform .12s linear; }
+.v18-payline { position: absolute; left: 8px; right: 8px; top: 50%; height: 4px; margin-top: -2px; background: #E5322D; border-radius: 2px; z-index: 2; opacity: .85; pointer-events: none; }
+.v18-paytable { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; width: 100%; max-width: 340px; margin: 12px auto 4px; font-size: 13px; font-weight: 700; color: #FFF6D8; }
+.v18-paytable b { color: #F2C230; float: right; }
+
+/* --- Cards (baccarat / three-card poker / jacks or better) --- */
+.v18-cards { display: flex; gap: 8px; justify-content: center; margin: 10px 0; min-height: 86px; }
+.v18-card { width: 56px; height: 80px; border-radius: 8px; background: #FFF6D8; border: 1.5px solid #C99612; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 900; color: #14213D; box-shadow: 0 4px 10px rgba(0,0,0,.4); animation: v18-deal .28s ease backwards; }
+.v18-card.red { color: #C22828; }
+.v18-card .r { font-size: 19px; line-height: 1; }
+.v18-card .s { font-size: 22px; line-height: 1.1; }
+.v18-card.back { background: linear-gradient(140deg, #C99612, #8A6D1B); border-color: #8A6D1B; color: #FFF6D8; }
+.v18-card.held { outline: 3px solid #F2C230; outline-offset: 2px; transform: translateY(-6px); }
+.v18-card.clickable { cursor: pointer; touch-action: manipulation; }
+@keyframes v18-deal { from { transform: translateY(-10px) rotate(-3deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.v18-handlab { text-align: center; font-size: 12px; font-weight: 800; letter-spacing: .08em; color: #F2C230; text-transform: uppercase; margin-top: 8px; }
+.v18-handlab span { color: #FFF6D8; letter-spacing: 0; text-transform: none; font-size: 13px; }
+.v18-dice { display: flex; gap: 12px; justify-content: center; margin: 12px 0; }
+.v18-die { width: 58px; height: 58px; border-radius: 12px; background: #FFF6D8; border: 2px solid #C99612; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,.45); animation: v18-deal .3s ease backwards; }
+.v18-die i { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #14213D; transform: translate(-50%,-50%); }
+.v18-die.rolling { animation: v18-shake .12s linear infinite; }
+@keyframes v18-shake { 0% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } 100% { transform: rotate(-6deg); } }
+
+/* --- Tower Climb --- */
+.v18-tower { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 340px; margin: 10px auto; }
+.v18-trow { display: flex; gap: 6px; align-items: center; }
+.v18-trow .v18-tmult { width: 52px; text-align: right; font-size: 12px; font-weight: 900; color: #F2C230; flex: none; }
+.v18-ttile { flex: 1; min-height: 40px; border-radius: 9px; border: 1px solid rgba(242,194,48,.4); background: rgba(7,8,18,.65); color: #FFF6D8; font-size: 18px; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; transition: transform .12s ease, background .15s ease; }
+.v18-ttile:disabled { cursor: default; }
+.v18-ttile.safe { background: linear-gradient(180deg, #FFD964, #F2C230 55%, #D9A41C); color: #231600; border-color: #F2C230; }
+.v18-ttile.trap { background: #E5322D; border-color: #8A1B1B; color: #FFF6D8; }
+.v18-ttile.active { outline: 2px solid #FFF6D8; outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) { .v18-ttile:not(:disabled):hover { transform: translateY(-1px); } }
+.v18-diff { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
+.v18-diff button { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(242,194,48,.45); background: rgba(7,8,18,.6); color: #FFF6D8; font-size: 13px; font-weight: 800; cursor: pointer; touch-action: manipulation; }
+.v18-diff button[aria-pressed="true"] { background: linear-gradient(180deg, #FFD964, #F2C230 55%, #D9A41C); color: #231600; border-color: #F2C230; }
+
+/* --- Gold Rush Derby --- */
+.v18-track { position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: linear-gradient(180deg, #0E332A, #070812); border: 1px solid rgba(242,194,48,.4); padding: 10px 8px; }
+.v18-lane { position: relative; height: 44px; border-bottom: 1px dashed rgba(242,194,48,.35); }
+.v18-lane:last-child { border-bottom: 0; }
+.v18-horse { position: absolute; top: 50%; left: 0; transform: translateY(-50%); transition: left .12s linear; font-size: 26px; line-height: 1; will-change: left; }
+.v18-horse .tag { font-size: 10px; font-weight: 900; color: #231600; background: #F2C230; border-radius: 999px; padding: 1px 6px; margin-left: 2px; vertical-align: middle; }
+.v18-finish { position: absolute; top: 0; bottom: 0; right: 14px; width: 6px; background: repeating-linear-gradient(180deg, #FFF6D8 0 8px, #14213D 8px 16px); opacity: .9; }
+
+/* --- Bingo Blitz --- */
+.v18-bingo { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; max-width: 340px; margin: 10px auto; }
+.v18-bcell { aspect-ratio: 1; border-radius: 10px; border: 1px solid rgba(242,194,48,.4); background: rgba(7,8,18,.65); color: #FFF6D8; font-size: 17px; font-weight: 900; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+.v18-bcell.marked { background: linear-gradient(180deg, #FFD964, #F2C230 55%, #D9A41C); color: #231600; border-color: #F2C230; }
+.v18-bcell.free { background: #0C2B22; color: #F2C230; font-size: 13px; }
+.v18-balls { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 34px; margin: 8px 0; }
+.v18-ball { width: 32px; height: 32px; border-radius: 50%; background: #FFF6D8; border: 2px solid #C99612; color: #14213D; font-weight: 900; font-size: 13px; display: grid; place-items: center; animation: v18-deal .25s ease backwards; }
+.v18-ball.hit { background: #F2C230; border-color: #8A6D1B; }
+
+/* --- Stack Tower --- */
+.v18-stack { position: relative; height: 300px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #070812, #0C2B22); border: 1px solid rgba(242,194,48,.4); touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer; }
+.v18-block { position: absolute; height: 22px; border-radius: 4px; border: 1px solid rgba(7,8,18,.6); }
+.v18-block.swing { transition: none; }
+.v18-stack-hint { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 12px; font-weight: 800; color: #FFF6D8; opacity: .8; pointer-events: none; }
+
+/* --- Bubble Shooter / Brick Breaker / Golden Catch stages --- */
+.v18-aim { font-size: 12px; font-weight: 800; color: #FFF6D8; opacity: .8; text-align: center; margin-top: 6px; }
+
+/* --- Bullseye Darts --- */
+.v18-dartboard { position: relative; width: 260px; height: 260px; margin: 8px auto; border-radius: 50%; background: #14213D; border: 3px solid #C99612; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; cursor: crosshair; }
+.v18-dartboard .ring { position: absolute; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%,-50%); }
+.v18-dartboard .r1 { width: 250px; height: 250px; background: #FFF6D8; }
+.v18-dartboard .r2 { width: 200px; height: 200px; background: #14213D; }
+.v18-dartboard .r3 { width: 150px; height: 150px; background: #FFF6D8; }
+.v18-dartboard .r4 { width: 100px; height: 100px; background: #E5322D; }
+.v18-dartboard .r5 { width: 50px; height: 50px; background: #F2C230; border: 2px solid #8A6D1B; }
+.v18-dartboard .aim { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 2px solid #FFF6D8; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
+.v18-dartboard .aim::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #E5322D; }
+.v18-dartboard .dart { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #F2C230; border: 2px solid #8A6D1B; }
+.v18-power { height: 10px; border-radius: 999px; background: rgba(255,246,216,.15); overflow: hidden; max-width: 300px; margin: 8px auto; }
+.v18-power i { display: block; height: 100%; background: linear-gradient(90deg, #3ED97E, #F2C230, #E5322D); transition: width .05s linear; }
+
+/* --- Connect Four --- */
+.v18-c4 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; width: 100%; max-width: 380px; margin: 10px auto; padding: 10px; border-radius: 12px; background: #14213D; border: 2px solid #C99612; }
+.v18-c4col { display: flex; flex-direction: column; gap: 5px; cursor: pointer; touch-action: manipulation; border-radius: 8px; padding: 2px; }
+.v18-c4col:hover { background: rgba(242,194,48,.12); }
+.v18-c4cell { aspect-ratio: 1; border-radius: 50%; background: #070812; border: 1px solid rgba(242,194,48,.25); }
+.v18-c4cell.r { background: #E5322D; border-color: #8A1B1B; animation: v18-deal .22s ease backwards; }
+.v18-c4cell.y { background: #F2C230; border-color: #8A6D1B; animation: v18-deal .22s ease backwards; }
+.v18-c4cell.win { outline: 3px solid #FFF6D8; outline-offset: 1px; }
+
+/* --- Golden Catch fish (DOM stage) --- */
+.v18-pond { position: relative; height: 260px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #0E332A, #070812); border: 1px solid rgba(242,194,48,.4); touch-action: none; -webkit-user-select: none; user-select: none; }
+.v18-fish { position: absolute; cursor: pointer; touch-action: manipulation; font-size: 30px; line-height: 1; transition: transform .15s ease; will-change: left, top; }
+.v18-fish:active { transform: scale(1.25); }
+.v18-fish .v { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); font-size: 10px; font-weight: 900; color: #F2C230; background: rgba(7,8,18,.75); border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v18-card, .v18-die, .v18-ball, .v18-c4cell.r, .v18-c4cell.y { animation: none; }
+  .v18-reel-strip { transition: none; }
+}
+
+/* --- Round 18 fixes: classes the rooms actually use ---
+   (The first pass of this sheet used .ring/.aim/.dart, .r/.y,
+   .marked and .v18-balls; the components use the .v18- names
+   below, so the board/bubbles/darts/discs rendered unstyled.) */
+
+/* Bingo Blitz: header letters + hit cells + drawn-balls row */
+.v18-bhead { font-size: 14px; font-weight: 900; color: #F2C230; text-align: center; }
+.v18-bcell.hit { background: linear-gradient(180deg, #FFD964, #F2C230 55%, #D9A41C); color: #231600; border-color: #F2C230; }
+.v18-drawn { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 34px; margin: 8px 0; }
+
+/* Bubble Shooter: the board, bubbles, aim line, shooter */
+.v18-bubbleboard { position: relative; height: 320px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #0E332A, #070812); border: 1px solid rgba(242,194,48,.4); touch-action: none; -webkit-user-select: none; user-select: none; cursor: crosshair; }
+.v18-bub { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 2px solid rgba(7,8,18,.5); box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+.v18-bub.fly { z-index: 3; }
+.v18-aimline { position: absolute; left: 50%; bottom: 32px; width: 2px; height: 220px; margin-left: -1px; background: repeating-linear-gradient(180deg, rgba(255,246,216,.75) 0 6px, transparent 6px 12px); transform-origin: bottom center; pointer-events: none; }
+.v18-shooter { position: absolute; left: 50%; bottom: 6px; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; border: 2px solid rgba(7,8,18,.5); box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+
+/* Bullseye Darts: rings / crosshair / landed darts (base rules;
+   the .r1–.r5 sizes above still apply via the r1..r5 classes) */
+.v18-dartboard .v18-ring { position: absolute; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%,-50%); }
+.v18-dartboard .v18-cross { position: absolute; font-size: 28px; font-weight: 900; line-height: 1; color: #FFF6D8; text-shadow: 0 0 4px #000, 0 0 2px #000; transform: translate(-50%,-50%); pointer-events: none; }
+.v18-dartboard .v18-dart { position: absolute; font-size: 20px; line-height: 1; color: #F2C230; text-shadow: 0 0 4px #000; transform: translate(-50%,-50%); pointer-events: none; }
+
+/* Gold Rush Derby: lane names + winner flag */
+.v18-hname { position: absolute; left: 6px; top: 2px; font-size: 10px; font-weight: 900; letter-spacing: .02em; z-index: 1; background: rgba(7,8,18,.7); border-radius: 999px; padding: 1px 7px; pointer-events: none; }
+.v18-winflag { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); font-size: 22px; line-height: 1; pointer-events: none; }
+
+/* Golden Catch: idle rod, centred */
+.v18-pondidle { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 64px; opacity: .55; pointer-events: none; }
+
+/* Connect Four: the disc colours the rooms actually apply */
+.v18-c4cell.gold { background: #F2C230; border-color: #8A6D1B; animation: v18-deal .22s ease backwards; }
+.v18-c4cell.red { background: #E5322D; border-color: #8A1B1B; animation: v18-deal .22s ease backwards; }
+
+/* ============ Round 19 — realistic visuals for the 15 new games ============
+   Drawn art with depth: gradients, shading, highlights, texture.
+   Visuals only — no logic, payouts or layout changes. These rules sit
+   last in the sheet so they override the round-18 rules above. */
+
+/* --- Golden Reels: a real machine cabinet, deep reel windows --- */
+.v18-reels { background: linear-gradient(180deg, #1A2436, #14213D 60%, #0E1626); border: 3px solid #C99612; border-radius: 16px; padding: 14px 10px 12px; box-shadow: 0 12px 32px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255,217,100,.3), inset 0 2px 0 rgba(255,246,216,.25); }
+.v18-reel { box-shadow: inset 0 5px 12px rgba(0,0,0,.4), inset 0 -5px 10px rgba(0,0,0,.22), inset 2px 0 4px rgba(0,0,0,.18), inset -2px 0 4px rgba(0,0,0,.18); border-width: 2px; }
+.v18-sym svg { width: 62px; height: 62px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+
+/* --- Cards: real faces — corner indices, centre pip, inner frame, court crowns; patterned back --- */
+.v18-card { position: relative; padding: 0; background: linear-gradient(160deg, #FFFFFF 0%, #FFF6D8 45%, #EFE3BC 100%); box-shadow: 0 5px 12px rgba(0,0,0,.45), inset 0 0 0 1px rgba(201,150,18,.55); }
+.v18-card::after { content: ""; position: absolute; inset: 4px; border: 1px solid rgba(201,150,18,.45); border-radius: 5px; pointer-events: none; }
+.v18-card .ci { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; font-style: normal; }
+.v18-card .ci b { font-size: 13px; font-weight: 900; }
+.v18-card .ci i { font-style: normal; font-size: 12px; line-height: 1.1; }
+.v18-card .ci.tl { top: 5px; left: 5px; }
+.v18-card .ci.br { bottom: 5px; right: 5px; transform: rotate(180deg); }
+.v18-card .cp { flex: 1; display: grid; place-items: center; }
+.v18-card .cps { font-style: normal; font-size: 30px; line-height: 1; text-shadow: 0 2px 0 rgba(0,0,0,.14); }
+.v18-card .cps.ace { font-size: 42px; }
+.v18-card .crown { width: 30px; height: 20px; display: block; margin-bottom: 1px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
+.v18-card.back { background: linear-gradient(140deg, #D9A41C, #8A6D1B 55%, #5C430A); }
+.v18-card.back .backpat { position: absolute; inset: 6px; border-radius: 5px; border: 1.5px solid rgba(255,246,216,.75); background-image: repeating-linear-gradient(45deg, rgba(255,246,216,.35) 0 1.5px, transparent 1.5px 9px), repeating-linear-gradient(-45deg, rgba(255,246,216,.35) 0 1.5px, transparent 1.5px 9px); }
+.v18-card.back::after { border-color: rgba(255,246,216,.5); }
+
+/* --- Sic Bo: ivory dice with shaded spherical pips, on a felt tray --- */
+.v18-dice { background: radial-gradient(ellipse 90% 90% at 50% 40%, #0E332A, #070812 85%); border: 1px solid rgba(242,194,48,.4); border-radius: 14px; padding: 12px 8px; box-shadow: inset 0 0 24px rgba(0,0,0,.5); }
+.v18-die { background: linear-gradient(145deg, #FFFFFF 0%, #FFF6D8 45%, #DCD2AC 100%); box-shadow: 0 5px 14px rgba(0,0,0,.5), inset 0 2px 2px rgba(255,255,255,.9), inset 0 -3px 5px rgba(0,0,0,.18); }
+.v18-die i { background: radial-gradient(circle at 35% 30%, #5A5A5A 0%, #14213D 55%, #000 100%); box-shadow: inset 0 -1px 1px rgba(0,0,0,.7), 0 1px 0 rgba(255,255,255,.75); }
+
+/* --- Tower Climb: carved stone tower, gold steps, cracked trap --- */
+.v18-tower { background: linear-gradient(180deg, #1A2436, #0C2B22); border: 1px solid rgba(242,194,48,.4); border-radius: 14px; padding: 10px; box-shadow: inset 0 0 24px rgba(0,0,0,.45); }
+.v18-ttile { background: linear-gradient(180deg, #4A505E, #2A2F3A 60%, #1C2029); border: 1px solid #14181F; box-shadow: inset 0 2px 0 rgba(255,255,255,.22), inset 0 -3px 0 rgba(0,0,0,.4), 0 2px 5px rgba(0,0,0,.4); }
+.v18-ttile.safe { background: linear-gradient(180deg, #FFE9A8, #F2C230 55%, #D9A41C); border-color: #F2C230; box-shadow: 0 0 14px rgba(242,194,48,.55), inset 0 2px 0 rgba(255,255,255,.6); }
+.v18-ttile.trap { background: radial-gradient(circle at 50% 40%, #FF6B62, #E5322D 55%, #7A0F0F); border-color: #7A0F0F; box-shadow: inset 0 0 0 2px rgba(0,0,0,.25), 0 0 12px rgba(229,50,45,.4); }
+.v18-tmark { width: 20px; height: 20px; display: block; margin: 0 auto; }
+
+/* --- Golden Catch: underwater light, sand, reeds; fish with wagging tails --- */
+.v18-pond { background: linear-gradient(180deg, #0E5A4A 0%, #0E332A 45%, #071A14 100%); }
+.v18-pond::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(105deg, rgba(255,246,216,.09) 0 14px, transparent 14px 46px); }
+.v18-pond::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 30px; pointer-events: none; background: linear-gradient(180deg, rgba(201,150,18,0), rgba(201,150,18,.35)), repeating-linear-gradient(90deg, transparent 0 26px, rgba(20,60,40,.9) 26px 30px, transparent 30px 58px); }
+.v18-fish { background: none; border: 0; padding: 0; filter: drop-shadow(0 3px 3px rgba(0,0,0,.5)); }
+.v18-fishart { display: block; }
+.v18-fishart .v18-tail { transform-box: fill-box; transform-origin: 100% 50%; animation: v18-wag .45s ease-in-out infinite alternate; }
+@keyframes v18-wag { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+.v18-pondidle { font-size: 0; }
+.v18-pondidle svg { width: 110px; height: 110px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+
+/* --- Gold Rush Derby: dirt track, finish post, galloping horses --- */
+.v18-track { background: linear-gradient(180deg, #7A5A1E, #5C430F 55%, #3A2A08); }
+.v18-track::after { content: ""; position: absolute; top: 0; bottom: 0; right: 12px; width: 7px; background: repeating-linear-gradient(180deg, #FFF6D8 0 8px, #14213D 8px 16px); opacity: .95; pointer-events: none; }
+.v18-lane { background: linear-gradient(180deg, rgba(255,246,216,.05), rgba(0,0,0,.14)); }
+.v18-horse { font-size: 0; }
+.v18-horse svg { width: 46px; height: 32px; display: block; filter: drop-shadow(0 3px 2px rgba(0,0,0,.55)); animation: v18-gallop .22s ease-in-out infinite alternate; }
+@keyframes v18-gallop { from { transform: translateY(0); } to { transform: translateY(-2px); } }
+.v18-silk { display: inline-block; width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(7,8,18,.6); vertical-align: -3px; box-shadow: inset 0 2px 0 rgba(255,255,255,.4); }
+.v18-winflag svg { width: 22px; height: 22px; display: block; }
+
+/* --- Bingo Blitz: a real cream card, coloured ball letters, daubed hits, glossy balls --- */
+.v18-bingo { background: linear-gradient(180deg, #FFFDF4, #EFE6C8); border: 2px solid #C99612; border-radius: 14px; padding: 10px; box-shadow: 0 8px 22px rgba(0,0,0,.5), inset 0 0 0 2px rgba(255,255,255,.6); }
+.v18-bhead { width: 100%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; color: #FFF6D8; text-shadow: 0 1px 2px rgba(0,0,0,.45); box-shadow: inset -2px -3px 5px rgba(0,0,0,.28), inset 2px 3px 4px rgba(255,255,255,.35); }
+.v18-bingo .v18-bhead:nth-child(1) { background: radial-gradient(circle at 35% 30%, #FF8A85, #E5322D 65%, #7A0F0F); }
+.v18-bingo .v18-bhead:nth-child(2) { background: radial-gradient(circle at 35% 30%, #7DE8DC, #2DD4BF 65%, #0F766E); }
+.v18-bingo .v18-bhead:nth-child(3) { background: radial-gradient(circle at 35% 30%, #FFE9A8, #F2C230 65%, #8A6D1B); }
+.v18-bingo .v18-bhead:nth-child(4) { background: radial-gradient(circle at 35% 30%, #8FE8A8, #3ED97E 65%, #1E6B2E); }
+.v18-bingo .v18-bhead:nth-child(5) { background: radial-gradient(circle at 35% 30%, #FFB3D9, #E879C6 65%, #8A2E63); }
+.v18-bcell { background: linear-gradient(180deg, #FFFDF4, #E7DFC6); border: 1px solid #C99612; color: #14213D; box-shadow: inset 0 2px 3px rgba(255,255,255,.8), inset 0 -2px 3px rgba(0,0,0,.12); }
+.v18-bcell.hit { background: radial-gradient(circle at 50% 38%, #FFE9A8, #F2C230 58%, #D9A41C); color: #231600; border-color: #8A6D1B; box-shadow: inset 0 0 0 2px rgba(138,109,27,.6), 0 0 12px rgba(242,194,48,.5); }
+.v18-bcell.free { background: radial-gradient(circle at 50% 38%, #14563F, #0C2B22); color: #F2C230; }
+.v18-freestar { width: 22px; height: 22px; display: block; }
+.v18-ball { background: radial-gradient(circle at 34% 28%, #FFFFFF 0%, #FFF6D8 32%, #E7DFC6 68%, #C99612 100%); box-shadow: inset -2px -3px 5px rgba(0,0,0,.28), 0 2px 5px rgba(0,0,0,.4); position: relative; }
+.v18-ball::after { content: ""; position: absolute; left: 7px; top: 5px; width: 8px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.95); transform: rotate(-25deg); }
+
+/* --- Stack Tower: sky, clouds, ground; blocks with a bevel --- */
+.v18-stack { background: linear-gradient(180deg, #0B1030 0%, #1B2A52 55%, #0E332A 100%); }
+.v18-stack::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(ellipse 60px 18px at 22% 18%, rgba(255,246,216,.28), transparent 70%), radial-gradient(ellipse 80px 22px at 74% 30%, rgba(255,246,216,.22), transparent 70%), radial-gradient(ellipse 50px 14px at 55% 12%, rgba(255,246,216,.2), transparent 70%); }
+.v18-stack::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 24px; pointer-events: none; background: linear-gradient(180deg, transparent, rgba(7,8,18,.55)), linear-gradient(180deg, #0C2B22, #071A14); border-top: 2px solid #F2C230; }
+.v18-block { box-shadow: inset 0 3px 0 rgba(255,255,255,.45), inset 0 -3px 0 rgba(0,0,0,.35), 0 3px 6px rgba(0,0,0,.5); border: 1px solid rgba(7,8,18,.55); }
+
+/* --- Bubble Shooter: glossy spheres with a specular highlight --- */
+.v18-bubbleboard { box-shadow: inset 0 0 44px rgba(45,212,191,.14); }
+.v18-bub { background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.3) 20%, var(--bub, #F2C230) 58%, rgba(7,8,18,.55) 100%); border: 1px solid rgba(255,255,255,.4); box-shadow: inset -2px -3px 5px rgba(0,0,0,.3), 0 2px 5px rgba(0,0,0,.35); }
+.v18-bub::after { content: ""; position: absolute; left: 4px; top: 3px; width: 8px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.95); transform: rotate(-25deg); }
+.v18-shooter { background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.3) 20%, var(--bub, #F2C230) 58%, rgba(7,8,18,.55) 100%); border: 1px solid rgba(255,255,255,.4); box-shadow: inset -2px -3px 5px rgba(0,0,0,.3), 0 2px 6px rgba(0,0,0,.4); }
+.v18-nextdot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: -2px; background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.3) 20%, var(--bub, #F2C230) 58%, rgba(7,8,18,.55) 100%); box-shadow: inset -1px -2px 3px rgba(0,0,0,.3); }
+
+/* --- Bullseye Darts: the real board fills the circle; darts + crosshair drawn --- */
+.v18-dartboard { background: #0A0A12; }
+.v18-boardart { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.v18-dartmark { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; pointer-events: none; z-index: 3; filter: drop-shadow(0 2px 2px rgba(0,0,0,.6)); }
+.v18-dartmark svg { width: 26px; height: 26px; display: block; }
+.v18-dartboard .v18-cross { width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 2px solid rgba(255,246,216,.92); border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,.45), inset 0 0 0 2px rgba(0,0,0,.3); font-size: 0; background: transparent; }
+.v18-dartboard .v18-cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #E5322D; box-shadow: 0 0 0 1.5px rgba(255,246,216,.9); }
+
+/* --- Connect Four: the classic yellow frame, glossy discs in dark holes --- */
+.v18-c4 { background: linear-gradient(180deg, #FFD964, #D9A41C); border: 2px solid #8A6D1B; box-shadow: 0 10px 24px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.5); }
+.v18-c4cell { background: radial-gradient(circle at 50% 42%, #0A0A12, #070812); border: 1px solid rgba(7,8,18,.7); box-shadow: inset 0 3px 6px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,255,255,.18); }
+.v18-c4cell.gold { background: radial-gradient(circle at 34% 28%, #FFF3C4 0%, #F2C230 55%, #B8860B 100%); border-color: #7A5200; box-shadow: inset -2px -3px 5px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.45); animation: v18-deal .22s ease backwards; }
+.v18-c4cell.red { background: radial-gradient(circle at 34% 28%, #FF8A85 0%, #E5322D 55%, #7A0F0F 100%); border-color: #7A0F0F; box-shadow: inset -2px -3px 5px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.45); animation: v18-deal .22s ease backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v18-fishart .v18-tail, .v18-horse svg { animation: none; }
+}

@@ -16,7 +16,7 @@ export default function AccountPage() {
 
   if (!user) {
     return (
-      <main className="rg48-page-main"><div className="wrap">
+      <main className="rg48-page-main rg23"><div className="wrap">
         <h2>My <em>account</em></h2>
         <p>Log in to see your account.</p>
         <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>Log in</button>
@@ -56,7 +56,7 @@ export default function AccountPage() {
   };
 
   return (
-    <main className="rg48-page-main">
+    <main className="rg48-page-main rg23">
       <div className="wrap">
         <div className="rg48-hbar-in">
           <Link className="gp-back" href="/" aria-label="Back"><span className="gp-back-coin">←</span></Link>

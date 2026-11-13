@@ -2,3 +2,111 @@
    Owned by the round-17 crash worker. Loaded last so these rules beat
    globals.css / v48.css. Brand tokens only: midnight #070812, felt
    #0C2B22, gold #F2C230, cream #FFF6D8, red #E5322D. */
+
+/* --- Flight stage: touch-native, no text selection on the canvas --- */
+.cr-stage {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* --- Crash moment: red flash + a short stage shake (mounts fresh
+ *  each crash, so the animation replays every round) --- */
+.cr-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(120% 120% at 50% 40%, rgba(229, 50, 45, .55), rgba(229, 50, 45, .18) 60%, transparent);
+  opacity: 0;
+}
+.cr-flash.on { animation: cr-flash .9s ease-out forwards; }
+@keyframes cr-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.cr-stage.is-crashed { animation: cr-shake .5s ease-out; }
+@keyframes cr-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+/* --- Multiplier: pulse while flying, red glow on crash, green on
+ *  cash-out. v48.css already styles .cr-mult b/span/.crashed/.cashed;
+ *  these add the motion + glow on top. --- */
+.cr-mult.flying b { animation: cr-mult-pulse .6s ease-in-out infinite; }
+@keyframes cr-mult-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.cr-mult.crashed b { text-shadow: 0 0 24px rgba(229, 50, 45, .8), 0 4px 22px rgba(0, 0, 0, .65); }
+.cr-mult.cashed b { text-shadow: 0 0 24px rgba(62, 217, 126, .7), 0 4px 22px rgba(0, 0, 0, .65); }
+
+/* --- Aviator "CRASHED ×N.NN" centre-stage overlay (Jet Fly reuses
+ *  the artifact's .jf-flew in v48.css; same look, red wording) --- */
+.cr-flew {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  pointer-events: none;
+  font-weight: 900;
+  letter-spacing: .14em;
+  font-size: clamp(15px, 3.4vw, 20px);
+  color: #FF8580;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, .8);
+  animation: cr-flew-in .35s ease-out;
+}
+.cr-flew b {
+  display: block;
+  font-family: var(--mono);
+  font-size: clamp(40px, 9vw, 64px);
+  letter-spacing: 0;
+  color: #fff;
+  margin-top: 2px;
+}
+@keyframes cr-flew-in {
+  from { opacity: 0; transform: scale(.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+.jf-flew { animation: cr-flew-in .35s ease-out; }
+
+/* --- Press feedback on the room action buttons (mobile-native:
+ *  :active, not :hover — touch has no hover) --- */
+.xg-action { touch-action: manipulation; }
+.xg-action:active { transform: scale(.97); }
+@media (hover: hover) and (pointer: fine) {
+  .xg-action:active { transform: none; }
+}
+
+/* --- Reduced motion: the flight still reads, without the shake,
+ *  pulse or flash --- */
+@media (prefers-reduced-motion: reduce) {
+  .cr-stage.is-crashed,
+  .cr-mult.flying b,
+  .cr-flash.on,
+  .cr-flew,
+  .jf-flew { animation: none; }
+  .cr-flash { display: none; }
+}
+
+/* ============ Round 17 — impress: premium crash stage ============
+   The big multiplier keeps its white face (the crashed red / cashed
+   green states still win on specificity) but gains a gold halo while
+   it flies; the provably-fair meta line becomes a gold-lit card. */
+.cr-mult b{
+  text-shadow:0 0 28px rgba(242,194,48,.5), 0 4px 22px rgba(0,0,0,.65);
+}
+.cr-meta{
+  border:1px solid rgba(242,194,48,.28);
+  border-radius:14px;
+  background:linear-gradient(180deg, rgba(20,26,48,.85), rgba(10,13,26,.9));
+  padding:10px 14px;
+}

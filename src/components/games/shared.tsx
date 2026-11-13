@@ -1,17 +1,18 @@
 // Shared game-room shell + settle hook. Every room follows the v48
-// standard pattern: Back coin button (icon-only, 48px, top-left), balance
-// beside the title, subtitle under, stats strip + history, stake chips.
-// Room headers are normal page flow — never sticky/fixed — so they
-// scroll away. Balances update server-side via POST /api/games/settle;
-// stats/history persist via /api/games/stats + /api/games/history.
+// standard pattern: GameRoomHeader on top (round 21 — back, the cash
+// balance AND the coins balance, REAL/SIM toggle, mute), subtitle
+// under, stats strip + history, stake chips. Room headers are normal
+// page flow — never sticky/fixed — so they scroll away. Balances
+// update server-side via POST /api/games/settle; stats/history persist
+// via /api/games/stats + /api/games/history.
 // In SIM mode, cash games play against the session SIM counter only.
 
 "use client";
 
-import Link from "next/link";
 import React, { useCallback, useEffect, useState } from "react";
 import { api, fmtCash, fmtCoins, GameHistoryRow, GameStat, money } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import GameRoomHeader from "../GameRoomHeader";
 import { playSfx, useStore } from "../../lib/store";
 
 export interface SettleResult {
@@ -28,6 +29,11 @@ export function useGameRoom(game: GameDef) {
   const [stats, setStats] = useState<GameStat | null>(null);
   const [history, setHistory] = useState<GameHistoryRow[]>([]);
   const [busy, setBusy] = useState(false);
+  // SIM-mode stats: the server only records REAL rounds, so SIM rounds
+  // never moved the stats strip (PLAYED stayed 0 while playing SIM).
+  // Mirror the server /api/games/stats definition locally, persisted
+  // per game in localStorage so SIM counts are cumulative like REAL.
+  const [simStats, setSimStats] = useState<GameStat | null>(null);
 
   const loadStats = useCallback(async () => {
     if (!user) return;
@@ -48,6 +54,15 @@ export function useGameRoom(game: GameDef) {
   const balance = isCoin ? wallet?.coins ?? user?.coins ?? 0 : simMode ? simSession ?? wallet?.sim ?? 0 : wallet?.cash ?? user?.cash ?? 0;
   const balText = isCoin ? `${fmtCoins(balance)} coins` : simMode ? `SIM ${Math.round(balance).toLocaleString("en-GH")}` : fmtCash(balance);
 
+  // Load this game's persisted SIM stats when SIM mode is on.
+  useEffect(() => {
+    if (!simMode) return;
+    try {
+      const all = JSON.parse(localStorage.getItem("rg-sim-stats") || "{}") as Record<string, GameStat>;
+      setSimStats(all[game.slug] ?? null);
+    } catch { /* ignore */ }
+  }, [game.slug, simMode]);
+
   /** Settle one round. Returns true on success. */
   const settle = useCallback(async (stake: number, payout: number, result: Record<string, unknown> = {}, roundId?: string): Promise<boolean> => {
     if (!user) { openAuth("login"); return false; }
@@ -63,6 +78,27 @@ export function useGameRoom(game: GameDef) {
         const won = payout > stake;
         toast(won ? `You won ${fmtCash(payout)} (SIM)` : payout > 0 ? `${fmtCash(payout)} back (SIM)` : `You lost ${fmtCash(stake)} (SIM)`, won ? "win" : "lose");
         if (won) playSfx("cheer", muted); else playSfx("groan", muted);
+        // SIM stats: same definition as the server (/api/games/stats) —
+        // played+1, win iff payout > stake, best = max profit, streak =
+        // the current run of consecutive wins. Persisted per game.
+        const profit = payout - stake;
+        setSimStats((prev) => {
+          const p = prev ?? { game: game.slug, played: 0, wins: 0, losses: 0, streak: 0, best: 0 };
+          const next: GameStat = {
+            game: game.slug,
+            played: p.played + 1,
+            wins: p.wins + (won ? 1 : 0),
+            losses: p.losses + (won ? 0 : 1),
+            streak: won ? p.streak + 1 : 0,
+            best: Math.max(p.best, profit),
+          };
+          try {
+            const all = JSON.parse(localStorage.getItem("rg-sim-stats") || "{}") as Record<string, GameStat>;
+            all[game.slug] = next;
+            localStorage.setItem("rg-sim-stats", JSON.stringify(all));
+          } catch { /* ignore */ }
+          return next;
+        });
         setHistory((h) => [{ id: `sim-${Date.now()}`, game: game.slug, currency: "cash", stake, payout, result, createdAt: new Date().toISOString() }, ...h].slice(0, 20));
         return true;
       }
@@ -90,7 +126,12 @@ export function useGameRoom(game: GameDef) {
     setHistory((h) => [row, ...h].slice(0, 20));
   }, []);
 
-  return { user, wallet, mode, muted, stats, history, busy, balance, balText, simMode, isCoin, settle, pushHistory, refreshStats: loadStats, refresh };
+  // In SIM mode the strip shows the local SIM stats (the server only
+  // records REAL rounds); in REAL mode it shows the server stats.
+  const displayStats: GameStat | null = simMode
+    ? simStats ?? { game: game.slug, played: 0, wins: 0, losses: 0, streak: 0, best: 0 }
+    : stats;
+  return { user, wallet, mode, muted, stats: displayStats, history, busy, balance, balText, simMode, isCoin, settle, pushHistory, refreshStats: loadStats, refresh };
 }
 
 export function StakeChips({ stake, setStake, currency, disabled }: { stake: number; setStake: (n: number) => void; currency: "cash" | "coins"; disabled?: boolean }) {
@@ -190,50 +231,17 @@ export function RoomShell({ game, subtitle, children, stats, history, bare }: {
   history: GameHistoryRow[];
   bare?: boolean;
 }) {
-  const { mode, setMode, muted, toggleMute, user, wallet, simSession, topUpSim } = useStore();
-  const isCoin = game.currency === "coins";
-  const simMode = mode === "SIM" && !isCoin;
-  const balance = isCoin ? wallet?.coins ?? user?.coins ?? 0 : simMode ? simSession ?? wallet?.sim ?? 0 : wallet?.cash ?? user?.cash ?? 0;
-  const balText = isCoin ? `${fmtCoins(balance)} coins` : simMode ? `SIM ${Math.round(balance).toLocaleString("en-GH")}` : fmtCash(balance);
-
+  // Round 21: the header (balances, mode, mute) lives in
+  // GameRoomHeader now — RoomShell only renders the subtitle, the
+  // game, the stats strip and the history.
   return (
     <div className="xgame-room">
-      {/* Round 8: bare variant (homepage Bottle section) renders no
-          xg-bar at all — no back link, no title, no balance, no REAL/SIM
-          bar, no mute, no v48 pill. The homepage is not supposed to
-          have those; the header already carries the mode switch. */}
-      {!bare && (
-      <div className="xg-bar">
-        <div className="wrap xg-bar-in">
-          <Link className="xg-back xg-back-icon" href="/games" aria-label="Back to all games">←</Link>
-          <div className="xg-head">
-            {/* Round 9: no game name in any room's top bar — the user
-                wants the title gone from every game. The mode bar
-                carries margin-left:auto, so it still sits at the right
-                end of the bar, after the back coin. */}
-            <div className="xg-mode">
-              <span className="xg-bal">{balText}</span>
-              {/* Round 12: SIM runs out mid-session with no way back —
-                  the top-up lives next to the balance, where the
-                  "Not enough SIM — top up to play" toast fires. */}
-              {simMode && (
-                <button type="button" className="xg-topup" onClick={topUpSim}>Top up SIM</button>
-              )}
-              {!isCoin && (
-                <span className="xg-mode-btns" role="group" aria-label="Real or SIM cash">
-                  <button type="button" aria-pressed={mode === "REAL"} className={mode === "REAL" ? "on" : ""} onClick={() => setMode("REAL")}>REAL</button>
-                  <button type="button" aria-pressed={mode === "SIM"} className={mode === "SIM" ? "on" : ""} onClick={() => setMode("SIM")}>SIM</button>
-                </span>
-              )}
-              <button className="icon-btn xg-mute" type="button" aria-label={muted ? "Unmute" : "Mute"} onClick={toggleMute}>
-                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4z" />{muted ? <path stroke="#E5322D" strokeWidth="2.4" strokeLinecap="round" d="M16.5 9.5l5 5M21.5 9.5l-5 5" /> : <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M16 9.5a3.4 3.4 0 0 1 0 5M18.4 7a6.6 6.6 0 0 1 0 10" />}</svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        <span className="xg-ver" aria-hidden="true">v48</span>
-      </div>
-      )}
+      {/* Round 21: the room header is GameRoomHeader now — back, the
+          cash balance AND the coins balance, the REAL/SIM toggle and
+          the sound toggle. The old .xg-bar (one balance, no coins
+          pill) is gone. The bare variant (homepage Bottle section)
+          still renders no header at all. */}
+      {!bare && <GameRoomHeader />}
       <div className="wrap">
         <p className="xg-sub">{subtitle}</p>
         {children}

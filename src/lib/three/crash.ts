@@ -332,6 +332,36 @@ function backdropTexture(withCity: boolean): THREE.CanvasTexture {
     x.arc(Math.random() * 1024, Math.random() * 300, Math.random() * 1.8 + 0.4, 0, 7);
     x.fill();
   }
+  // Warm dusk band hugging the horizon + a glowing moon and soft
+  // clouds, so the night sky reads as a real sky, not a flat grid.
+  const hz = x.createLinearGradient(0, 380, 0, 500);
+  hz.addColorStop(0, "rgba(201,122,46,0)");
+  hz.addColorStop(1, "rgba(201,122,46,.34)");
+  x.fillStyle = hz;
+  x.fillRect(0, 380, 1024, 120);
+  const mg = x.createRadialGradient(880, 84, 4, 880, 84, 90);
+  mg.addColorStop(0, "rgba(255,246,216,.9)");
+  mg.addColorStop(0.3, "rgba(255,232,154,.3)");
+  mg.addColorStop(1, "rgba(255,232,154,0)");
+  x.fillStyle = mg;
+  x.beginPath(); x.arc(880, 84, 90, 0, 7); x.fill();
+  x.fillStyle = "#FFF6D8";
+  x.beginPath(); x.arc(880, 84, 26, 0, 7); x.fill();
+  x.fillStyle = "rgba(180,160,110,.55)";
+  x.beginPath(); x.arc(871, 77, 5, 0, 7); x.arc(889, 93, 4, 0, 7); x.fill();
+  const cloud = (cx: number, cy: number, s: number, a: number) => {
+    const cg2 = x.createRadialGradient(cx, cy, 1, cx, cy, 90 * s);
+    cg2.addColorStop(0, `rgba(255,235,210,${a})`);
+    cg2.addColorStop(1, "rgba(255,235,210,0)");
+    x.fillStyle = cg2;
+    x.beginPath();
+    x.ellipse(cx, cy, 90 * s, 26 * s, 0, 0, 7);
+    x.fill();
+  };
+  cloud(300, 130, 1.2, 0.14);
+  cloud(620, 90, 0.9, 0.11);
+  cloud(180, 250, 1.4, 0.09);
+  cloud(760, 220, 1.1, 0.08);
   if (withCity) {
     x.fillStyle = "#070B18";
     let bx = 0;
@@ -346,9 +376,118 @@ function backdropTexture(withCity: boolean): THREE.CanvasTexture {
       x.fillRect(Math.random() * 1024, 500 + Math.random() * 70, 2.4, 3);
     }
   }
+  // Runway strip along the bottom: tarmac band + gold dashed
+  // centreline, sitting just under the parked craft (world y ≈ -3).
+  x.fillStyle = "#080D1D";
+  x.fillRect(0, 468, 1024, 72);
+  x.strokeStyle = "rgba(242,194,48,.5)";
+  x.lineWidth = 2;
+  x.setLineDash([18, 14]);
+  x.beginPath();
+  x.moveTo(0, 504);
+  x.lineTo(1024, 504);
+  x.stroke();
+  x.setLineDash([]);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+/** Glowing trail ribbon under the flight curve — a flat quad strip
+ *  that follows the curve points, gold at the head fading to nothing
+ *  at the tail (additive blending: black = invisible). A 1px
+ *  LineBasicMaterial can't carry a glow; the ribbon can. */
+interface Ribbon {
+  mesh: THREE.Mesh;
+  pos: Float32Array;
+  col: Float32Array;
+}
+
+function makeTrailRibbon(scene: THREE.Scene): Ribbon {
+  const N = 80;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(3 * 2 * N);
+  const col = new Float32Array(3 * 2 * N);
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  const idx: number[] = [];
+  for (let i = 0; i < N - 1; i++) {
+    const a = i * 2;
+    idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  mesh.frustumCulled = false;
+  scene.add(mesh);
+  return { mesh, pos, col };
+}
+
+function updateTrailRibbon(
+  r: Ribbon,
+  pts: [number, number][],
+  halfW: number,
+): void {
+  const N = pts.length;
+  for (let i = 0; i < N; i++) {
+    const p = pts[i];
+    const pn = pts[Math.min(N - 1, i + 1)];
+    const pp = pts[Math.max(0, i - 1)];
+    let dx = pn[0] - pp[0];
+    let dy = pn[1] - pp[1];
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    const nx = -dy * halfW;
+    const ny = dx * halfW;
+    const f = Math.pow(i / (N - 1), 1.6);
+    const cr = 1.0 * f;
+    const cg = 0.82 * f;
+    const cb = 0.32 * f;
+    const o = i * 6;
+    r.pos[o] = p[0] + nx;
+    r.pos[o + 1] = p[1] + ny;
+    r.pos[o + 2] = 0;
+    r.pos[o + 3] = p[0] - nx;
+    r.pos[o + 4] = p[1] - ny;
+    r.pos[o + 5] = 0;
+    r.col[o] = cr;
+    r.col[o + 1] = cg;
+    r.col[o + 2] = cb;
+    r.col[o + 3] = cr;
+    r.col[o + 4] = cg;
+    r.col[o + 5] = cb;
+  }
+  r.mesh.geometry.attributes.position.needsUpdate = true;
+  r.mesh.geometry.attributes.color.needsUpdate = true;
+}
+
+/** Full-frame red flash quad for the crash moment. Oversized on
+ *  purpose (bigger than the frustum at its standoff) so it always
+ *  covers the view; opacity spikes on crash and decays per frame. */
+function makeFlashQuad(scene: THREE.Scene): THREE.Mesh {
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(40, 24),
+    new THREE.MeshBasicMaterial({
+      color: 0xe5322d,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      depthTest: false,
+    }),
+  );
+  mesh.renderOrder = 999;
+  mesh.position.set(0, 0.6, 7);
+  scene.add(mesh);
+  return mesh;
 }
 
 function makeCurveLine(scene: THREE.Scene): {
@@ -394,6 +533,10 @@ export class CrashScene {
   private skin: CrashSkin;
   private curvePos: Float32Array;
   private curveLine: THREE.Line;
+  private ribbon: Ribbon;
+  private flash: THREE.Mesh;
+  private flashOp = 0;
+  private lastVehState: CrashSceneState["vehState"] = "idle";
   private exhaustPos: Float32Array;
   private exhaust: THREE.Points;
   private exhaustMat: THREE.PointsMaterial;
@@ -437,6 +580,8 @@ export class CrashScene {
     const curve = makeCurveLine(st.scene);
     this.curveLine = curve.line;
     this.curvePos = curve.pos;
+    this.ribbon = makeTrailRibbon(st.scene);
+    this.flash = makeFlashQuad(st.scene);
     const ex = makeExhaust(st.scene);
     this.exhaust = ex.points;
     this.exhaustPos = ex.pos;
@@ -482,14 +627,23 @@ export class CrashScene {
     const elapsed = s.elapsed;
     const span = Math.max(10, elapsed * 1.15);
     const maxLog = Math.log(Math.max(m * 1.35, 2.2));
+    const pts: [number, number][] = [];
     for (let i = 0; i < 80; i++) {
       const t = (elapsed * i) / 79;
       const p = this.curvePoint(t, span, maxLog);
+      pts.push(p);
       this.curvePos[i * 3] = p[0];
       this.curvePos[i * 3 + 1] = p[1];
       this.curvePos[i * 3 + 2] = 0;
     }
     this.curveLine.geometry.attributes.position.needsUpdate = true;
+    updateTrailRibbon(this.ribbon, pts, 0.09);
+    // Crash flash: spike on the crash transition, decay per frame.
+    if (s.vehState === "crash" && this.lastVehState !== "crash") this.flashOp = 0.55;
+    this.lastVehState = s.vehState;
+    this.flashOp *= 0.9;
+    (this.flash.material as THREE.MeshBasicMaterial).opacity = this.flashOp;
+    this.flash.position.set(0, 0.6, this.cam.position.z - 2);
     const head = this.curvePoint(elapsed, span, maxLog);
     const prev = this.curvePoint(Math.max(0, elapsed - 0.4), span, maxLog);
     const veh = this.vehicles[SKIN_VEH[this.skin]];
@@ -568,6 +722,9 @@ export class JetScene {
   private jet: THREE.Group;
   private curvePos: Float32Array;
   private curveLine: THREE.Line;
+  private ribbon: Ribbon;
+  private flash: THREE.Mesh;
+  private flashOp = 0;
   private exhaustPos: Float32Array;
   private exhaust: THREE.Points;
   private exhaustMat: THREE.PointsMaterial;
@@ -604,6 +761,8 @@ export class JetScene {
     const curve = makeCurveLine(st.scene);
     this.curveLine = curve.line;
     this.curvePos = curve.pos;
+    this.ribbon = makeTrailRibbon(st.scene);
+    this.flash = makeFlashQuad(st.scene);
     const ex = makeExhaust(st.scene);
     this.exhaust = ex.points;
     this.exhaustPos = ex.pos;
@@ -655,14 +814,22 @@ export class JetScene {
     const m = s.mult;
     const elapsed = s.elapsed;
     const hp = this.headPoint(m, elapsed);
+    const pts: [number, number][] = [];
     for (let i = 0; i < 80; i++) {
       const t = (elapsed * i) / 79;
       const p = this.curvePoint(t, hp.span, hp.maxLog);
+      pts.push(p);
       this.curvePos[i * 3] = p[0];
       this.curvePos[i * 3 + 1] = p[1];
       this.curvePos[i * 3 + 2] = 0;
     }
     this.curveLine.geometry.attributes.position.needsUpdate = true;
+    updateTrailRibbon(this.ribbon, pts, 0.09);
+    // Crash flash: spike on the fly-away transition, decay per frame.
+    if (s.vehState === "away" && this.lastVehState !== "away") this.flashOp = 0.55;
+    this.flashOp *= 0.9;
+    (this.flash.material as THREE.MeshBasicMaterial).opacity = this.flashOp;
+    this.flash.position.set(0, 0.6, this.cam.position.z - 2);
     const head = hp.pt;
     const prev = this.curvePoint(Math.max(0, elapsed - 0.4), hp.span, hp.maxLog);
     // Pitch capped at ~31°: the raw curve slope at takeoff (~37°) would
@@ -673,10 +840,11 @@ export class JetScene {
     );
     this.lastAng = ang;
 
-    // v41: NO exit. At the crash point the jet levels off into a small
-    // banked holding pattern around the crash point, clamped inside
-    // the safe box. awayPos is fixed from the last running frame, as
-    // the artifact's doCrash did.
+    // Crash: the jet FLIES AWAY. It climbs steeply off the crash
+    // point toward the top-right, banking up and shrinking into the
+    // distance, clamped inside the SAFE box — it never leaves the
+    // stage (v41), it just flies away from the curve. awayPos is
+    // fixed from the last running frame, as the artifact's doCrash did.
     if (s.vehState === "away" && this.lastVehState !== "away") {
       const h = this.curvePoint(this.lastElapsed, this.lastSpan, this.lastMaxLog);
       this.awayPos = { x: h[0], y: h[1], ang: this.lastAng };
@@ -686,21 +854,25 @@ export class JetScene {
 
     if (s.vehState === "away" && this.awayPos) {
       const ht = (performance.now() - s.vehT0) / 1000;
+      const dir = Math.max(this.awayPos.ang, 0.55);
+      const dist = Math.min(ht * 1.7, 2.6);
       const hp2 = clampJet(
-        this.awayPos.x + Math.sin(ht * 2.4) * 0.3,
-        this.awayPos.y + Math.cos(ht * 2.4) * 0.2,
+        this.awayPos.x + Math.cos(dir) * dist,
+        this.awayPos.y + Math.sin(dir) * dist,
       );
-      if (hp2[0] < -1.9) hp2[0] = -1.9; // banking near the left edge must not swing the tail out
+      const sc = Math.max(0.35, 1 - ht * 0.28);
       this.jet.visible = true;
+      this.jet.scale.setScalar(sc);
       this.jet.position.set(hp2[0], hp2[1], 0);
-      this.jet.rotation.z =
-        this.awayPos.ang * 0.3 + Math.sin(ht * 2.4) * 0.26;
+      this.jet.rotation.z = dir + Math.min(0.5, ht * 0.25);
     } else if (s.vehState === "fly" || s.phase === "running") {
       this.jet.visible = true;
+      this.jet.scale.setScalar(1);
       this.jet.position.set(head[0], head[1], 0);
       this.jet.rotation.z = ang;
     } else {
       this.jet.visible = true;
+      this.jet.scale.setScalar(1);
       this.jet.position.set(
         IDLE_POS[0],
         IDLE_POS[1] + Math.sin(performance.now() / 480) * 0.06,
@@ -726,9 +898,11 @@ export class JetScene {
     }
     this.exhaust.geometry.attributes.position.needsUpdate = true;
     this.exhaustMat.opacity =
-      s.phase === "running"
-        ? Math.min(0.9, 0.35 + Math.log(Math.max(m, 1)) * 0.18)
-        : 0.25;
+      s.vehState === "away"
+        ? Math.max(0, 0.5 - ((performance.now() - s.vehT0) / 1000) * 0.4)
+        : s.phase === "running"
+          ? Math.min(0.9, 0.35 + Math.log(Math.max(m, 1)) * 0.18)
+          : 0.25;
     this.cam.position.z =
       9.5 + Math.min(3.5, Math.log(Math.max(m, 1)) * 1.1);
     this.cam.lookAt(0, 0.6, 0);

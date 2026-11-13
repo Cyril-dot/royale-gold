@@ -447,3 +447,278 @@ html{overflow-x:clip}
    margin is the only separation the homepage needs. Scoped to #games so
    the /games page sticky bar keeps its own margin. --- */
 #games .gp-filters{margin-top:0}
+
+/* ================= Round 23 — IMPRESS PASS =================
+   Maximal polish, look-and-feel ONLY. No copy, route, API, payout,
+   economy, balance or behaviour change; no button, link or control
+   removed. One bold move: gold LIGHT + deep felt DEPTH — a warm radial
+   glow at every focal point, hairline gold edges, real shadows, air.
+   Everything else stays disciplined: same tokens, same type, same copy.
+
+   SPECIFICITY: globals.css loads BEFORE v48.css and the later sheets,
+   so every override here outranks the base by construction:
+   - homepage rules ride on main#top (the ID beats any class chain);
+   - settings/account/admin rules ride on main.rg48-page-main.rg23 —
+     the rg23 class is added to those pages' <main> ONLY, so the wallet
+     and owner pages (same base class, no rg23) are untouched;
+   - the only whole-site rules are behaviour-neutral (selection colour,
+     focus ring, tap highlight, scrollbar, button press scale).
+   Hover effects live in ONE capability-gated block at the end.
+   Deliberately untouched: header, dock, wallet, game rooms, games
+   page, GameTile, covers, toasts, auth/deposit modals, owner panel.
+   The red 18+ badge (.age) keeps its red — that colour is the warning.
+   ============================================================== */
+
+/* --- A. Global premium layer (whole site, behaviour-neutral) --- */
+::selection{background:#F2C230;color:#231600}
+html{-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:2px solid rgba(242,194,48,.75);outline-offset:2px}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#2A2F45;border-radius:8px;border:2px solid #070812}
+::-webkit-scrollbar-thumb:hover{background:#9A7410}
+::-webkit-scrollbar-track{background:transparent}
+html body .btn:active{transform:scale(.97)}
+
+/* --- B. Homepage (main#top only — the games page is main.gpage) --- */
+main#top section.hero.hero{
+  background:
+    radial-gradient(1000px 520px at 85% -6%,rgba(242,194,48,.17),transparent 60%),
+    radial-gradient(760px 480px at 4% 96%,rgba(12,43,34,.95),transparent 65%),
+    radial-gradient(620px 300px at 50% 0%,rgba(242,194,48,.06),transparent 70%),
+    var(--bg);
+}
+main#top .hero-kicker{
+  background:rgba(242,194,48,.1);border-color:rgba(242,194,48,.55);
+  box-shadow:0 0 0 1px rgba(242,194,48,.08),0 6px 22px rgba(242,194,48,.14);
+}
+main#top h1.headline .gold-word{
+  background:linear-gradient(180deg,#FFE89A 0%,#F2C230 52%,#D9A41C 100%);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+}
+main#top .slot-frame{
+  border-color:var(--gold-2);
+  box-shadow:0 18px 44px rgba(0,0,0,.65),inset 0 0 0 3px rgba(242,194,48,.16),0 0 44px rgba(242,194,48,.28);
+}
+main#top .slot-note .win-msg{color:#3ED97E;text-shadow:0 0 14px rgba(62,217,126,.4)}
+main#top .hero-sub{color:#D8D2B8}
+main#top .hero-sub b{color:var(--gold-2)}
+main#top .trust-row div::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px rgba(242,194,48,.8);flex:none}
+main#top .hero-stats{border-color:rgba(242,194,48,.35);box-shadow:0 16px 36px rgba(0,0,0,.4)}
+main#top .hero-stats div{background:linear-gradient(180deg,#182238,#10152A)}
+main#top .hero-stats b{color:var(--gold-2);text-shadow:0 0 16px rgba(242,194,48,.3)}
+main#top .hero-stats span{color:#9A9E8A}
+main#top .hero-cta .btn-gold{position:relative;overflow:hidden}
+main#top .hero-cta .btn-gold::after{
+  content:"";position:absolute;top:0;bottom:0;left:0;width:42%;pointer-events:none;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.5),transparent);
+  transform:translateX(-180%) skewX(-18deg);animation:rg23Sheen 6.5s ease-in-out infinite;
+}
+@keyframes rg23Sheen{0%{transform:translateX(-180%) skewX(-18deg)}55%,100%{transform:translateX(480%) skewX(-18deg)}}
+main#top .stage{border-color:rgba(242,194,48,.5);box-shadow:0 30px 70px rgba(0,0,0,.6),0 0 44px rgba(242,194,48,.12)}
+main#top .jackpot{border-color:rgba(242,194,48,.55);box-shadow:0 14px 30px rgba(0,0,0,.5),0 0 24px rgba(242,194,48,.14)}
+main#top .jackpot .jp-val,
+main#top .jackpot-strip .jp-val{
+  background:linear-gradient(180deg,#FFF6D8,#FFD964 55%,#F2C230);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+}
+main#top .jackpot-strip{border:1px solid rgba(242,194,48,.5);background:rgba(5,8,15,.9);box-shadow:0 10px 26px rgba(0,0,0,.45),0 0 22px rgba(242,194,48,.12)}
+main#top .online-chip{border-color:rgba(62,217,126,.4);box-shadow:0 10px 24px rgba(0,0,0,.45)}
+main#top .stage-caption{border-color:rgba(242,194,48,.3)}
+main#top .marquee{border-block-color:rgba(242,194,48,.55);box-shadow:0 0 30px rgba(242,194,48,.07)}
+main#top .mq-item{color:#C9CDB6}
+main#top .mq-item b{text-shadow:0 0 12px rgba(242,194,48,.4)}
+@media (min-width:1020px){main#top section.block{padding:84px 0 14px}}
+main#top .sec-head{margin-bottom:30px}
+main#top .sec-tag::after{flex-basis:72px;background:linear-gradient(90deg,var(--line-gold),transparent);box-shadow:0 0 12px rgba(242,194,48,.4)}
+main#top .sec-head h2 em{
+  background:linear-gradient(180deg,#FFE89A,#F2C230 60%,#D9A41C);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+}
+main#top .games .game{
+  border-color:rgba(255,246,216,.16);box-shadow:0 14px 30px rgba(0,0,0,.4);
+  transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease;
+}
+main#top .games .game .g-info{border-top-color:rgba(242,194,48,.55)}
+/* Round 23 — homepage tile pills: v48 pins .g-mult absolute at top:52px and
+   .g-topwin (TOP ×n) at top:46px, which lands ON the title row of normal tiles
+   (their info band starts ~38px down, title at 53px), so long titles were
+   clipped under the pills. A 172px tile with a ~134px info band leaves no free
+   row for the pills at that height, so give the grid taller rows where the
+   pills show (desktop/tablet) — the art area then clears the title. Phone
+   keeps v48's rows: the pills are hidden there and the info band is compact.
+   The mult pill is also tightened (30px) for extra clearance. */
+@media (min-width:641px){main#top .games{grid-auto-rows:210px}}
+main#top .games .game .g-mult{padding:4px 10px}
+main#top .fchip[aria-pressed="true"]{
+  background:linear-gradient(180deg,var(--gold-2),var(--gold) 60%,#D9A41C);
+  box-shadow:0 10px 22px rgba(242,194,48,.3);
+}
+main#top .games-more{border:1px solid var(--line-gold);color:var(--gold-2);background:rgba(242,194,48,.07)}
+@media (min-width:701px){main#top .podium{gap:16px}}
+main#top .pod-1 .base{
+  background:linear-gradient(180deg,rgba(242,194,48,.34),rgba(242,194,48,.08));
+  box-shadow:0 0 30px rgba(242,194,48,.22),inset 0 1px 0 rgba(255,232,154,.5);
+}
+main#top .pod-1 .ava{box-shadow:0 0 0 3px rgba(242,194,48,.35),0 10px 24px rgba(242,194,48,.35)}
+main#top .pod .amt{text-shadow:0 0 14px rgba(62,217,126,.35)}
+main#top .pod-rest{border-color:rgba(242,194,48,.25);box-shadow:0 16px 36px rgba(0,0,0,.4)}
+main#top .live-feed{
+  border-color:rgba(242,194,48,.3);
+  background:linear-gradient(180deg,#182238,#10152A);
+  box-shadow:0 18px 40px rgba(0,0,0,.45);
+}
+main#top .live-feed h3{font-size:17px}
+main#top .live-feed .feed-list{gap:2px}
+main#top .live-feed .feed-row{display:flex;align-items:baseline;gap:8px;padding:11px 4px;border-bottom:1px solid rgba(255,246,216,.08)}
+main#top .live-feed .feed-row:last-child{border-bottom:0}
+main#top .live-feed .feed-row b{color:var(--ink);font-size:14px;white-space:nowrap}
+main#top .live-feed .feed-row span{color:var(--muted);font-size:13px}
+main#top .live-feed .feed-row small{color:var(--faint);font-size:12px;margin-left:auto;white-space:nowrap}
+main#top .verb{
+  border-color:rgba(242,194,48,.35);
+  box-shadow:0 22px 48px rgba(0,0,0,.5),inset 0 1px 0 rgba(242,194,48,.25);
+  transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease;
+}
+main#top .verb::after{
+  content:"";position:absolute;top:0;left:24px;right:24px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,rgba(242,194,48,.8),transparent);
+}
+main#top .verb .vnum{color:var(--gold-2);text-shadow:0 0 12px rgba(242,194,48,.35)}
+main#top .verb h3 em{
+  background:linear-gradient(180deg,#FFE89A,#F2C230 60%,#D9A41C);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+}
+main#top .promo-gold{box-shadow:0 26px 54px rgba(242,194,48,.28),0 0 0 1px rgba(255,232,154,.35)}
+main#top .promo-gold::before{
+  content:"";position:absolute;top:0;bottom:0;left:0;width:38%;pointer-events:none;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.28),transparent);
+  transform:translateX(-220%) skewX(-14deg);animation:rg23Sheen 7s ease-in-out infinite;
+}
+main#top .promo-gold .big{text-shadow:0 2px 0 rgba(35,22,0,.12)}
+main#top .faq details{border-radius:14px}
+main#top .faq details[open]{
+  background:linear-gradient(180deg,rgba(242,194,48,.06),rgba(242,194,48,.02));
+  box-shadow:inset 3px 0 0 var(--gold);
+}
+main#top .faq summary{padding:20px 12px}
+main#top .resp{
+  border-color:rgba(242,194,48,.5);
+  background:linear-gradient(180deg,#182238,#10152A);
+  box-shadow:0 18px 40px rgba(0,0,0,.4);
+}
+main#top footer.site{box-shadow:inset 0 1px 0 rgba(242,194,48,.4)}
+main#top .foot-name{
+  background:linear-gradient(180deg,#FFF6D8 0%,#FFD964 45%,#F2C230 70%,#9A7410 100%);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+  filter:drop-shadow(0 8px 30px rgba(242,194,48,.22));
+}
+
+/* --- C. Settings / Account / Admin (main.rg48-page-main.rg23 only) --- */
+main.rg48-page-main.rg23{
+  background:
+    radial-gradient(900px 320px at 50% -90px,rgba(242,194,48,.1),transparent 70%),
+    radial-gradient(700px 400px at 100% 0%,rgba(12,43,34,.5),transparent 60%);
+}
+main.rg48-page-main.rg23 .rg48-hbar-in{border-bottom:1px solid rgba(242,194,48,.35);padding-bottom:14px;margin-bottom:8px}
+main.rg48-page-main.rg23 .rg48-hbar-in h2{letter-spacing:.01em}
+main.rg48-page-main.rg23 .rg48-sub{color:#C9CDB6;font-size:14.5px}
+main.rg48-page-main.rg23 .rg48-mini{color:#A9AD97}
+main.rg48-page-main.rg23 .admin-sec{
+  position:relative;
+  background:linear-gradient(180deg,#182238,#10152A 62%,#0C1424);
+  border:1px solid rgba(242,194,48,.3);
+  border-radius:20px;padding:22px;margin:18px 0;
+  box-shadow:0 18px 42px rgba(0,0,0,.45);
+}
+main.rg48-page-main.rg23 .admin-sec::before{
+  content:"";position:absolute;top:0;left:22px;right:22px;height:2px;border-radius:2px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(242,194,48,.75),transparent);
+}
+main.rg48-page-main.rg23 .admin-sec.referral-sec{
+  background:linear-gradient(180deg,rgba(242,194,48,.13),rgba(12,43,34,.4) 70%),#141828;
+  border-color:rgba(242,194,48,.55);
+}
+main.rg48-page-main.rg23 .admin-sec h3{font-size:20px;letter-spacing:.01em}
+main.rg48-page-main.rg23 .admin-sec h3::after{
+  content:"";display:block;width:36px;height:3px;border-radius:2px;margin-top:9px;
+  background:linear-gradient(90deg,var(--gold-2),var(--gold));
+}
+main.rg48-page-main.rg23 .sum-card{
+  position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#17203A,#0B1020);
+  border:1px solid rgba(242,194,48,.34);
+  border-radius:14px;padding:14px;
+  box-shadow:0 10px 24px rgba(0,0,0,.35);
+  transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease;
+}
+main.rg48-page-main.rg23 .sum-card::before{
+  content:"";position:absolute;top:0;left:14px;right:14px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,rgba(242,194,48,.7),transparent);
+}
+main.rg48-page-main.rg23 .sum-card span{color:#9A9E8A}
+main.rg48-page-main.rg23 .sum-card b{font-size:21px;color:var(--gold-2);text-shadow:0 0 18px rgba(242,194,48,.35)}
+main.rg48-page-main.rg23 .rg48-f input,
+main.rg48-page-main.rg23 .rg48-f select,
+main.rg48-page-main.rg23 .code-form input,
+main.rg48-page-main.rg23 .date-pick input{
+  background:#05070F;border-color:rgba(255,246,216,.2);padding:13px 14px;font-size:15px;
+  transition:border-color .18s ease,box-shadow .18s ease;
+}
+main.rg48-page-main.rg23 .rg48-f input:focus,
+main.rg48-page-main.rg23 .rg48-f select:focus,
+main.rg48-page-main.rg23 .code-form input:focus,
+main.rg48-page-main.rg23 .date-pick input:focus{
+  outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(242,194,48,.2);
+}
+main.rg48-page-main.rg23 .rg48-f label{color:#D8D2B8}
+main.rg48-page-main.rg23 .btn-gold{box-shadow:0 12px 26px rgba(242,194,48,.35),inset 0 1px 0 rgba(255,255,255,.65)}
+main.rg48-page-main.rg23 .dep-table th{color:var(--gold-2);letter-spacing:.1em;border-bottom:1px solid rgba(242,194,48,.35);padding:10px 8px}
+main.rg48-page-main.rg23 .dep-table td{padding:11px 8px}
+main.rg48-page-main.rg23 .dep-table tr.clickable:focus-visible{outline:2px solid rgba(242,194,48,.75);outline-offset:-2px}
+main.rg48-page-main.rg23 .day-totals{border-left:3px solid var(--gold);padding-left:12px}
+main.rg48-page-main.rg23 .code-chip{box-shadow:0 6px 16px rgba(242,194,48,.3),inset 0 1px 0 rgba(255,255,255,.5)}
+main.rg48-page-main.rg23 .code-row{padding:12px 0}
+main.rg48-page-main.rg23 .user-row{border-radius:10px;padding:12px 10px;transition:background .18s ease,box-shadow .18s ease}
+main.rg48-page-main.rg23 .admin-nav{background:rgba(20,24,40,.85);border:1px solid rgba(255,246,216,.12);border-radius:14px;padding:6px;gap:6px}
+main.rg48-page-main.rg23 .admin-nav a{border-color:transparent;background:transparent}
+main.rg48-page-main.rg23 .admin-nav a.an-active{
+  background:linear-gradient(180deg,var(--gold-2),var(--gold));color:#231600;border-color:var(--gold);
+  box-shadow:0 8px 18px rgba(242,194,48,.3);
+}
+main.rg48-page-main.rg23 .admin-preview{background:rgba(242,194,48,.13);box-shadow:0 10px 24px rgba(0,0,0,.35),0 0 20px rgba(242,194,48,.1)}
+main.rg48-page-main.rg23 .linklike{color:var(--gold-2);text-underline-offset:3px}
+
+/* --- D. Hover — capability-gated only (touch never gets a stuck hover) --- */
+@media (hover:hover) and (pointer:fine){
+  main#top .games .game:hover{transform:translateY(-4px);border-color:rgba(242,194,48,.6);box-shadow:0 22px 44px rgba(0,0,0,.55),0 0 26px rgba(242,194,48,.16)}
+  main#top .games .game:hover .g-info h3{color:var(--gold-2)}
+  main#top .verb:hover{transform:translateY(-4px);border-color:rgba(242,194,48,.55)}
+  main#top .faq summary:hover .fq{color:var(--gold-2)}
+  main#top .foot-links a:hover{color:var(--gold-2)}
+  main#top .p-row:hover{background:rgba(242,194,48,.06)}
+  main#top .live-feed .feed-row:hover{background:rgba(242,194,48,.05)}
+  main.rg48-page-main.rg23 .sum-card:hover{transform:translateY(-2px);border-color:rgba(242,194,48,.6);box-shadow:0 16px 32px rgba(0,0,0,.5),0 0 22px rgba(242,194,48,.14)}
+  main.rg48-page-main.rg23 .user-row:hover{background:rgba(242,194,48,.09);box-shadow:inset 3px 0 0 var(--gold)}
+  main.rg48-page-main.rg23 .btn-gold:hover{transform:translateY(-2px);box-shadow:0 16px 32px rgba(242,194,48,.45),inset 0 1px 0 rgba(255,255,255,.65)}
+  main.rg48-page-main.rg23 .linklike:hover{color:#FFE89A}
+  main.rg48-page-main.rg23 .admin-nav a:not(.an-active):hover{border-color:rgba(242,194,48,.45);color:var(--gold-2)}
+}
+
+/* --- E. Coarse pointers: 16px inputs so iOS never zooms into a field --- */
+@media (pointer:coarse){
+  main.rg48-page-main.rg23 .rg48-f input,
+  main.rg48-page-main.rg23 .rg48-f select,
+  main.rg48-page-main.rg23 .code-form input,
+  main.rg48-page-main.rg23 .date-pick input{font-size:16px}
+}
+
+/* --- F. Reduced motion: the two sheen sweeps stop, everything else stays --- */
+@media (prefers-reduced-motion: reduce){
+  main#top .hero-cta .btn-gold::after,
+  main#top .promo-gold::before{animation:none}
+}
