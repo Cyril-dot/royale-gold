@@ -1,8 +1,13 @@
-// Header — v48 structure (brand, chip nav, search, LV chip, balance pill
-// with eye, coin pill, Login/Register or account chip), plus the jackpot
-// ticker with the export's content and live counter. Round 11: NO Deposit
-// button anywhere — the balance pill, coin pill, submenu balance/coins
-// rows and the account-chip balances all link to the wallet page.
+// Header — v48 structure (brand, chip nav, search, LV chip, coin pill,
+// Join now or account chip), plus the jackpot ticker with the export's
+// content and live counter. Round 11: NO Deposit button anywhere — the
+// coin pill and submenu coins row link to the wallet page. Round 14g:
+// the account-chip figures are gone (cash + coins) — the chip is avatar
+// + name + role only. Round 15: the balance pill/tab is GONE entirely;
+// the balance lives in the phone hamburger submenu again (Balance row,
+// first); the chip carries a 👑 crown after the name; signed-out shows
+// ONE gold "Join now" button opening the toggle-based auth modal;
+// header polish — premium chip, richer gold bottom line, breathing room.
 // Phone tier (export): search + LV chip retire under 640px, the header
 // condenses to coin logo + balance.
 
@@ -150,21 +155,14 @@ export default function Header() {
           <div className="hdr-row hdr-row-3">
             <div className="acct-box">
               {!user ? (
-                <>
-                  <button className="btn btn-ghost btn-acct" type="button" onClick={() => openAuth("login")}>Log in</button>
-                  <button className="btn btn-gold btn-acct" type="button" onClick={() => openAuth("register")}>Register</button>
-                </>
+                <button className="btn btn-gold btn-acct" type="button" onClick={() => openAuth("register")}>Join now</button>
               ) : (
                 <div className="acct-wrap">
                   <button className="acct-chip" type="button" aria-haspopup="true" aria-expanded={menuOpen} onClick={() => { setToolsOpen(false); setMenuOpen((v) => !v); }}>
                     <span className="ac-av">{user.name.trim().charAt(0).toUpperCase()}</span>
                     <span className="ac-id">
-                      <span className="ac-name">{user.name.split(" ")[0]}</span>
+                      <span className="ac-name">{user.name.split(" ")[0]} <span className="ac-crown" aria-hidden="true">👑</span></span>
                       <span className="ac-role">{user.role === "owner" ? "Owner" : user.role === "admin" ? "Admin" : "Player"}</span>
-                    </span>
-                    <span className="ac-bals" title="Open wallet" style={{ cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); router.push("/wallet"); }}>
-                      <span className="ac-bal">{fmtCash(cash)}</span>
-                      <span className="ac-bal coin">◉ {fmtCoins(coins)}</span>
                     </span>
                   </button>
                   {menuOpen && (
@@ -206,30 +204,17 @@ export default function Header() {
         </div>
         <div className="ver-strip"><span className="xg-ver hdr-ver" aria-hidden="true">v48</span></div>
       </header>
-      {/* Round 14b: the wallet balance lives HERE and nowhere else — a
-          standalone tab hanging just below the header's gold bottom
-          line, top edge attached to the line, right-aligned, on phone +
-          desktop. The row is a direct child of .hdr-zone (NOT inside
-          header.site), so it sits below the gold border-bottom instead
-          of above it; it is in normal flow, so page content starts
-          below the tab and nothing is covered. Round 14d: JUST the
-          balance — the coin icon and the eye (hide/show) are gone, the
-          tab keeps only the label + value text in the Link to /wallet.
-          Round 14e: the label is gone too — the tab shows ONLY the
-          value text (SIM 1,000 in SIM mode, GH₵ in REAL mode). */}
-      <div className="wrap hdr-bal-row">
-        <div className="bal-pill" aria-label="Wallet balance">
-          <Link href="/wallet" className="bal-link" aria-label="Open wallet">
-            <div>
-              <strong>{balText}</strong>
-            </div>
-          </Link>
-        </div>
-      </div>
       {toolsOpen && (
         <div ref={toolsPanelRef} className="hdr-tools-menu" id="hdrToolsMenu" role="menu" aria-label="More options">
           {user && (
             <>
+              <Link href="/wallet" className="htm-row" role="menuitem" onClick={() => setToolsOpen(false)}>
+                <span className="bal-coin htm-ico" aria-hidden="true">₵</span>
+                <span className="htm-lab">{mode === "SIM" ? "SIM balance" : "Balance"}</span>
+                <span className="htm-ctl">
+                  <span className="htm-val">{balText}</span>
+                </span>
+              </Link>
               <Link href="/wallet" className="htm-row" role="menuitem" onClick={() => setToolsOpen(false)}>
                 <span className="cp-ico htm-ico" aria-hidden="true">◉</span>
                 <span className="htm-lab">Coins</span>

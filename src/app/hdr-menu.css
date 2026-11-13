@@ -53,55 +53,47 @@
   .hdr-zone .hdr-tools-menu{animation:none}
 }
 
-/* ============ Standalone balance pill row (round 14, moved 14b, squared + edge-flush 14c) ============
-   The wallet balance lives HERE and nowhere else — a pill on its own
-   hanging just below the header's gold bottom line, top edge attached
-   to the line, right-aligned, on phone + desktop. Round 14b moved the
-   row OUT of header.site (it sat above the gold border-bottom) to be a
-   direct child of .hdr-zone after </header>, so it sits below the gold
-   line instead. It is in normal flow inside the sticky zone, so it
-   hides with the header on scroll and page content starts below the
-   pill — nothing is covered, no clearance hack needed. padding-top is
-   0 so the pill's top edge is flush against the gold line.
-   Round 14c: the pill is NOT rounded and is pushed to the edge —
-   border-radius:0 on all four corners (a rectangular tab, not a pill
-   shape) and the row is full-bleed (width:100% beats the .wrap
-   min(1280px,100% - 40px) inset, so the pill's right edge touches the
-   viewport edge with 0 gap). No negative-margin hack: the row is
-   exactly viewport-wide, so it cannot cause horizontal overflow.
-   Round 14d: JUST the balance — the coin icon and the eye (hide/show)
-   are gone from the tab, it keeps only the label + value text. The
-   pill's v48 padding (5px 14px 5px 6px) was sized for the coin icon,
-   so the text gets symmetric padding here (14px desktop / 10px phone)
-   and the dead .eye override is dropped. No replacement hide/show
-   control anywhere — that is what was asked for.
-   Round 14e: the label is gone too and the tab is styled UNIQUELY —
-   a SOLID GOLD tab, not a dark box: gold gradient background
-   (#FFD964 → #F2C230 → #D9A41C), midnight #070812 amount text in
-   Anton (20px desktop / 17px phone, the v48 mono 15.5px is gone),
-   subtle gold glow to lift it off the dark page, NO border (the tab
-   IS gold now). Square corners and the full-bleed edge-flush row
-   from 14c stand. The dead small{display:block} phone override goes
-   with the label.
-   Round 14f: the Anton display face was bad for the amount — swapped
-   to the site's clean body font, Outfit bold (700), via the same
-   --font-body variable the body text uses. Gold tab, glow, sizes
-   (20px desktop / 17px phone) and everything else untouched.
-   The old top-row pill (hdr-row-2) and the submenu balance row are
-   gone; the coins pill is untouched. The pill reuses the .bal-pill
-   styling; the row only pins it right and keeps it a pill (never a
-   full-width bar). position:relative keeps the pill painted above
-   the header.site::after gold glow, so the pill's top edge stays clean. */
-.hdr-zone .hdr-bal-row{position:relative;display:flex;justify-content:flex-end;padding:0 0 10px;width:100%}
-.hdr-zone .hdr-bal-row .bal-pill{flex:0 0 auto;min-width:0;max-width:100%;border-radius:0;padding:7px 16px;background:linear-gradient(180deg,#FFD964 0%,#F2C230 52%,#D9A41C 100%);border:0;box-shadow:0 2px 16px rgba(242,194,48,.35);color:#070812}
-.hdr-zone .hdr-bal-row .bal-pill>div{min-width:0}
-.hdr-zone .hdr-bal-row .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-body);font-size:20px;line-height:1.1;letter-spacing:.02em;font-weight:700;color:#070812}
+/* ============ Round 15 — header rework: pill gone, crown, premium finish ============
+   The balance pill/tab (rounds 14–14f) is GONE entirely — its row, its
+   rules and its comment block are deleted. The balance lives in the
+   phone hamburger submenu again (Balance row, first, in Header.tsx).
+   What this section does instead:
+   - Richer gold bottom line: the v48 solid 3px gold border becomes a
+     gold gradient (deep gold at the edges, bright #FFD964 centre) with
+     a stronger glow — same line, same place, richer finish.
+   - Premium account chip: felt gradient background, gold border, soft
+     gold glow, gold-ringed avatar, name slightly larger/bolder in
+     Outfit, 👑 crown after the name. Subtle hover only (capability-
+     gated), no new colours, no layout moves, no new elements.
+   - Breathing room: the desktop top row gap opens 16px → 18px.
+   - Join now: the single signed-out gold button gets a touch of gold
+     glow so it reads as the one action. */
+header#siteHdr{border-bottom:3px solid transparent;border-image:linear-gradient(90deg,#D9A41C,#F2C230 25%,#FFD964 50%,#F2C230 75%,#D9A41C) 1;box-shadow:0 14px 34px rgba(0,0,0,.5),inset 0 -14px 26px rgba(0,0,0,.35),0 3px 18px rgba(242,194,48,.30)}
+header#siteHdr::after{width:min(760px,86%);height:4px;background:linear-gradient(90deg,transparent,#FFD964 30%,#F2C230 50%,#FFD964 70%,transparent);filter:blur(.6px)}
+header#siteHdr .acct-chip{background:linear-gradient(180deg,#0E332A,#0A211B);border:1px solid rgba(242,194,48,.65);box-shadow:0 0 0 1px rgba(242,194,48,.10),0 8px 20px rgba(0,0,0,.5),0 0 16px rgba(242,194,48,.16)}
+header#siteHdr .acct-chip .ac-av{box-shadow:0 0 0 2px rgba(242,194,48,.40),0 2px 8px rgba(0,0,0,.5)}
+header#siteHdr .acct-chip .ac-name{font-size:15px;font-weight:900;letter-spacing:.01em}
+header#siteHdr .acct-chip .ac-crown{font-size:13px;line-height:1}
+header#siteHdr .btn-acct.btn-gold{box-shadow:0 10px 24px rgba(242,194,48,.35),inset 0 1px 0 rgba(255,255,255,.65),0 0 16px rgba(242,194,48,.22)}
+@media (min-width:641px){
+  header#siteHdr .hdr-main{gap:18px}
+}
 @media (max-width:640px){
-  .hdr-zone .hdr-bal-row{padding:0 0 8px}
-  .hdr-zone .hdr-bal-row .bal-pill{padding:6px 12px}
-  .hdr-zone .hdr-bal-row .bal-pill strong{font-size:17px}
+  header#siteHdr .acct-chip .ac-name{font-size:14px}
+  header#siteHdr .acct-chip .ac-crown{font-size:12px}
 }
 @media (hover:hover) and (pointer:fine){
-  .hdr-zone .hdr-bal-row .bal-pill:hover{filter:brightness(.96)}
+  header#siteHdr .acct-chip:hover{border-color:rgba(242,194,48,.9);box-shadow:0 0 0 1px rgba(242,194,48,.20),0 8px 22px rgba(0,0,0,.5),0 0 22px rgba(242,194,48,.28)}
+}
+
+/* ============ Account chip without figures (round 14g) ============
+   The cash + coins figures are gone from the chip — avatar + name +
+   role only. The v48 phone rule `.acct-chip>span:last-child{display:none}`
+   (it hid the figures on phone) would now hide .ac-id, the name/role,
+   since it is the last child — so it is overridden here. hdr-menu.css
+   loads after v48.css and #siteHdr beats the v48 specificity, so
+   this wins. The chip still opens the account menu on click. */
+@media (max-width:640px){
+  header#siteHdr .acct-chip>span:last-child{display:flex}
 }
       
