@@ -83,6 +83,10 @@
    IS gold now). Square corners and the full-bleed edge-flush row
    from 14c stand. The dead small{display:block} phone override goes
    with the label.
+   Round 14f: the Anton display face was bad for the amount — swapped
+   to the site's clean body font, Outfit bold (700), via the same
+   --font-body variable the body text uses. Gold tab, glow, sizes
+   (20px desktop / 17px phone) and everything else untouched.
    The old top-row pill (hdr-row-2) and the submenu balance row are
    gone; the coins pill is untouched. The pill reuses the .bal-pill
    styling; the row only pins it right and keeps it a pill (never a
@@ -91,7 +95,7 @@
 .hdr-zone .hdr-bal-row{position:relative;display:flex;justify-content:flex-end;padding:0 0 10px;width:100%}
 .hdr-zone .hdr-bal-row .bal-pill{flex:0 0 auto;min-width:0;max-width:100%;border-radius:0;padding:7px 16px;background:linear-gradient(180deg,#FFD964 0%,#F2C230 52%,#D9A41C 100%);border:0;box-shadow:0 2px 16px rgba(242,194,48,.35);color:#070812}
 .hdr-zone .hdr-bal-row .bal-pill>div{min-width:0}
-.hdr-zone .hdr-bal-row .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-display,Anton,sans-serif);font-size:20px;line-height:1.1;letter-spacing:.02em;font-weight:400;color:#070812}
+.hdr-zone .hdr-bal-row .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-body);font-size:20px;line-height:1.1;letter-spacing:.02em;font-weight:700;color:#070812}
 @media (max-width:640px){
   .hdr-zone .hdr-bal-row{padding:0 0 8px}
   .hdr-zone .hdr-bal-row .bal-pill{padding:6px 12px}
