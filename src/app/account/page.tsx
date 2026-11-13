@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api, fmtCash, fmtCoins, GameStat, GameHistoryRow } from "../../lib/api";
+import { avatarFor } from "../../lib/avatar";
 import { useStore } from "../../lib/store";
 import { getGame } from "../../lib/games";
 
@@ -57,13 +58,6 @@ function readSimStats(): GameStat[] {
   } catch {
     return [];
   }
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "RG";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function when(iso: string): string {
@@ -209,7 +203,7 @@ export default function AccountPage() {
 
         {/* Profile hero */}
         <section className="ac-hero" aria-label="Profile">
-          <div className="ac-avatar" aria-hidden="true">{initials(user.name)}</div>
+          <div className="ac-avatar" aria-hidden="true">{avatarFor(user.id)}</div>
           <div className="ac-who">
             <h3>{user.name}{user.role === "owner" ? " 👑" : ""}</h3>
             <p>{user.email || user.phone || "—"} · {roleLabel} · Joined {new Date(user.createdAt).toLocaleDateString("en-GB")}</p>
