@@ -53,27 +53,33 @@
   .hdr-zone .hdr-tools-menu{animation:none}
 }
 
-/* ============ Standalone balance pill row (round 14) ============
+/* ============ Standalone balance pill row (round 14, moved 14b) ============
    The wallet balance lives HERE and nowhere else — a pill on its own
-   directly under the header, right-aligned, on phone + desktop. The old
-   top-row pill (hdr-row-2) and the submenu balance row are gone; the
-   coins pill is untouched. The row sits inside header.site (after the
-   ticker), so it shares the felt header, hides with the header on
-   scroll, and the submenu still hangs below the whole header block.
-   The pill reuses the .bal-pill styling; the row only pins it right and
-   keeps it a pill (never a full-width bar) — the globals.css flex:1
-   stretch and the v48.css phone eye/label hides are overridden here,
-   because the hide/show eye must survive on phone now that the submenu
-   balance row (which carried it) is gone. */
-header#siteHdr .hdr-bal-row{display:flex;justify-content:flex-end;padding:8px 0 10px}
-header#siteHdr .hdr-bal-row .bal-pill{flex:0 0 auto;min-width:0;max-width:100%}
-header#siteHdr .hdr-bal-row .bal-pill>div{min-width:0}
-header#siteHdr .hdr-bal-row .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+   hanging just below the header's gold bottom line, top edge attached
+   to the line, right-aligned, on phone + desktop. Round 14b moved the
+   row OUT of header.site (it sat above the gold border-bottom) to be a
+   direct child of .hdr-zone after </header>, so it sits below the gold
+   line instead. It is in normal flow inside the sticky zone, so it
+   hides with the header on scroll and page content starts below the
+   pill — nothing is covered, no clearance hack needed. padding-top is
+   0 so the pill's top edge is flush against the gold line.
+   The old top-row pill (hdr-row-2) and the submenu balance row are
+   gone; the coins pill is untouched. The pill reuses the .bal-pill
+   styling; the row only pins it right and keeps it a pill (never a
+   full-width bar) — the globals.css flex:1 stretch and the v48.css
+   phone eye/label hides are overridden here, because the hide/show eye
+   must survive on phone now that the submenu balance row (which
+   carried it) is gone. position:relative keeps the pill painted above
+   the header.site::after gold glow, so the pill's top edge stays clean. */
+.hdr-zone .hdr-bal-row{position:relative;display:flex;justify-content:flex-end;padding:0 0 10px}
+.hdr-zone .hdr-bal-row .bal-pill{flex:0 0 auto;min-width:0;max-width:100%}
+.hdr-zone .hdr-bal-row .bal-pill>div{min-width:0}
+.hdr-zone .hdr-bal-row .bal-pill strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:640px){
-  header#siteHdr .hdr-bal-row{padding:6px 0 8px}
+  .hdr-zone .hdr-bal-row{padding:0 0 8px}
   /* phone: the eye + label stay visible on this pill (v48.css hides them
      on the old top-row pill) — the hide/show feature must not be lost */
-  header#siteHdr .hdr-bal-row .bal-pill .eye{display:grid}
-  header#siteHdr .hdr-bal-row .bal-pill small{display:block}
+  .hdr-zone .hdr-bal-row .bal-pill .eye{display:grid}
+  .hdr-zone .hdr-bal-row .bal-pill small{display:block}
 }
       

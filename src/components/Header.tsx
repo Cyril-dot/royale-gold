@@ -196,24 +196,6 @@ export default function Header() {
             {tickerItems}
           </div>
         </div>
-        {/* Round 14: the wallet balance lives HERE and nowhere else — a
-            standalone pill directly under the header, right-aligned, on
-            phone + desktop. Same pill markup (Link to /wallet + eye) as
-            the old top-row pill, so the styling and behaviour are unchanged. */}
-        <div className="wrap hdr-bal-row">
-          <div className="bal-pill" aria-label="Wallet balance">
-            <Link href="/wallet" className="bal-link" aria-label="Open wallet">
-              <span className="bal-coin" aria-hidden="true">₵</span>
-              <div>
-                <small>{mode === "SIM" ? "SIM BALANCE" : "BALANCE"}</small>
-                <strong>{balText}</strong>
-              </div>
-            </Link>
-            <button className="eye" type="button" aria-label={balHidden ? "Show balance" : "Hide balance"} onClick={() => setBalHidden((v) => !v)}>
-              <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5C6.5 5 2 12 2 12s4.5 7 10 7 10-7 10-7-4.5-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" /></svg>
-            </button>
-          </div>
-        </div>
         <div className={`search-row${searchOpen ? " open" : ""}`} id="searchRow">
           <div className="wrap search-inner">
             <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z" /></svg>
@@ -225,6 +207,29 @@ export default function Header() {
         </div>
         <div className="ver-strip"><span className="xg-ver hdr-ver" aria-hidden="true">v48</span></div>
       </header>
+      {/* Round 14b: the wallet balance lives HERE and nowhere else — a
+          standalone pill hanging just below the header's gold bottom
+          line, top edge attached to the line, right-aligned, on phone +
+          desktop. The row is a direct child of .hdr-zone (NOT inside
+          header.site), so it sits below the gold border-bottom instead
+          of above it; it is in normal flow, so page content starts
+          below the pill and nothing is covered. Same pill markup
+          (Link to /wallet + eye) as before, so the styling and
+          behaviour are unchanged. */}
+      <div className="wrap hdr-bal-row">
+        <div className="bal-pill" aria-label="Wallet balance">
+          <Link href="/wallet" className="bal-link" aria-label="Open wallet">
+            <span className="bal-coin" aria-hidden="true">₵</span>
+            <div>
+              <small>{mode === "SIM" ? "SIM BALANCE" : "BALANCE"}</small>
+              <strong>{balText}</strong>
+            </div>
+          </Link>
+          <button className="eye" type="button" aria-label={balHidden ? "Show balance" : "Hide balance"} onClick={() => setBalHidden((v) => !v)}>
+            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5C6.5 5 2 12 2 12s4.5 7 10 7 10-7 10-7-4.5-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" /></svg>
+          </button>
+        </div>
+      </div>
       {toolsOpen && (
         <div ref={toolsPanelRef} className="hdr-tools-menu" id="hdrToolsMenu" role="menu" aria-label="More options">
           {user && (
