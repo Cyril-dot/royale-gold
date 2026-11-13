@@ -31,43 +31,80 @@ function FishArt({ kind, size }: { kind: "minnow" | "clown" | "puffer" | "koi"; 
   if (kind === "puffer") return (
     <svg viewBox="0 0 64 48" width={size} height={size * 0.75} aria-hidden="true" className="v18-fishart">
       <defs><radialGradient id="pf-b" cx=".4" cy=".35" r=".9"><stop offset="0" stopColor="#FFE9A8" /><stop offset=".55" stopColor="#F2C230" /><stop offset="1" stopColor="#B8860B" /></radialGradient></defs>
-      <g fill="#8A6D1B"><path d="M32 4 L35 14 L29 14 Z" /><path d="M32 44 L35 34 L29 34 Z" /><path d="M6 24 L16 21 L16 27 Z" /><path d="M58 24 L48 21 L48 27 Z" /><path d="M16 10 L22 16 L18 18 Z" /><path d="M48 10 L42 16 L46 18 Z" /><path d="M16 38 L22 32 L18 30 Z" /><path d="M48 38 L42 32 L46 30 Z" /></g>
+      <path className="v18-tail" d="M15 24 L5 17 L8 24 L5 31 Z" fill="#D9A41C" stroke="#7A5200" strokeWidth="1" strokeLinejoin="round" />
+      <g fill="#8A6D1B" stroke="#FFE9A8" strokeWidth="0.7" strokeLinejoin="round"><path d="M32 4 L35 14 L29 14 Z" /><path d="M32 44 L35 34 L29 34 Z" /><path d="M58 24 L48 21 L48 27 Z" /><path d="M16 10 L22 16 L18 18 Z" /><path d="M48 10 L42 16 L46 18 Z" /><path d="M16 38 L22 32 L18 30 Z" /><path d="M48 38 L42 32 L46 30 Z" /></g>
       <circle cx="32" cy="24" r="17" fill="url(#pf-b)" stroke="#7A5200" strokeWidth="1.6" />
-      <circle cx="24" cy="20" r="3" fill="#231600" /><circle cx="23" cy="19" r="1.1" fill="#FFF6D8" />
-      <circle cx="40" cy="20" r="3" fill="#231600" /><circle cx="39" cy="19" r="1.1" fill="#FFF6D8" />
-      <path d="M26 31 q6 3 12 0" fill="none" stroke="#7A5200" strokeWidth="1.6" strokeLinecap="round" />
+      <ellipse cx="32" cy="33" rx="10" ry="5" fill="#FFF3C4" opacity=".55" />
+      <g fill="#8A6D1B" opacity=".5"><circle cx="26" cy="16" r="1" /><circle cx="34" cy="12" r="1" /><circle cx="40" cy="30" r="1" /><circle cx="24" cy="28" r="1" /><circle cx="38" cy="18" r=".8" /></g>
+      <path d="M18 26 q-4 3-2 6 q3-1 4-4 Z" fill="#D9A41C" stroke="#7A5200" strokeWidth="1" opacity=".9" />
+      <path d="M46 26 q4 3 2 6 q-3-1-4-4 Z" fill="#D9A41C" stroke="#7A5200" strokeWidth="1" opacity=".9" />
+      <circle cx="24" cy="20" r="3.4" fill="#FFF6D8" /><circle cx="24" cy="20" r="3" fill="#231600" /><circle cx="23" cy="19" r="1.1" fill="#FFF6D8" />
+      <circle cx="40" cy="20" r="3.4" fill="#FFF6D8" /><circle cx="40" cy="20" r="3" fill="#231600" /><circle cx="39" cy="19" r="1.1" fill="#FFF6D8" />
+      <circle cx="32" cy="31" r="2.2" fill="#B8860B" /><circle cx="32" cy="31" r="1.2" fill="#7A5200" />
       <ellipse cx="26" cy="14" rx="6" ry="3.4" fill="#FFF6D8" opacity=".5" transform="rotate(-18 26 14)" />
     </svg>
   );
   if (kind === "clown") return (
     <svg viewBox="0 0 64 48" width={size} height={size * 0.75} aria-hidden="true" className="v18-fishart">
-      <defs><linearGradient id="cf-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FF9A3D" /><stop offset="1" stopColor="#E5322D" /></linearGradient></defs>
-      <path className="v18-tail" d="M12 24 L2 14 L2 34 Z" fill="#E5322D" stroke="#7A0F0F" strokeWidth="1" />
+      <defs><linearGradient id="cf-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FF9A3D" /><stop offset="1" stopColor="#E5322D" /></linearGradient>
+      <linearGradient id="cf-t" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#E5322D" /><stop offset="1" stopColor="#FF7A3D" /></linearGradient></defs>
+      <path className="v18-tail" d="M13 24 C6 15 2 17 0 24 C2 31 6 33 13 24 Z" fill="url(#cf-t)" stroke="#7A0F0F" strokeWidth="1" />
       <path d="M12 24 C22 10 44 8 54 20 C58 24 58 24 54 28 C44 40 22 38 12 24 Z" fill="url(#cf-b)" stroke="#7A0F0F" strokeWidth="1.4" />
-      <path d="M26 12 q-3 12 0 24 M38 10 q-3 14 0 28 M50 14 q-2 10 0 20" fill="none" stroke="#FFF6D8" strokeWidth="4" strokeLinecap="round" opacity=".95" />
-      <path d="M26 12 q-3 12 0 24 M38 10 q-3 14 0 28 M50 14 q-2 10 0 20" fill="none" stroke="#14213D" strokeWidth="1" strokeLinecap="round" opacity=".4" />
-      <circle cx="48" cy="21" r="2.6" fill="#231600" /><circle cx="47" cy="20" r=".9" fill="#FFF6D8" />
-      <path d="M30 12 q6-4 10 0" fill="none" stroke="#FF9A3D" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M22 12 q4-5 10-4 q3-1 6 1 q-8 4-16 3 Z" fill="#FF7A3D" stroke="#7A0F0F" strokeWidth="1" />
+      <g fill="#FFF6D8" stroke="#14213D" strokeWidth="1.1">
+        <path d="M23 14 q-3 10 0 20 q2.5-1 2.5-10 q0-9-2.5-10 Z" />
+        <path d="M35 12 q-3 12 0 24 q2.5-1 2.5-12 q0-11-2.5-12 Z" />
+        <path d="M47 15 q-2.5 9 0 18 q2-1 2-9 q0-8-2-9 Z" />
+      </g>
+      <path d="M34 28 q5 6 11 4 q-2-6-11-4 Z" fill="#FF7A3D" stroke="#7A0F0F" strokeWidth="1" opacity=".9" />
+      <g fill="none" stroke="#FFD9A8" strokeWidth="0.8" opacity=".5">
+        <path d="M20 20 q2.5 2.5 5 0 M28 17 q2.5 2.5 5 0 M42 20 q2.5 2.5 5 0" />
+      </g>
+      <circle cx="48" cy="21" r="3.2" fill="#FFF6D8" /><circle cx="48" cy="21" r="2.6" fill="#231600" /><circle cx="47" cy="20" r="1" fill="#FFF6D8" />
     </svg>
   );
   if (kind === "koi") return (
     <svg viewBox="0 0 64 48" width={size} height={size * 0.75} aria-hidden="true" className="v18-fishart">
-      <defs><linearGradient id="kf-b" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#FFE9A8" /><stop offset=".5" stopColor="#F2C230" /><stop offset="1" stopColor="#D9A41C" /></linearGradient></defs>
-      <path className="v18-tail" d="M14 24 C6 16 2 20 0 24 C2 28 6 32 14 24 Z" fill="#FFD964" stroke="#8A6D1B" strokeWidth="1" />
+      <defs><linearGradient id="kf-b" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#FFE9A8" /><stop offset=".5" stopColor="#F2C230" /><stop offset="1" stopColor="#D9A41C" /></linearGradient>
+      <linearGradient id="kf-t" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#FFD964" /><stop offset="1" stopColor="#E85D2A" /></linearGradient></defs>
+      <g className="v18-tail">
+        <path d="M15 24 C9 18 4 19 2 24 C4 29 9 30 15 24 Z" fill="#E85D2A" opacity=".55" />
+        <path d="M15 24 C7 14 2 16 0 24 C2 32 7 34 15 24 Z" fill="url(#kf-t)" stroke="#8A6D1B" strokeWidth="1" />
+      </g>
       <path d="M14 24 C24 10 46 10 56 22 C58 24 58 24 56 26 C46 38 24 38 14 24 Z" fill="url(#kf-b)" stroke="#7A5200" strokeWidth="1.4" />
-      <path d="M30 14 q4 10 0 20 M42 13 q4 11 0 22" fill="none" stroke="#FFF6D8" strokeWidth="2" strokeLinecap="round" opacity=".7" />
-      <circle cx="50" cy="21" r="2.6" fill="#231600" /><circle cx="49" cy="20" r=".9" fill="#FFF6D8" />
+      <g fill="#E85D2A" stroke="#B03A12" strokeWidth="0.8">
+        <path d="M36 13 q7 0 9 4 q1 4-4 5 q-7 1-8-4 q0-4 3-5 Z" />
+        <path d="M24 26 q7-2 10 2 q2 4-3 6 q-7 1-8-4 q0-3 1-4 Z" />
+        <path d="M17 16 q4-1 5 2 q0 3-4 3 q-3-1-1-5 Z" />
+      </g>
+      <path d="M26 11 q6-4 13-2 q-6 4-13 2 Z" fill="#FFE9A8" stroke="#8A6D1B" strokeWidth="0.8" opacity=".9" />
+      <path d="M32 29 q3 7 9 8 q-1-7-9-8 Z" fill="#FFE9A8" stroke="#8A6D1B" strokeWidth="0.8" opacity=".75" />
+      <path d="M40 30 q2 6 7 7 q-1-6-7-7 Z" fill="#FFE9A8" stroke="#8A6D1B" strokeWidth="0.8" opacity=".75" />
+      <g fill="none" stroke="#FFF3C4" strokeWidth="0.9" opacity=".5">
+        <path d="M22 18 q3 3 6 0 M22 26 q3 3 6 0 M30 16 q3 3 6 0 M30 30 q3 3 6 0 M40 18 q3 3 6 0" />
+      </g>
+      <path d="M44 15 q-3 9 0 18" fill="none" stroke="#7A5200" strokeWidth="1.1" opacity=".5" strokeLinecap="round" />
+      <circle cx="50" cy="21" r="3.2" fill="#FFF6D8" /><circle cx="50" cy="21" r="2.6" fill="#231600" /><circle cx="49" cy="20" r="1" fill="#FFF6D8" />
       <path d="M56 26 q5 2 7 5 M56 22 q5-2 7-5" fill="none" stroke="#8A6D1B" strokeWidth="1.4" strokeLinecap="round" />
       <ellipse cx="34" cy="16" rx="7" ry="3" fill="#FFF6D8" opacity=".45" transform="rotate(-14 34 16)" />
     </svg>
   );
   return (
     <svg viewBox="0 0 64 48" width={size} height={size * 0.75} aria-hidden="true" className="v18-fishart">
-      <defs><linearGradient id="mf-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#BFE8FF" /><stop offset=".55" stopColor="#5AA9FF" /><stop offset="1" stopColor="#2B5F9E" /></linearGradient></defs>
-      <path className="v18-tail" d="M14 24 L4 15 L4 33 Z" fill="#2B5F9E" />
+      <defs><linearGradient id="mf-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#D6F0FF" /><stop offset=".45" stopColor="#7CC0F5" /><stop offset=".8" stopColor="#3E7FC4" /><stop offset="1" stopColor="#2B5F9E" /></linearGradient>
+      <linearGradient id="mf-t" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#2B5F9E" /><stop offset="1" stopColor="#5AA9FF" /></linearGradient></defs>
+      <path className="v18-tail" d="M15 24 L3 14 L7 24 L3 34 Z" fill="url(#mf-t)" stroke="#14213D" strokeWidth="1" strokeLinejoin="round" />
       <path d="M14 24 C24 11 46 10 56 22 C58 24 58 24 56 26 C46 38 24 37 14 24 Z" fill="url(#mf-b)" stroke="#14213D" strokeWidth="1.3" />
-      <path d="M30 13 q6-3 10 0" fill="none" stroke="#2B5F9E" strokeWidth="2.2" strokeLinecap="round" />
-      <circle cx="49" cy="21" r="2.6" fill="#231600" /><circle cx="48" cy="20" r=".9" fill="#FFF6D8" />
+      <g fill="none" stroke="#BFE8FF" strokeWidth="0.9" opacity=".55">
+        <path d="M24 18 q3 3 6 0 M24 24 q3 3 6 0 M24 30 q3 3 6 0" />
+        <path d="M32 16 q3 3 6 0 M32 22 q3 3 6 0 M32 28 q3 3 6 0" />
+        <path d="M40 18 q3 3 6 0 M40 24 q3 3 6 0" />
+      </g>
+      <path d="M16 25 C28 23 42 23 54 24" fill="none" stroke="#EAF7FF" strokeWidth="1" opacity=".6" />
+      <path d="M28 12 q5-4 11-1 q-5 3-11 1 Z" fill="#2B5F9E" opacity=".85" />
+      <path d="M30 30 q4 5 9 4 q-2-5-9-4 Z" fill="#5AA9FF" opacity=".7" />
+      <path d="M44 15 q-3 9 0 18" fill="none" stroke="#14213D" strokeWidth="1.2" opacity=".55" strokeLinecap="round" />
+      <circle cx="49" cy="21" r="3.2" fill="#FFF6D8" /><circle cx="49" cy="21" r="2.6" fill="#14213D" /><circle cx="48" cy="20" r="1" fill="#FFF6D8" />
       <ellipse cx="32" cy="17" rx="8" ry="3" fill="#FFF6D8" opacity=".5" transform="rotate(-12 32 17)" />
     </svg>
   );
@@ -76,13 +113,22 @@ function FishArt({ kind, size }: { kind: "minnow" | "clown" | "puffer" | "koi"; 
 function RodArt() {
   return (
     <svg viewBox="0 0 120 120" aria-hidden="true" className="v18-rodart">
-      <path d="M18 102 C40 70 70 44 104 18" fill="none" stroke="#8A6D1B" strokeWidth="3.4" strokeLinecap="round" />
-      <path d="M18 102 C40 70 70 44 104 18" fill="none" stroke="#C99612" strokeWidth="1.2" strokeLinecap="round" opacity=".7" />
-      <path d="M104 18 C106 34 102 48 96 58" fill="none" stroke="#FFF6D8" strokeWidth="1.4" strokeDasharray="3 3" opacity=".8" />
-      <circle cx="96" cy="62" r="5" fill="none" stroke="#F2C230" strokeWidth="2" />
-      <path d="M96 67 L96 74" stroke="#F2C230" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="92" cy="86" r="6" fill="#E5322D" stroke="#7A0F0F" strokeWidth="1.4" />
-      <circle cx="90" cy="84" r="1.8" fill="#FFF6D8" opacity=".9" />
+      <ellipse cx="92" cy="99" rx="17" ry="4.5" fill="none" stroke="#FFF6D8" strokeWidth="1.2" opacity=".35" />
+      <ellipse cx="92" cy="99" rx="10" ry="3" fill="none" stroke="#FFF6D8" strokeWidth="1.2" opacity=".5" />
+      <path d="M14 106 C40 72 70 44 104 18" fill="none" stroke="#6B4A12" strokeWidth="4.6" strokeLinecap="round" />
+      <path d="M14 106 C40 72 70 44 104 18" fill="none" stroke="#C99612" strokeWidth="1.4" strokeLinecap="round" opacity=".8" />
+      <path d="M14 106 L26 92" fill="none" stroke="#B08954" strokeWidth="8" strokeLinecap="round" />
+      <path d="M17 103 L21 100 M20 100 L24 97 M23 97 L27 94" stroke="#7A5A28" strokeWidth="1" strokeLinecap="round" />
+      <circle cx="34" cy="86" r="5.5" fill="#3A2A08" stroke="#F2C230" strokeWidth="1.6" />
+      <circle cx="34" cy="86" r="2.2" fill="#F2C230" />
+      <path d="M34 91 L40 96" stroke="#F2C230" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="41" cy="97" r="2" fill="#231600" stroke="#F2C230" strokeWidth="1" />
+      <g fill="none" stroke="#F2C230" strokeWidth="1.6"><circle cx="56" cy="67" r="2.6" /><circle cx="79" cy="47" r="2.6" /><circle cx="96" cy="28" r="2.6" /></g>
+      <path d="M34 86 C52 68 76 44 104 18 C106 34 102 48 96 58" fill="none" stroke="#FFF6D8" strokeWidth="1.3" strokeDasharray="3 3" opacity=".85" />
+      <circle cx="92" cy="86" r="6.5" fill="#FFF6D8" stroke="#7A0F0F" strokeWidth="1.4" />
+      <path d="M85.5 86 a6.5 6.5 0 0 1 13 0 Z" fill="#E5322D" />
+      <circle cx="90" cy="84" r="1.6" fill="#FFF6D8" opacity=".95" />
+      <path d="M92 93 q0 6-4 6 q-3 0-3-3" fill="none" stroke="#F2C230" strokeWidth="1.6" strokeLinecap="round" />
       <circle cx="60" cy="102" r="2" fill="#FFF6D8" opacity=".6" /><circle cx="76" cy="110" r="1.6" fill="#FFF6D8" opacity=".5" />
     </svg>
   );
@@ -225,8 +271,10 @@ const FISH_SPEED: Record<Fish["kind"], [number, number]> = { minnow: [12, 15], c
 const BUBBLES = [
   { left: 12, size: 7, dur: 5, delay: 0 },
   { left: 28, size: 5, dur: 6.5, delay: 1.4 },
+  { left: 38, size: 6, dur: 5.2, delay: 2.1 },
   { left: 47, size: 9, dur: 4.5, delay: 2.6 },
   { left: 66, size: 6, dur: 5.8, delay: 0.7 },
+  { left: 74, size: 5, dur: 6, delay: 4 },
   { left: 84, size: 8, dur: 4.2, delay: 3.1 },
 ];
 

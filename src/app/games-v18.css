@@ -196,12 +196,15 @@
 .v18-tmark { width: 20px; height: 20px; display: block; margin: 0 auto; }
 
 /* --- Golden Catch: underwater light, sand, reeds; fish with wagging tails --- */
-.v18-pond { background: linear-gradient(180deg, #0E5A4A 0%, #0E332A 45%, #071A14 100%); }
-.v18-pond::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(105deg, rgba(255,246,216,.09) 0 14px, transparent 14px 46px); }
-.v18-pond::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 30px; pointer-events: none; background: linear-gradient(180deg, rgba(201,150,18,0), rgba(201,150,18,.35)), repeating-linear-gradient(90deg, transparent 0 26px, rgba(20,60,40,.9) 26px 30px, transparent 30px 58px); }
+/* Round 26 — REALISM: deeper water, drifting light rays, natural sand
+   with reed clumps and pebbles, swimming sway, wobbling bubbles. */
+.v18-pond { background: radial-gradient(ellipse 120% 34% at 50% -6%, rgba(190,240,220,.28), transparent 60%), linear-gradient(180deg, #0E6B58 0%, #0E4A3C 30%, #0E332A 62%, #06120E 100%); }
+.v18-pond::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 70% 22% at 50% 0%, rgba(255,246,216,.16), transparent 70%), repeating-linear-gradient(105deg, rgba(255,246,216,.09) 0 14px, transparent 14px 46px); animation: v18-rays 14s linear infinite; }
+@keyframes v18-rays { from { background-position: 0 0, 0 0; } to { background-position: 0 0, 92px 0; } }
+.v18-pond::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 30px; pointer-events: none; background: radial-gradient(ellipse 90px 14px at 20% 100%, rgba(201,150,18,.5), transparent 70%), radial-gradient(ellipse 110px 16px at 70% 100%, rgba(201,150,18,.45), transparent 70%), radial-gradient(ellipse 3px 26px at 8% 100%, rgba(20,60,40,.95), transparent 70%), radial-gradient(ellipse 2.5px 20px at 14% 100%, rgba(28,80,52,.9), transparent 70%), radial-gradient(ellipse 3px 30px at 88% 100%, rgba(20,60,40,.95), transparent 70%), radial-gradient(ellipse 2px 16px at 94% 100%, rgba(28,80,52,.9), transparent 70%), radial-gradient(circle 2px at 30% 92%, rgba(230,200,120,.7), transparent 70%), radial-gradient(circle 1.6px at 55% 95%, rgba(230,200,120,.6), transparent 70%), radial-gradient(circle 2.2px at 78% 90%, rgba(230,200,120,.55), transparent 70%), linear-gradient(180deg, rgba(201,150,18,0), rgba(201,150,18,.35)); }
 .v18-fish { background: none; border: 0; padding: 0; filter: drop-shadow(0 3px 3px rgba(0,0,0,.5)); transition: left .1s linear, top .1s linear, transform .15s ease; }
 .v18-fishart { display: block; animation: v18-bob 1.6s ease-in-out infinite alternate; }
-@keyframes v18-bob { from { transform: translateY(-2px); } to { transform: translateY(2px); } }
+@keyframes v18-bob { from { transform: translateY(-2px) rotate(-1.4deg); } to { transform: translateY(2px) rotate(1.4deg); } }
 .v18-fishart .v18-tail { transform-box: fill-box; transform-origin: 100% 50%; animation: v18-wag .45s ease-in-out infinite alternate; }
 @keyframes v18-wag { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
 /* Faster fish wag faster — the speed difference reads at a glance. */
@@ -212,12 +215,14 @@
 .v18-fish-koi { filter: drop-shadow(0 3px 3px rgba(0,0,0,.5)) drop-shadow(0 0 9px rgba(242,194,48,.6)); }
 /* Rising bubbles — pure CSS, staggered so the pond never sits still. */
 .v18-bubble { position: absolute; bottom: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.9), rgba(255,255,255,.15) 55%, transparent 70%); border: 1px solid rgba(255,246,216,.35); pointer-events: none; animation: v18-rise linear infinite; opacity: 0; }
-@keyframes v18-rise { 0% { transform: translateY(0); opacity: 0; } 12% { opacity: .7; } 85% { opacity: .5; } 100% { transform: translateY(-230px); opacity: 0; } }
+@keyframes v18-rise { 0% { transform: translateY(0) translateX(0); opacity: 0; } 12% { opacity: .7; } 50% { transform: translateY(-115px) translateX(4px); } 85% { opacity: .5; } 100% { transform: translateY(-230px) translateX(-2px); opacity: 0; } }
 /* Catch splash — an expanding ring where the fish was tapped. */
 .v18-splash { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 2px solid rgba(255,246,216,.95); pointer-events: none; animation: v18-splash .6s ease-out forwards; z-index: 2; }
+.v18-splash::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255,246,216,.7); animation: v18-splash .6s .15s ease-out forwards; }
 @keyframes v18-splash { from { transform: scale(.3); opacity: .95; } to { transform: scale(1.5); opacity: 0; } }
 .v18-pondidle { font-size: 0; }
-.v18-pondidle svg { width: 110px; height: 110px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+.v18-pondidle svg { width: 110px; height: 110px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); animation: v18-rodbob 2.4s ease-in-out infinite alternate; }
+@keyframes v18-rodbob { from { transform: translateY(0); } to { transform: translateY(-3px); } }
 
 /* --- Gold Rush Derby: dirt track, finish post, galloping horses --- */
 .v18-track { background: linear-gradient(180deg, #7A5A1E, #5C430F 55%, #3A2A08); }
@@ -272,5 +277,6 @@
 .v18-c4cell.red { background: radial-gradient(circle at 34% 28%, #FF8A85 0%, #E5322D 55%, #7A0F0F 100%); border-color: #7A0F0F; box-shadow: inset -2px -3px 5px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.45); animation: v18-deal .22s ease backwards; }
 
 @media (prefers-reduced-motion: reduce) {
-  .v18-fishart, .v18-fishart .v18-tail, .v18-bubble, .v18-horse svg { animation: none; }
+  .v18-fishart, .v18-fishart .v18-tail, .v18-bubble, .v18-horse svg, .v18-pondidle svg { animation: none; }
+  .v18-pond::before { animation: none; }
 }
