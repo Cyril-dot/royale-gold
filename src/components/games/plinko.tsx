@@ -169,9 +169,18 @@ export default function PlinkoRoom({ game }: { game: GameDef }) {
     let lastSeg = 0;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const frame = (now: number) => {
-      const elapsed = now - startT;
+      // The rAF timestamp is the frame-START time, so the first frame
+      // after a click can arrive with now < startT (up to ~a frame
+      // behind performance.now()). Without the clamp, segFloat goes
+      // negative, seg becomes -1, pts[-1] is undefined and a[0] throws
+      // — killing the loop, freezing the ball mid-board and leaving
+      // activeRef set so every later drop just queues forever (the
+      // "stuck ball": won once, dropped again, ball stuck). Clamp
+      // elapsed at 0 and seg into range so a behind-timestamp can
+      // never index out of bounds.
+      const elapsed = Math.max(0, now - startT);
       const segFloat = elapsed / segDur;
-      const seg = Math.min(pts.length - 2, Math.floor(segFloat));
+      const seg = Math.max(0, Math.min(pts.length - 2, Math.floor(segFloat)));
       const u = Math.min(1, segFloat - seg);
       // Termination MUST use segFloat: seg is capped at pts.length - 2,
       // so `seg >= pts.length - 1` can never be true and the ball would

@@ -150,8 +150,8 @@ export default function MinesRoom({ game }: { game: GameDef }) {
     <RoomShell game={game} subtitle="5×5 board · 3, 5 or 10 mines · every gem raises the multiplier" stats={room.stats} history={room.history}>
       <div className="mn-stage">
         <div className="xg-hud mn-hud">
-          <span className="xg-chip">MULTIPLIER <b>×{mult.toFixed(2)}</b></span>
-          <span className="xg-chip">GEMS <b>{revealed}</b></span>
+          <span className="xg-chip mn-chip-mult" aria-label={`Multiplier ×${mult.toFixed(2)}`}><b>×{mult.toFixed(2)}</b></span>
+          <span className="xg-chip mn-chip-gems" aria-label={`Gems found: ${revealed}`}><span className="mn-gem-ico" aria-hidden="true">{GEM_SVG}</span><b>{revealed}</b></span>
           <span className="xg-chip push">CASH OUT <b>{playing && revealed > 0 ? fmtCash(pays) : fmtCash(0)}</b></span>
         </div>
         <div className="mn-board" role="grid" aria-label="Mines board, 5 by 5">

@@ -216,13 +216,26 @@ export function TowerClimbRoom({ game }: { game: GameDef }) {
 // ---------- Golden Catch ----------
 interface Fish { id: number; kind: "minnow" | "clown" | "puffer" | "koi"; x: number; y: number; v: number; dir: 1 | -1; size: number }
 const FISH_VAL: Record<Fish["kind"], number> = { minnow: 0.2, clown: 0.5, puffer: 1.0, koi: 2.0 };
-const FISH_SIZE: Record<Fish["kind"], number> = { minnow: 26, clown: 32, puffer: 38, koi: 46 };
+const FISH_SIZE: Record<Fish["kind"], number> = { minnow: 32, clown: 40, puffer: 46, koi: 56 };
+// Speeds in % of pond width per second — a fish crosses the pond in
+// ~4–8s (koi fastest, minnow slowest). Old speeds (v 6–20, 0.16%/tick
+// once a second) were 0.96–3.2 %/s: a slow fish took ~100s to cross.
+const FISH_SPEED: Record<Fish["kind"], [number, number]> = { minnow: [12, 15], clown: [15, 19], puffer: [18, 22], koi: [22, 26] };
+// Rising bubbles for the pond — fixed layout, staggered rise times.
+const BUBBLES = [
+  { left: 12, size: 7, dur: 5, delay: 0 },
+  { left: 28, size: 5, dur: 6.5, delay: 1.4 },
+  { left: 47, size: 9, dur: 4.5, delay: 2.6 },
+  { left: 66, size: 6, dur: 5.8, delay: 0.7 },
+  { left: 84, size: 8, dur: 4.2, delay: 3.1 },
+];
 
 function spawnFish(id: number): Fish {
   const r = Math.random();
   const kind: Fish["kind"] = r < 0.5 ? "minnow" : r < 0.8 ? "clown" : r < 0.94 ? "puffer" : "koi";
   const dir = Math.random() < 0.5 ? 1 : -1;
-  return { id, kind, x: dir === 1 ? -10 : 110, y: 8 + Math.random() * 70, v: 6 + Math.random() * 14, dir, size: FISH_SIZE[kind] };
+  const [lo, hi] = FISH_SPEED[kind];
+  return { id, kind, x: dir === 1 ? -10 : 110, y: 8 + Math.random() * 70, v: lo + Math.random() * (hi - lo), dir, size: FISH_SIZE[kind] };
 }
 
 export function GoldenCatchRoom({ game }: { game: GameDef }) {
@@ -233,8 +246,10 @@ export function GoldenCatchRoom({ game }: { game: GameDef }) {
   const [pot, setPot] = useState(0);
   const [caught, setCaught] = useState(0);
   const [secs, setSecs] = useState(30);
+  const [splashes, setSplashes] = useState<{ id: number; x: number; y: number }[]>([]);
   const [msg, setMsg] = useState("30 seconds in the pond — tap fish to catch them. Minnow 0.2×, clownfish 0.5×, puffer 1×, golden koi 2×. Your pot is your multiplier, capped at ×10.");
   const idRef = useRef(0);
+  const splashIdRef = useRef(0);
   const potRef = useRef(0);
   const caughtRef = useRef(0);
   const settledRef = useRef(false);
@@ -262,20 +277,24 @@ export function GoldenCatchRoom({ game }: { game: GameDef }) {
     setMsg("Go! Tap the fish!");
   };
 
-  // Fish swim + respawn; the clock ticks. When the clock hits 0 the
-  // round ends (watched in an effect, not inside a state updater).
+  // Fish swim + respawn on a fast 100ms tick (smooth glide, ~4–8s to
+  // cross the pond); the clock ticks once a second on its own interval.
+  // When the clock hits 0 the round ends (watched in an effect, not
+  // inside a state updater).
   useEffect(() => {
     if (phase !== "playing") return;
-    const iv = window.setInterval(() => {
+    const swim = window.setInterval(() => {
       setFishes((prev) => {
-        let next = prev.map((f) => ({ ...f, x: f.x + f.v * f.dir * 0.16 }));
+        let next = prev.map((f) => ({ ...f, x: f.x + f.v * f.dir * 0.1 }));
         next = next.filter((f) => f.x > -15 && f.x < 115);
         while (next.length < 4) next.push(spawnFish(idRef.current++));
         return next;
       });
+    }, 100);
+    const clock = window.setInterval(() => {
       setSecs((s) => Math.max(0, s - 1));
     }, 1000);
-    return () => window.clearInterval(iv);
+    return () => { window.clearInterval(swim); window.clearInterval(clock); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -291,6 +310,10 @@ export function GoldenCatchRoom({ game }: { game: GameDef }) {
     setPot(potRef.current);
     setCaught((c) => c + 1);
     setFishes((prev) => prev.filter((x) => x.id !== f.id));
+    // Splash ring where the fish was caught, gone after the animation.
+    const sid = splashIdRef.current++;
+    setSplashes((prev) => [...prev, { id: sid, x: f.x, y: f.y }]);
+    window.setTimeout(() => setSplashes((prev) => prev.filter((s) => s.id !== sid)), 650);
     if (potRef.current >= 10) { void end("Pot full — ×10!"); }
   };
 
@@ -301,8 +324,14 @@ export function GoldenCatchRoom({ game }: { game: GameDef }) {
         <div className="v18-stage">
           <div className="v18-hud"><span>TIME <b>{secs}s</b></span><span>POT <b>×{pot.toFixed(1)}</b></span><span>CAUGHT <b>{caught}</b></span></div>
           <div className="v18-pond" role="group" aria-label="Fishing pond">
+            {BUBBLES.map((b, i) => (
+              <span key={i} className="v18-bubble" style={{ left: `${b.left}%`, width: b.size, height: b.size, animationDuration: `${b.dur}s`, animationDelay: `${b.delay}s` }} aria-hidden="true" />
+            ))}
             {phase === "playing" && fishes.map((f) => (
-              <button key={f.id} type="button" className="v18-fish" style={{ left: `${f.x}%`, top: `${f.y}%`, transform: f.dir === -1 ? "scaleX(-1)" : undefined }} onClick={() => catchFish(f)} aria-label={`${f.kind} fish, worth ${FISH_VAL[f.kind]}x`}><FishArt kind={f.kind} size={f.size} /></button>
+              <button key={f.id} type="button" className={`v18-fish v18-fish-${f.kind}`} style={{ left: `${f.x}%`, top: `${f.y}%`, transform: f.dir === -1 ? "scaleX(-1)" : undefined }} onClick={() => catchFish(f)} aria-label={`${f.kind} fish, worth ${FISH_VAL[f.kind]}x`}><FishArt kind={f.kind} size={f.size} /></button>
+            ))}
+            {splashes.map((s) => (
+              <span key={s.id} className="v18-splash" style={{ left: `${s.x}%`, top: `${s.y}%` }} aria-hidden="true" />
             ))}
             {phase !== "playing" && <span className="v18-pondidle"><RodArt /></span>}
           </div>

@@ -108,27 +108,29 @@ export function BingoBlitzRoom({ game }: { game: GameDef }) {
 }
 
 // ---------- Brick Breaker ----------
-// Canvas breakout: paddle + ball, 3 lives, 24 bricks. Clear them all
-// for ×5, 80%+ for ×3, 50%+ for ×2.
+// Canvas breakout: paddle + ball, 24 bricks. One ball — miss it and
+// the round ends. Clear them all for ×5, 80%+ for ×3, 50%+ for ×2.
 export function BrickBreakerRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(5);
   const [phase, setPhase] = useState<"idle" | "playing" | "done">("idle");
-  const [lives, setLives] = useState(3);
   const [broken, setBroken] = useState(0);
-  const [msg, setMsg] = useState("Break the wall — clear all 24 bricks for ×5, 80% for ×3, half for ×2. Three balls, drag or use ← →.");
+  const [msg, setMsg] = useState("Break the wall — clear all 24 bricks for ×5, 80% for ×3, half for ×2. One ball — miss it and you lose. Drag or use ← →.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sRef = useRef({ px: 120, bx: 150, by: 300, vx: 3, vy: -3.4, bricks: [] as boolean[], lives: 3, broken: 0, over: false, trail: [] as { x: number; y: number }[] });
+  const sRef = useRef({ px: 120, bx: 150, by: 300, vx: 3, vy: -3.4, bricks: [] as boolean[], broken: 0, over: false, trail: [] as { x: number; y: number }[] });
   const rafRef = useRef(0);
   const settledRef = useRef(false);
 
-  const finish = useCallback(async (brk: number) => {
+  const finish = useCallback(async (brk: number, fell = false) => {
     sRef.current.over = true;
     cancelAnimationFrame(rafRef.current);
     setPhase("done");
     const mult = brk >= 24 ? 5 : brk >= 20 ? 3 : brk >= 12 ? 2 : 0;
     const payout = Math.round(stake * mult);
-    setMsg(brk >= 24 ? `Wall cleared! ×5 — ${fmtCoins(payout)}` : brk >= 12 ? `${brk} bricks down — pays ×${mult}, ${fmtCoins(payout)}` : `${brk} bricks down — not enough for a payout.`);
+    // One ball only: when the ball falls the round ends here, so the
+    // message names the miss.
+    const lead = fell ? "Ball missed — " : "";
+    setMsg(brk >= 24 ? `Wall cleared! ×5 — ${fmtCoins(payout)}` : brk >= 12 ? `${lead}${brk} bricks down — pays ×${mult}, ${fmtCoins(payout)}` : `${lead}${brk} bricks down — not enough for a payout.`);
     if (!settledRef.current) { settledRef.current = true; await room.settle(stake, payout, { broken: brk, mult }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stake, room]);
@@ -204,8 +206,8 @@ export function BrickBreakerRoom({ game }: { game: GameDef }) {
   const start = () => {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
     settledRef.current = false;
-    sRef.current = { px: 120, bx: 150, by: 300, vx: 3, vy: -3.4, bricks: new Array(24).fill(true), lives: 3, broken: 0, over: false, trail: [] };
-    setLives(3); setBroken(0);
+    sRef.current = { px: 120, bx: 150, by: 300, vx: 3, vy: -3.4, bricks: new Array(24).fill(true), broken: 0, over: false, trail: [] };
+    setBroken(0);
     setPhase("playing");
     setMsg("Go! Break the wall.");
     const step = () => {
@@ -233,13 +235,9 @@ export function BrickBreakerRoom({ game }: { game: GameDef }) {
           if (s.broken >= 24) { draw(); void finish(s.broken); return; }
         }
       }
-      if (s.by > 406) {
-        s.lives--;
-        setLives(s.lives);
-        if (s.lives <= 0) { draw(); void finish(s.broken); return; }
-        s.bx = 150; s.by = 300; s.vx = 3; s.vy = -3.4;
-        setMsg(`Ball lost — ${s.lives} ${s.lives === 1 ? "ball" : "balls"} left.`);
-      }
+      // One ball only: a miss ends the round at once — no reset, no
+      // extra balls. finish() settles with the bricks-broken payout.
+      if (s.by > 406) { draw(); void finish(s.broken, true); return; }
       draw();
       rafRef.current = requestAnimationFrame(step);
     };
@@ -266,7 +264,7 @@ export function BrickBreakerRoom({ game }: { game: GameDef }) {
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={phase === "playing"} />
         <div className="v18-stage">
-          <div className="v18-hud"><span>LIVES <b>{lives}</b></span><span>BRICKS <b>{broken}/24</b></span></div>
+          <div className="v18-hud"><span>BRICKS <b>{broken}/24</b></span></div>
           <canvas ref={canvasRef} width={300} height={400} className="v18-canvas" tabIndex={0} onPointerMove={onMove} onKeyDown={onKey} aria-label="Brick Breaker board" />
           <p className="v18-aim">Drag across the board (or ← → keys) to move the paddle</p>
         </div>
