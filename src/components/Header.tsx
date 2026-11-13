@@ -16,7 +16,7 @@ import { useJackpot } from "../lib/jackpot";
 import { useStore } from "../lib/store";
 
 export default function Header() {
-  const { user, wallet, mode, setMode, muted, toggleMute, openAuth, logout } = useStore();
+  const { user, wallet, mode, setMode, muted, toggleMute, openAuth, logout, simSession } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -74,7 +74,10 @@ export default function Header() {
 
   const cash = wallet?.cash ?? user?.cash ?? 0;
   const coins = wallet?.coins ?? user?.coins ?? 0;
-  const sim = wallet?.sim ?? user?.sim ?? 0;
+  // Round 12 follow-up: in SIM mode show the LIVE session counter, not the
+  // server value — otherwise the header pill and the room bar disagree
+  // after playing in SIM (the server SIM only moves on signup + daily claim).
+  const sim = simSession ?? wallet?.sim ?? user?.sim ?? 0;
   const shownBal = mode === "SIM" ? sim : cash;
   const balText = balHidden ? "••••••" : mode === "SIM" ? `SIM ${sim.toLocaleString("en-GH")}` : fmtCash(shownBal);
 

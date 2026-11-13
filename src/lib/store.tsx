@@ -140,7 +140,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // the server value, which is fine for demo money.
   const topUpSim = useCallback(() => {
     setSimSession((prev) => (prev ?? wallet?.sim ?? 0) + 1000);
-    toast("SIM topped up +GH₵ 1,000 — demo money, keep checking", "info");
+    toast("SIM topped up +GH₵ 1,000", "info");
   }, [wallet, toast]);
 
   const login = useCallback(async (emailOrPhone: string, password: string) => {
