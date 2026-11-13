@@ -62,7 +62,7 @@ export default function DepositModal() {
         <div className="rg48-card">
           <button className="icon-btn rg48-x" type="button" aria-label="Close" onClick={() => setDepositOpen(false)}>✕</button>
           <h3>Top <em>up</em></h3>
-          <p className="sub">Demo cashier — cash deposits only.{refPct != null ? ` Your referring admin earns ${refPct}% commission on this deposit.` : ""}</p>
+          <p className="sub">Cash deposits only.{refPct != null ? ` Your referring admin earns ${refPct}% commission on this deposit.` : ""}</p>
           <form onSubmit={submit}>
             <div className="rg48-f"><label htmlFor="depAmt">Amount (GH₵)</label><input id="depAmt" type="number" min={1} step={1} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required /></div>
             <div className="rg48-f"><label>Method</label>

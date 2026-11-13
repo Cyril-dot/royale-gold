@@ -55,7 +55,7 @@ export default function WalletPage() {
           <button className="btn btn-gold wallet-dep" type="button" onClick={() => setDepositOpen(true)}>Deposit</button>
         )}
         {mode === "SIM" && (
-          <p className="rg48-mini wallet-note">SIM is demo money — top up anytime, it never touches your real cash.</p>
+          <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
         )}
         <p className="rg48-mini wallet-note">Coins are play-only — never withdrawable.</p>
       </div>

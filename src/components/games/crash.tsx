@@ -336,7 +336,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
       {skin === "aviator" && history.length > 0 && (
         <div className="xg-history"><span className="bh-lab">ROUND HISTORY</span>{history.map((h, i) => <span key={i} className={`bh-item ${h >= 2 ? "win" : "lose"}`}>×{h.toFixed(2)}</span>)}</div>
       )}
-      <p className="xg-note">Mode: {mode} · {room.simMode ? "SIM play is demo-only and never touches your real cash." : "Real cash settles server-side."}</p>
+      <p className="xg-note">Mode: {mode} · {room.simMode ? "SIM play is play-money only and never touches your real cash." : "Real cash settles server-side."}</p>
     </RoomShell>
   );
 }

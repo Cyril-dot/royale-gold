@@ -82,7 +82,6 @@ export default function AuthModal() {
               <div className="rg48-f"><label htmlFor="liPass">Password</label><input id="liPass" type="password" placeholder="Your password" value={pass} onChange={(e) => setPass(e.target.value)} required /></div>
               <p className="rg48-err">{err}</p>
               <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
-              <div className="rg48-demo"><b>Demo accounts — remove before real launch.</b><br /><b>Demo owner login</b> — email <b>owner@royale.gold</b> · password <b>owner123</b>. The owner adds admins, sets their commission % and runs the referral system.<br /><b>Demo admin</b> — <b>admin@royale.gold</b> · <b>admin123</b> (10% commission, code RG-DEMO1).</div>
             </form>
           ) : (
             <form onSubmit={doRegister} autoComplete="off">

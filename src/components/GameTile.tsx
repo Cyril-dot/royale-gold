@@ -33,7 +33,7 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
   useGameCardTilt();
   // Artifact's Demo button: a toast only — free play-money mode, same
   // game, no risk. It never opens the room.
-  const demo = () => toast(`${g.name} demo — free play-money mode, same game, no risk.`, "info");
+  const demo = () => toast(`${g.name} — free play mode, same game, no risk.`, "info");
 
   // Games page: the export's simpler gp-card — art + name + Play now,
   // with the TOP ×n and 1 TAP pills on beginner art. Currency is an
@@ -123,7 +123,7 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
         </div>
         <div className="play-row">
           <Link className="play-btn" href={`/games/${g.slug}`}>{PLAY_ICON}Play now</Link>
-          <button type="button" className="demo-btn" onClick={demo}>Demo</button>
+          <button type="button" className="demo-btn" onClick={demo}>Free play</button>
         </div>
       </div>
     </article>

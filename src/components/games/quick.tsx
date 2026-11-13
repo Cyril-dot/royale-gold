@@ -557,7 +557,7 @@ export function BottleRoom({ game, variant = "room" }: { game: GameDef; variant?
         <span className="deco-chip" style={{ right: "8%", top: "32%", width: 46, height: 46, background: "#17503C", animationDelay: "-1.2s" }} aria-hidden="true" />
         <span className="deco-coin" style={{ left: "14%", top: "20%", width: 32, height: 32, fontSize: 13 }} aria-hidden="true">₵</span>
         <span className="deco-coin" style={{ right: "15%", top: "23%", width: 28, height: 28, fontSize: 12, animationDelay: "-2.6s" }} aria-hidden="true">₵</span>
-        <p className="bottle-sub">The saloon game · bottle pays ×2 · demo stakes — pick a side below and spin the playable wheel.</p>
+        <p className="bottle-sub">The saloon game · bottle pays ×2 — pick a side below and spin the playable wheel.</p>
         <div className="wheel-wrap">
           <div className="wheel-disc" aria-hidden="true" />
           <span className="wheel-label up" aria-hidden="true">UP</span>

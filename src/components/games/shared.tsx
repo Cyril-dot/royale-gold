@@ -220,7 +220,7 @@ export function RoomShell({ game, subtitle, children, stats, history, bare }: {
                 <button type="button" className="xg-topup" onClick={topUpSim}>Top up SIM</button>
               )}
               {!isCoin && (
-                <span className="xg-mode-btns" role="group" aria-label="Real or demo cash">
+                <span className="xg-mode-btns" role="group" aria-label="Real or SIM cash">
                   <button type="button" aria-pressed={mode === "REAL"} className={mode === "REAL" ? "on" : ""} onClick={() => setMode("REAL")}>REAL</button>
                   <button type="button" aria-pressed={mode === "SIM"} className={mode === "SIM" ? "on" : ""} onClick={() => setMode("SIM")}>SIM</button>
                 </span>

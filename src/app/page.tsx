@@ -183,7 +183,7 @@ export default function Home() {
             </details>
             <details>
               <summary><span className="fnum">03</span><span className="fq">Can I practise without money?</span><span className="fx" aria-hidden="true">+</span></summary>
-              <p>Every game has a Demo button with a play-money balance. The games play identically — only the money is pretend, so you can learn the ropes risk-free.</p>
+              <p>Every game has a Free play button with a play-money balance. The games play identically — only the money is play money, so you can learn the ropes risk-free.</p>
             </details>
             <details>
               <summary><span className="fnum">04</span><span className="fq">Are the games fair?</span><span className="fx" aria-hidden="true">+</span></summary>
@@ -205,8 +205,8 @@ export default function Home() {
         <div className="wrap">
           <div className="foot-top">
             <div>
-              <strong style={{ color: "var(--ink)" }}>Royale Gold</strong> — sample homepage design.<br />
-              Licensed gaming operator concept · Accra, Ghana · 18+ only. Play responsibly.
+              <strong style={{ color: "var(--ink)" }}>Royale Gold</strong><br />
+              Licensed gaming operator · Accra, Ghana · 18+ only. Play responsibly.
             </div>
             <nav className="foot-links" aria-label="Footer">
               <Link href="/games">Games</Link>
@@ -215,7 +215,6 @@ export default function Home() {
             </nav>
           </div>
           <div className="foot-name" aria-hidden="true">Royale <em>Gold</em></div>
-          <p className="foot-legal">All balances, jackpots, player counts and winnings shown on this page are demo figures for the design sample.</p>
         </div>
       </footer>
     </main>

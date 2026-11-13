@@ -123,13 +123,13 @@ export default function SettingsPage() {
               <button className={`btn ${mode === "REAL" ? "btn-gold" : "btn-ghost"}`} type="button" onClick={() => setMode("REAL")} aria-pressed={mode === "REAL"}>REAL</button>
               <button className={`btn ${mode === "SIM" ? "btn-gold" : "btn-ghost"}`} type="button" onClick={() => setMode("SIM")} aria-pressed={mode === "SIM"}>SIM</button>
             </div>
-            <p className="rg48-mini">SIM is demo play. REAL uses your cash balance.</p>
+            <p className="rg48-mini">SIM is play-money mode. REAL uses your cash balance.</p>
           </div>
         </section>
 
         <section className="admin-sec">
           <h3>How winning works</h3>
-          <p>SIM is demo play — winning comes easier so you can test the games.</p>
+          <p>SIM is play-money mode — winning comes easier so you can test the games.</p>
           <p>LIVE win chance falls 5% for every GH₵100 you have deposited, never below half the normal rate.</p>
           {economy && (
             <p>Your total deposits: <b>{fmtCash(economy.lifetimeDeposited)}</b> — your LIVE win chance right now is <b>{Math.round(economy.liveFactor * 100)}%</b> of normal.</p>

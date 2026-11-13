@@ -116,7 +116,7 @@ export default function Hero() {
           Win<br /><span className="rm"><span className="hollow">Real</span> <span className="gold-word">Money</span></span>
         </h1>
         <div className="slot-note">
-          <span>Live demo slot · bet GH₵ 5 · three 7s pay GH₵ 500 · pairs pay GH₵ 10</span>
+          <span>Live slot · bet GH₵ 5 · three 7s pay GH₵ 500 · pairs pay GH₵ 10</span>
           <span className="win-msg" id="slotMsg" aria-live="polite">{msg}</span>
         </div>
 
@@ -134,7 +134,7 @@ export default function Hero() {
               <div>MoMo · Bank · Card</div>
             </div>
             <div className="hero-stats" aria-label="Platform highlights">
-              <div><b>GH₵ 9.4M</b><span>PAID OUT · SAMPLE</span></div>
+              <div><b>GH₵ 9.4M</b><span>PAID OUT</span></div>
               <div><b>2,300+</b><span>GAMES ON THE FLOOR</span></div>
               <div><b>4 min</b><span>AVG CASH-OUT</span></div>
               <div><b>24/7</b><span>REAL-HUMAN SUPPORT</span></div>
@@ -145,9 +145,8 @@ export default function Hero() {
             <div className="jackpot">
               <small><i /> MEGA JACKPOT · DROPS BEFORE GH₵ 500K</small>
               <strong className="jp-val">{jackpotText}</strong>
-              <span>Demo counter · climbs with every spin</span>
             </div>
-            <div className="online-chip"><i /><span>{onlineText}</span>&nbsp;playing now · demo</div>
+            <div className="online-chip"><i /><span>{onlineText}</span>&nbsp;playing now</div>
             <div className="stage-caption">
               <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C9 7 4 9 4 13a8 8 0 0 0 16 0c0-4-5-6-8-11z" /></svg>
               Your croupier deals a fresh hand every few seconds
@@ -167,11 +166,11 @@ export default function Hero() {
       </div>
       <div className="marquee" aria-label="Latest wins">
         <div className="marquee-track" id="winsTrack">
-          <span className="mq-item mq-live"><i />LIVE WINS · DEMO FEED</span>
+          <span className="mq-item mq-live"><i />LIVE WINS</span>
           {LIVE_WINS.map((w) => (
             <span key={w.name + w.amount} className="mq-item"><span className="mq-dot" />{w.name} won <b>{fmtCash(w.amount)}</b> on {w.game}</span>
           ))}
-          <span className="mq-item mq-live"><i />LIVE WINS · DEMO FEED</span>
+          <span className="mq-item mq-live"><i />LIVE WINS</span>
           {LIVE_WINS.map((w) => (
             <span key={w.name + w.amount + "-dup"} className="mq-item"><span className="mq-dot" />{w.name} won <b>{fmtCash(w.amount)}</b> on {w.game}</span>
           ))}
