@@ -17,6 +17,8 @@ interface AdminRow {
   permissions: string[] | null; totpEnabled: boolean;
   codes: { id: string; code: string; active: boolean }[];
   referralCount: number; coinsGiven: number; commissionAllTime: number; createdAt: string;
+  // P1 Batch 4 (O24): the admin's parent admin (a senior agent), if any.
+  parentAdminId: string | null; parentName: string | null;
 }
 
 // P0 Batch 3 (O2/O15) — per-admin permissions editor + "Kill all
@@ -352,11 +354,14 @@ export default function OwnerPage() {
   // P0 Batch 3 (O4): commission rules — the rules engine. A rule is a
   // model (RevShare = % of net loss, Turnover = % of stakes) + a rate,
   // for one admin or as the global default, from an effective date.
-  interface CommissionRuleRow { id: string; adminId: string | null; adminName: string | null; model: string; rate: number; effectiveFrom: string; createdAt: string }
+  interface CommissionRuleRow { id: string; adminId: string | null; adminName: string | null; model: string; rate: number; parentSharePct: number; effectiveFrom: string; createdAt: string }
   const [rules, setRules] = useState<CommissionRuleRow[] | null>(null);
   const [ruleAdmin, setRuleAdmin] = useState("");
   const [ruleModel, setRuleModel] = useState<"revshare" | "turnover">("revshare");
   const [ruleRate, setRuleRate] = useState(10);
+  // P1 Batch 4 (O24): the parent's share % of this admin's commission —
+  // a REPORTING line on the settlement, never a deduction.
+  const [ruleParentShare, setRuleParentShare] = useState(0);
   // Dates start empty and are set on mount (calling new Date() during
   // render breaks the prerender — the same rule as the commission date
   // picker above).
@@ -376,7 +381,7 @@ export default function OwnerPage() {
     try {
       await api("/api/owner/commission/rules", {
         method: "POST",
-        body: JSON.stringify({ adminId: ruleAdmin || null, model: ruleModel, rate: ruleRate, effectiveFrom: ruleFrom }),
+        body: JSON.stringify({ adminId: ruleAdmin || null, model: ruleModel, rate: ruleRate, parentSharePct: ruleParentShare, effectiveFrom: ruleFrom }),
       });
       toast("Commission rule saved — it applies from its effective date", "win");
       await loadRules();
@@ -389,7 +394,7 @@ export default function OwnerPage() {
   // P0 Batch 3 (O5): commission settlement — owed / paid / balance per
   // admin for a period, and recording a payout (which writes to the
   // ledger + audit log and drops the balance).
-  interface SettlementRow { adminId: string; adminName: string; adminEmail: string | null; active: boolean; owed: number; paid: number; balance: number }
+  interface SettlementRow { adminId: string; adminName: string; adminEmail: string | null; active: boolean; owed: number; paid: number; balance: number; parentAdminId: string | null; parentName: string | null; parentShare: number }
   const [settleFrom, setSettleFrom] = useState("");
   const [settleTo, setSettleTo] = useState("");
   useEffect(() => {
@@ -397,11 +402,11 @@ export default function OwnerPage() {
     setSettleFrom(`${today.slice(0, 8)}01`);
     setSettleTo(today);
   }, []);
-  const [settlement, setSettlement] = useState<{ from: string; to: string; rows: SettlementRow[]; totals: { owed: number; paid: number; balance: number } } | null>(null);
+  const [settlement, setSettlement] = useState<{ from: string; to: string; rows: SettlementRow[]; totals: { owed: number; paid: number; balance: number; parentShare: number } } | null>(null);
   const loadSettlement = useCallback(async () => {
     if (!settleFrom || !settleTo) return;
     try {
-      const r = await api<{ from: string; to: string; rows: SettlementRow[]; totals: { owed: number; paid: number; balance: number } }>(`/api/owner/commission/settlement?from=${settleFrom}&to=${settleTo}`);
+      const r = await api<{ from: string; to: string; rows: SettlementRow[]; totals: { owed: number; paid: number; balance: number; parentShare: number } }>(`/api/owner/commission/settlement?from=${settleFrom}&to=${settleTo}`);
       setSettlement(r);
     } catch { setSettlement(null); }
   }, [settleFrom, settleTo]);
@@ -671,6 +676,99 @@ export default function OwnerPage() {
   // render breaks the prerender — the same rule as the other pickers).
   useEffect(() => { setPromoStart(todayStr()); setCbDate(todayStr()); }, []);
 
+  // P1 Batch 4 (O20–O25): owner platform — announcements, platform
+  // settings & branding, KYC/AML settings, support oversight, agent
+  // hierarchy, cashier. These hooks MUST live above the early returns
+  // below — hooks after `if (!user) return` change the hook count
+  // between renders and crash the page (React #310).
+  // O20: announcements & banners (text only — no images, no links).
+  interface AnnouncementRow { id: string; title: string; body: string; audience: string; active: boolean; startsAt: string; endsAt: string | null; createdByName: string | null; createdAt: string }
+  const [announcements, setAnnouncements] = useState<AnnouncementRow[] | null>(null);
+  const [annTitle, setAnnTitle] = useState("");
+  const [annBody, setAnnBody] = useState("");
+  const [annAudience, setAnnAudience] = useState<"all" | "players" | "admins">("all");
+  const [annStartsAt, setAnnStartsAt] = useState("");
+  const [annEndsAt, setAnnEndsAt] = useState("");
+  const [annBusy, setAnnBusy] = useState(false);
+  const [annToggleBusy, setAnnToggleBusy] = useState<string | null>(null);
+  const loadAnnouncements = useCallback(async () => {
+    try {
+      const r = await api<{ announcements: AnnouncementRow[] }>("/api/owner/announcements");
+      setAnnouncements(r.announcements);
+    } catch { setAnnouncements([]); }
+  }, []);
+  useEffect(() => { void loadAnnouncements(); }, [loadAnnouncements]);
+  useEffect(() => { setAnnStartsAt(todayStr()); }, []);
+  // O21: platform settings & branding — site name, support contact,
+  // maintenance mode (the money fields live in Wallet config).
+  interface PlatSettings { siteName: string; supportContact: string; maintenanceMode: boolean }
+  const [platSettings, setPlatSettings] = useState<PlatSettings | null>(null);
+  const [platSiteName, setPlatSiteName] = useState("");
+  const [platSupport, setPlatSupport] = useState("");
+  const [platMaint, setPlatMaint] = useState(false);
+  const [platBusy, setPlatBusy] = useState(false);
+  const loadPlatSettings = useCallback(async () => {
+    try {
+      const r = await api<{ settings: PlatSettings }>("/api/owner/platform/settings");
+      setPlatSettings(r.settings);
+      setPlatSiteName(r.settings.siteName);
+      setPlatSupport(r.settings.supportContact);
+      setPlatMaint(r.settings.maintenanceMode);
+    } catch { setPlatSettings(null); }
+  }, []);
+  useEffect(() => { void loadPlatSettings(); }, [loadPlatSettings]);
+  // O22: KYC/AML settings — accepted document types, the auto-approve
+  // rule (URL-host allow-list), and the withdrawal KYC threshold.
+  interface KycSettingsRow { acceptedTypes: string[]; autoApprove: boolean; autoApproveHosts: string[]; withdrawalKycThreshold: number }
+  const KYC_TYPES = [
+    { type: "national_id", label: "National ID" },
+    { type: "passport", label: "Passport" },
+    { type: "drivers_licence", label: "Driver's licence" },
+  ];
+  const [kycSettings, setKycSettings] = useState<KycSettingsRow | null>(null);
+  const [kycTypesSel, setKycTypesSel] = useState<string[]>(["national_id", "passport", "drivers_licence"]);
+  const [kycAuto, setKycAuto] = useState(false);
+  const [kycHosts, setKycHosts] = useState("");
+  const [kycThreshold, setKycThreshold] = useState("0");
+  const [kycBusy, setKycBusy] = useState(false);
+  const loadKycSettings = useCallback(async () => {
+    try {
+      const r = await api<{ settings: KycSettingsRow }>("/api/owner/kyc-settings");
+      setKycSettings(r.settings);
+      setKycTypesSel(r.settings.acceptedTypes);
+      setKycAuto(r.settings.autoApprove);
+      setKycHosts(r.settings.autoApproveHosts.join(", "));
+      setKycThreshold(String(r.settings.withdrawalKycThreshold));
+    } catch { setKycSettings(null); }
+  }, []);
+  useEffect(() => { void loadKycSettings(); }, [loadKycSettings]);
+  // O23: support oversight — every open ticket + per-admin stats.
+  interface SupportTicketRow { id: string; subject: string; status: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; messages: number; createdAt: string; updatedAt: string; ageHours: number }
+  interface SupportAdminStats { adminId: string; adminName: string; open: number; answered: number; closed: number; unanswered: number; avgFirstResponseHours: number | null }
+  const [support, setSupport] = useState<{ openTickets: SupportTicketRow[]; stats: SupportAdminStats[]; totals: { open: number; answered: number; closed: number; unanswered: number } } | null>(null);
+  // Per-ticket reassign target (ticket id → admin id).
+  const [reassignSel, setReassignSel] = useState<Record<string, string>>({});
+  const [reassignBusy, setReassignBusy] = useState<string | null>(null);
+  const loadSupport = useCallback(async () => {
+    try {
+      setSupport(await api<{ openTickets: SupportTicketRow[]; stats: SupportAdminStats[]; totals: { open: number; answered: number; closed: number; unanswered: number } }>("/api/owner/tickets"));
+    } catch { setSupport(null); }
+  }, []);
+  useEffect(() => { void loadSupport(); }, [loadSupport]);
+  // O24: the parent picker per admin — the select's value is the admin's
+  // current parent; changing it saves at once. One busy id at a time.
+  const [parentBusy, setParentBusy] = useState<string | null>(null);
+  // O25: cashier / gateway balances — per-method totals + reconciliation.
+  interface CashierMethodRow { method: string; deposited: number; withdrawn: number; net: number }
+  interface CashierData { perMethod: CashierMethodRow[]; totals: { deposited: number; withdrawn: number; net: number }; reconciliation: { totalDeposited: number; totalWithdrawn: number; totalCommissionPaid: number; expectedCashOnHand: number; actualWalletBalances: number; difference: number } }
+  const [cashier, setCashier] = useState<CashierData | null>(null);
+  const loadCashier = useCallback(async () => {
+    try {
+      setCashier(await api<CashierData>("/api/owner/cashier"));
+    } catch { setCashier(null); }
+  }, []);
+  useEffect(() => { void loadCashier(); }, [loadCashier]);
+
   if (!user) {
     return (
       <main className="rg48-page-main"><div className="wrap">
@@ -742,6 +840,102 @@ export default function OwnerPage() {
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Cashback payment failed", "lose");
     } finally { setCbBusy(null); }
+  };
+
+  // P1 Batch 4 (O20): create an announcement / toggle one active.
+  const createAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAnnBusy(true);
+    try {
+      await api("/api/owner/announcements", {
+        method: "POST",
+        body: JSON.stringify({
+          title: annTitle.trim(),
+          body: annBody.trim(),
+          audience: annAudience,
+          startsAt: annStartsAt || undefined,
+          endsAt: annEndsAt || undefined,
+        }),
+      });
+      toast("Announcement created — it shows on the homepage while it is live", "win");
+      setAnnTitle("");
+      setAnnBody("");
+      setAnnEndsAt("");
+      await loadAnnouncements();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not create announcement", "lose");
+    } finally { setAnnBusy(false); }
+  };
+  const toggleAnnouncement = async (a: AnnouncementRow) => {
+    setAnnToggleBusy(a.id);
+    try {
+      await api(`/api/owner/announcements/${a.id}/toggle`, { method: "POST" });
+      toast(a.active ? "Announcement deactivated — it no longer shows" : "Announcement activated", "win");
+      await loadAnnouncements();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not toggle announcement", "lose");
+    } finally { setAnnToggleBusy(null); }
+  };
+  // P1 Batch 4 (O21): platform settings & branding.
+  const savePlatSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPlatBusy(true);
+    try {
+      await api("/api/owner/platform/settings", {
+        method: "POST",
+        body: JSON.stringify({ siteName: platSiteName.trim(), supportContact: platSupport.trim(), maintenanceMode: platMaint }),
+      });
+      toast("Platform settings saved", "win");
+      await loadPlatSettings();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not save platform settings", "lose");
+    } finally { setPlatBusy(false); }
+  };
+  // P1 Batch 4 (O22): KYC/AML settings.
+  const saveKycSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (kycTypesSel.length === 0) { toast("Pick at least one accepted document type", "lose"); return; }
+    setKycBusy(true);
+    try {
+      await api("/api/owner/kyc-settings", {
+        method: "POST",
+        body: JSON.stringify({
+          acceptedTypes: kycTypesSel,
+          autoApprove: kycAuto,
+          autoApproveHosts: kycHosts.trim(),
+          withdrawalKycThreshold: Number(kycThreshold) || 0,
+        }),
+      });
+      toast("KYC/AML settings saved", "win");
+      await loadKycSettings();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not save KYC settings", "lose");
+    } finally { setKycBusy(false); }
+  };
+  // P1 Batch 4 (O23): reassign a ticket to a different admin.
+  const reassignTicketTo = async (ticketId: string) => {
+    const target = reassignSel[ticketId] ?? "";
+    if (!target) { toast("Pick an admin to reassign to", "lose"); return; }
+    setReassignBusy(ticketId);
+    try {
+      await api(`/api/owner/tickets/${ticketId}/reassign`, { method: "POST", body: JSON.stringify({ adminId: target }) });
+      toast("Ticket reassigned — the history shows it", "win");
+      setReassignSel((cur) => ({ ...cur, [ticketId]: "" }));
+      await loadSupport();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not reassign ticket", "lose");
+    } finally { setReassignBusy(null); }
+  };
+  // P1 Batch 4 (O24): set or clear an admin's parent admin.
+  const saveParent = async (adminId: string, parentAdminId: string) => {
+    setParentBusy(adminId);
+    try {
+      await api(`/api/owner/admins/${adminId}/parent`, { method: "POST", body: JSON.stringify({ parentAdminId: parentAdminId || null }) });
+      toast(parentAdminId ? "Parent admin set — their panel now rolls this downline in" : "Parent admin cleared", "win");
+      await load();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not set parent admin", "lose");
+    } finally { setParentBusy(null); }
   };
 
   const addAdmin = async (e: React.FormEvent) => {
@@ -849,12 +1043,22 @@ export default function OwnerPage() {
             <div key={a.id} className="admin-row">
               <div>
                 <b>{a.name}</b> <span>{a.email}</span> <span className={a.active ? "ok" : "bad"}>{a.active ? "Active" : "Deactivated"}</span>
-                <div className="admin-meta">Codes: {a.codes.map((c) => c.code).join(", ") || "—"} · Referrals: {a.referralCount} · Coins given: {a.coinsGiven} · Commission all-time: {fmtCash(a.commissionAllTime)}</div>
+                <div className="admin-meta">Codes: {a.codes.map((c) => c.code).join(", ") || "—"} · Referrals: {a.referralCount} · Coins given: {a.coinsGiven} · Commission all-time: {fmtCash(a.commissionAllTime)}{a.parentName ? ` · Parent: ${a.parentName}` : ""}</div>
               </div>
               <div className="admin-edit">
                 <label>% <input type="number" min={0} max={100} defaultValue={a.commissionPct ?? 0} onChange={(e) => setEditing((ed) => ({ ...ed, [a.id]: Number(e.target.value) }))} /></label>
                 <button className="btn btn-ghost btn-sm" type="button" onClick={() => void savePct(a.id)}>Save %</button>
                 <button className="btn btn-ghost btn-sm" type="button" onClick={() => void toggleActive(a)}>{a.active ? "Deactivate" : "Reactivate"}</button>
+                {/* P1 Batch 4 (O24): the parent admin — a senior agent
+                    whose panel rolls this admin's downline in (read-only).
+                    Two levels only: only an admin with no parent of their
+                    own can be a parent. */}
+                <label>Parent <select value={a.parentAdminId ?? ""} disabled={parentBusy === a.id} onChange={(e) => void saveParent(a.id, e.target.value)} aria-label={`Parent admin for ${a.name}`}>
+                  <option value="">No parent</option>
+                  {admins.filter((p) => p.id !== a.id && !p.parentAdminId).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select></label>
                 {a.codes.length > 0 && (
                   <button className={`btn btn-ghost btn-sm${copiedId === a.id ? " done" : ""}`} type="button" onClick={() => copyAdminLink(a)}>
                     {copiedId === a.id ? "Copied ✓" : "Copy referral link"}
@@ -1012,21 +1216,24 @@ export default function OwnerPage() {
               <option value="turnover">Turnover — % of stakes</option>
             </select>
             <label>Rate % <input type="number" min={0} max={100} step={0.5} value={ruleRate} onChange={(e) => setRuleRate(Number(e.target.value))} /></label>
+            <label>Parent share % <input type="number" min={0} max={100} step={0.5} value={ruleParentShare} onChange={(e) => setRuleParentShare(Number(e.target.value))} /></label>
             <label>From <input type="date" value={ruleFrom} max={todayStr()} onChange={(e) => setRuleFrom(e.target.value)} /></label>
             <button className="btn btn-gold" type="submit" disabled={ruleBusy}>{ruleBusy ? "Saving…" : "Save rule"}</button>
           </form>
+          <p className="rg48-mini">Parent share: when this admin has a parent admin, the parent takes this % of the admin&apos;s commission — shown as a separate line on the settlement. It is a reporting line, NOT a deduction: the child&apos;s payout is untouched.</p>
           {rules === null ? <p>Loading rules…</p> : rules.length === 0 ? (
             <p>No rules yet — every admin is on the legacy flat % of deposits.</p>
           ) : (
             <div className="rg48-twrap">
               <table className="dep-table">
-                <thead><tr><th>Applies to</th><th>Model</th><th>Rate</th><th>From</th></tr></thead>
+                <thead><tr><th>Applies to</th><th>Model</th><th>Rate</th><th>Parent share</th><th>From</th></tr></thead>
                 <tbody>
                   {rules.map((r) => (
                     <tr key={r.id}>
                       <td>{r.adminName ?? "Global default"}</td>
                       <td>{r.model === "revshare" ? "RevShare" : "Turnover"}</td>
                       <td>{r.rate}%</td>
+                      <td>{r.parentSharePct > 0 ? `${r.parentSharePct}%` : "—"}</td>
                       <td>{r.effectiveFrom}</td>
                     </tr>
                   ))}
@@ -1049,18 +1256,21 @@ export default function OwnerPage() {
                 <div className="sum-card"><span>Owed</span><b>{fmtCash(settlement.totals.owed)}</b></div>
                 <div className="sum-card"><span>Paid</span><b>{fmtCash(settlement.totals.paid)}</b></div>
                 <div className="sum-card"><span>Balance</span><b>{fmtCash(settlement.totals.balance)}</b></div>
+                <div className="sum-card"><span>Parent shares</span><b>{fmtCash(settlement.totals.parentShare)}</b></div>
               </div>
+              <p className="rg48-mini">Parent shares are a reporting line — they are NOT deducted from any admin&apos;s payout.</p>
               {settlement.rows.length === 0 ? <p>No admins yet.</p> : (
                 <div className="rg48-twrap">
                   <table className="dep-table">
-                    <thead><tr><th>Admin</th><th>Owed</th><th>Paid</th><th>Balance</th></tr></thead>
+                    <thead><tr><th>Admin</th><th>Owed</th><th>Paid</th><th>Balance</th><th>Parent share</th></tr></thead>
                     <tbody>
                       {settlement.rows.map((r) => (
                         <tr key={r.adminId}>
-                          <td>{r.adminName}{r.active ? "" : " (deactivated)"}</td>
+                          <td>{r.adminName}{r.active ? "" : " (deactivated)"}{r.parentName ? ` · parent: ${r.parentName}` : ""}</td>
                           <td>{fmtCash(r.owed)}</td>
                           <td>{fmtCash(r.paid)}</td>
                           <td>{fmtCash(r.balance)}</td>
+                          <td>{r.parentShare > 0 ? fmtCash(r.parentShare) : "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1541,6 +1751,210 @@ export default function OwnerPage() {
                   </tbody>
                 </table>
               </div>
+            </>
+          )}
+        </section>
+
+        {/* P1 Batch 4 (O20): announcements & banners — text only, no
+            images, no links. */}
+        <section className="admin-sec">
+          <h3>Announcements</h3>
+          <p className="rg48-sub">Text-only banners on the homepage — no images, no links. An announcement shows while it is active and inside its dates: “all” for everyone (including signed-out visitors), “players” for signed-in players, “admins” for admins. A player can dismiss a banner for the rest of their session.</p>
+          <form className="owner-add ann-form" onSubmit={createAnnouncement}>
+            <input type="text" placeholder="Title" value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} required minLength={1} maxLength={120} />
+            <input type="text" placeholder="Message" value={annBody} onChange={(e) => setAnnBody(e.target.value)} required minLength={1} maxLength={1000} />
+            <select value={annAudience} onChange={(e) => setAnnAudience(e.target.value as "all" | "players" | "admins")} aria-label="Audience">
+              <option value="all">Everyone</option>
+              <option value="players">Players only</option>
+              <option value="admins">Admins only</option>
+            </select>
+            <label>From <input type="date" value={annStartsAt} onChange={(e) => setAnnStartsAt(e.target.value)} /></label>
+            <label>To <input type="date" value={annEndsAt} onChange={(e) => setAnnEndsAt(e.target.value)} /></label>
+            <button className="btn btn-gold" type="submit" disabled={annBusy}>{annBusy ? "Creating…" : "Create announcement"}</button>
+          </form>
+          {announcements === null ? <p>Loading announcements…</p> : announcements.length === 0 ? <p>No announcements yet.</p> : (
+            <div className="rg48-twrap">
+              <table className="dep-table ann-table">
+                <thead><tr><th>Title</th><th>Audience</th><th>Dates</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {announcements.map((a) => (
+                    <tr key={a.id}>
+                      <td><b>{a.title}</b><br /><span className="rg48-mini">{a.body}</span></td>
+                      <td>{a.audience}</td>
+                      <td>{a.startsAt.slice(0, 10)} to {a.endsAt ? a.endsAt.slice(0, 10) : "open"}</td>
+                      <td>{a.active ? "Active" : "Inactive"}</td>
+                      <td><button type="button" className="btn btn-ghost btn-sm" disabled={annToggleBusy === a.id} onClick={() => void toggleAnnouncement(a)}>{a.active ? "Deactivate" : "Activate"}</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* P1 Batch 4 (O21): platform settings & branding — site name,
+            support contact, maintenance mode. The money fields live in
+            Wallet config; the global kill switch is in Games. */}
+        <section className="admin-sec">
+          <h3>Platform settings</h3>
+          <p className="rg48-sub">The site name in the header, the support contact on the account page&apos;s Support form, and maintenance mode. Maintenance mode ON shows “Royale Gold is under maintenance — back soon” on the homepage and an unavailable screen in every game room; the owner and admin panels stay reachable so you can switch it back OFF.</p>
+          {platSettings === null ? <p>Loading platform settings…</p> : (
+            <form className="owner-add" onSubmit={savePlatSettings}>
+              <label>Site name <input type="text" value={platSiteName} onChange={(e) => setPlatSiteName(e.target.value)} maxLength={60} required /></label>
+              <label>Support contact <input type="text" value={platSupport} onChange={(e) => setPlatSupport(e.target.value)} maxLength={120} placeholder="Email or WhatsApp number" /></label>
+              <label><input type="checkbox" checked={platMaint} onChange={(e) => setPlatMaint(e.target.checked)} /> Maintenance mode</label>
+              <button className="btn btn-gold" type="submit" disabled={platBusy}>{platBusy ? "Saving…" : "Save platform settings"}</button>
+            </form>
+          )}
+        </section>
+
+        {/* P1 Batch 4 (O22): KYC/AML settings — accepted document types,
+            the auto-approve rule, and the withdrawal KYC threshold. */}
+        <section className="admin-sec">
+          <h3>KYC / AML settings</h3>
+          <p className="rg48-sub">The document types players can submit, the auto-approve rule, and the withdrawal KYC threshold. Auto-approve is a URL-host check, NOT a document check — there is no verification service: a submission is approved at once only when its document link&apos;s host is on the allow-list below, and it stays visible in the queue as “auto-approved”. The threshold flags withdrawal requests above it from players whose KYC is not Approved — a warning on the queue, never a block. KYC never blocks a withdrawal outright.</p>
+          {kycSettings === null ? <p>Loading KYC settings…</p> : (
+            <form className="owner-add" onSubmit={saveKycSettings}>
+              <span className="ow-perms-label">Accepted document types:</span>
+              <div className="ow-perms-checks">
+                {KYC_TYPES.map((t) => (
+                  <label key={t.type} className="ow-perm-check">
+                    <input type="checkbox" checked={kycTypesSel.includes(t.type)} onChange={() => setKycTypesSel((cur) => (cur.includes(t.type) ? cur.filter((x) => x !== t.type) : [...cur, t.type]))} /> {t.label}
+                  </label>
+                ))}
+              </div>
+              <label><input type="checkbox" checked={kycAuto} onChange={(e) => setKycAuto(e.target.checked)} /> Auto-approve from allow-listed hosts</label>
+              <label>Allow-listed hosts <input type="text" value={kycHosts} onChange={(e) => setKycHosts(e.target.value)} placeholder="e.g. imgbb.com, ibb.co" /></label>
+              <label>Withdrawal KYC threshold GH₵ <input type="number" min={0} step={1} value={kycThreshold} onChange={(e) => setKycThreshold(e.target.value)} /></label>
+              <button className="btn btn-gold" type="submit" disabled={kycBusy}>{kycBusy ? "Saving…" : "Save KYC settings"}</button>
+            </form>
+          )}
+        </section>
+
+        {/* P1 Batch 4 (O23): support oversight — every open ticket on the
+            platform + per-admin counts and first-response times. */}
+        <section className="admin-sec">
+          <h3>Support oversight</h3>
+          <p className="rg48-sub">Every open ticket on the platform, and how fast each admin answers. First response is the first admin reply after the ticket was created; a ticket with no admin reply yet counts as unanswered. Reassigning writes “Reassigned to …” into the ticket history and the audit log.</p>
+          {support === null ? <p>Loading support…</p> : (
+            <>
+              <div className="sum-cards">
+                <div className="sum-card"><span>Open</span><b>{support.totals.open}</b></div>
+                <div className="sum-card"><span>Answered</span><b>{support.totals.answered}</b></div>
+                <div className="sum-card"><span>Closed</span><b>{support.totals.closed}</b></div>
+                <div className="sum-card"><span>Unanswered</span><b>{support.totals.unanswered}</b></div>
+              </div>
+              {support.stats.length > 0 && (
+                <div className="rg48-twrap">
+                  <table className="dep-table">
+                    <thead><tr><th>Admin</th><th>Open</th><th>Answered</th><th>Closed</th><th>Unanswered</th><th>Avg first response</th></tr></thead>
+                    <tbody>
+                      {support.stats.map((s) => (
+                        <tr key={s.adminId}>
+                          <td>{s.adminName}</td>
+                          <td>{s.open}</td>
+                          <td>{s.answered}</td>
+                          <td>{s.closed}</td>
+                          <td>{s.unanswered}</td>
+                          <td>{s.avgFirstResponseHours === null ? "—" : `${s.avgFirstResponseHours}h`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {support.openTickets.length === 0 ? <p>No open tickets.</p> : (
+                <div className="rg48-twrap">
+                  <table className="dep-table">
+                    <thead><tr><th>Player</th><th>Subject</th><th>Admin</th><th>Status</th><th>Age</th><th>Reassign to</th></tr></thead>
+                    <tbody>
+                      {support.openTickets.map((t) => (
+                        <tr key={t.id}>
+                          <td>{t.userName}</td>
+                          <td>{t.subject}</td>
+                          <td>{t.adminName ?? "—"}</td>
+                          <td>{t.status}</td>
+                          <td>{t.ageHours < 1 ? "< 1h" : `${t.ageHours}h`}</td>
+                          <td>
+                            <select value={reassignSel[t.id] ?? ""} onChange={(e) => setReassignSel((cur) => ({ ...cur, [t.id]: e.target.value }))} aria-label={`Reassign ticket ${t.subject}`}>
+                              <option value="">Pick admin…</option>
+                              {admins.filter((a) => a.id !== t.adminId).map((a) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                            </select>{" "}
+                            <button type="button" className="btn btn-ghost btn-sm" disabled={reassignBusy === t.id || !(reassignSel[t.id] ?? "")} onClick={() => void reassignTicketTo(t.id)}>Reassign</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* P1 Batch 4 (O24): agent hierarchy — the tree at a glance. The
+            parent is set in All admins above; the split % in Commission
+            rules. */}
+        <section className="admin-sec">
+          <h3>Agent hierarchy</h3>
+          <p className="rg48-sub">An admin can have a parent admin (a senior agent). The parent&apos;s Overview, Commission and Players pages roll the child downlines in, read-only and labelled. A parent&apos;s share of a child&apos;s commission is a reporting line on the settlement — never deducted from the child&apos;s payout. Two levels only; an admin with no parent works exactly as before.</p>
+          {admins.length === 0 ? <p>No admins yet.</p> : (
+            <div className="ow-games">
+              {admins.filter((a) => !a.parentAdminId).map((p) => {
+                const kids = admins.filter((a) => a.parentAdminId === p.id);
+                return (
+                  <div key={p.id} className="ow-game-row">
+                    <div className="ow-game-head">
+                      <b>{p.name}</b>
+                      <span className="ow-game-cur">{kids.length === 0 ? "No child admins" : `${kids.length} ${kids.length === 1 ? "child admin" : "child admins"}`}</span>
+                    </div>
+                    {kids.length > 0 && (
+                      <p className="ow-game-note">Children: {kids.map((k) => k.name).join(", ")} — their downlines roll into {p.name}&apos;s Overview, Commission and Players pages.</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* P1 Batch 4 (O25): cashier / gateway balances — per-method
+            totals + the reconciliation note. */}
+        <section className="admin-sec cashier-sec">
+          <h3>Cashier</h3>
+          <p className="rg48-sub">What the platform holds per payment method — deposits minus approved withdrawals. Deposits are demo cashier only (no real payment gateway), so these are the platform&apos;s own ledger figures, not a gateway provider&apos;s balance.</p>
+          {cashier === null ? <p>Loading cashier…</p> : (
+            <>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Method</th><th>Deposited</th><th>Withdrawn</th><th>Net</th></tr></thead>
+                  <tbody>
+                    {cashier.perMethod.map((m) => (
+                      <tr key={m.method}>
+                        <td>{m.method}</td>
+                        <td>{fmtCash(m.deposited)}</td>
+                        <td>{fmtCash(m.withdrawn)}</td>
+                        <td>{fmtCash(m.net)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td><b>Total</b></td>
+                      <td><b>{fmtCash(cashier.totals.deposited)}</b></td>
+                      <td><b>{fmtCash(cashier.totals.withdrawn)}</b></td>
+                      <td><b>{fmtCash(cashier.totals.net)}</b></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <h4>Reconciliation</h4>
+              <div className="sum-cards">
+                <div className="sum-card"><span>Expected cash on hand</span><b>{fmtCash(cashier.reconciliation.expectedCashOnHand)}</b></div>
+                <div className="sum-card"><span>Actual wallet balances</span><b>{fmtCash(cashier.reconciliation.actualWalletBalances)}</b></div>
+                <div className="sum-card"><span>Difference</span><b>{fmtCash(cashier.reconciliation.difference)}</b></div>
+              </div>
+              <p className="rg48-mini">Expected = total deposits − total approved withdrawals − total commission paid out ({fmtCash(cashier.reconciliation.totalDeposited)} − {fmtCash(cashier.reconciliation.totalWithdrawn)} − {fmtCash(cashier.reconciliation.totalCommissionPaid)}). Actual = the sum of every player&apos;s cash balance. The difference is the house&apos;s net position — game winnings come from the house, so the two will differ; it is not an error.</p>
             </>
           )}
         </section>

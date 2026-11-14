@@ -16,7 +16,15 @@ export async function GET() {
   await connection();
   try {
     const [games, settings] = await Promise.all([getAllGameConfigs(), getPlatformSettings()]);
-    return ok({ globalKill: settings.globalKill, games });
+    return ok({
+      globalKill: settings.globalKill,
+      // P1 Batch 4 (O21): the header reads the site name from here and
+      // the homepage + game rooms read the maintenance flag.
+      siteName: settings.siteName,
+      maintenanceMode: settings.maintenanceMode,
+      supportContact: settings.supportContact,
+      games,
+    });
   } catch (err) {
     return toErrorResponse(err);
   }

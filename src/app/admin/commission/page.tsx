@@ -65,6 +65,13 @@ function AdminCommissionInner() {
       <AdminNav />
       <section className="admin-sec ac-commission">
         <h3>Commission</h3>
+        {/* P1 Batch 4 (O24): when this admin has child admins, the
+            figures below roll their downlines in — read-only. */}
+        {day && day.scope.childAdmins.length > 0 && (
+          <p className="rg48-mini">
+            Includes your child admins&apos; downlines: {day.scope.childAdmins.map((c) => c.name).join(", ")}.
+          </p>
+        )}
         <div className="ac-tabs" role="tablist" aria-label="Commission views">
           <button type="button" role="tab" id="ac-tab-day" aria-selected={tab === "day"} aria-controls="ac-panel-day" className={`ac-tab${tab === "day" ? " ac-tab-active" : ""}`} onClick={() => setTab("day")}>Day detail</button>
           <button type="button" role="tab" id="ac-tab-history" aria-selected={tab === "history"} aria-controls="ac-panel-history" className={`ac-tab${tab === "history" ? " ac-tab-active" : ""}`} onClick={() => setTab("history")}>History</button>
@@ -88,18 +95,20 @@ function AdminCommissionInner() {
                     ? `RevShare ${day.totals.rate}% of net loss · stakes ${fmtCash(day.totals.totalStakes ?? 0)} − payouts ${fmtCash(day.totals.totalPayouts ?? 0)}`
                     : day.totals.model === "turnover"
                       ? `Turnover ${day.totals.rate}% of stakes · stakes ${fmtCash(day.totals.totalStakes ?? 0)}`
-                      : "Legacy — flat % of deposits (no rule set)"}
+                      : day.totals.model === "mixed"
+                        ? "Mixed — your downline and child downlines priced on different rules"
+                        : "Legacy — flat % of deposits (no rule set)"}
                 </p>
                 {day.deposits.length === 0 ? (
                   <p className="bh-empty">No deposits that day.</p>
                 ) : (
                   <div className="rg48-twrap">
                     <table className="dep-table">
-                      <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th></tr></thead>
+                      <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th>{day.scope.childAdmins.length > 0 && <th>Admin</th>}</tr></thead>
                       <tbody>
                         {day.deposits.map((d) => (
                           <tr key={d.id} onClick={() => goPlayer(d.userId)} onKeyDown={(e) => { if (e.key === "Enter") goPlayer(d.userId); }} tabIndex={0} className="clickable">
-                            <td>{d.userName}</td><td>{d.userContact}</td><td>{fmtCash(d.amount)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtCash(d.commission)} ({d.pctInForce}%)</td>
+                            <td>{d.userName}</td><td>{d.userContact}</td><td>{fmtCash(d.amount)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtCash(d.commission)} ({d.pctInForce}%)</td>{day.scope.childAdmins.length > 0 && <td>{d.adminName || "—"}</td>}
                           </tr>
                         ))}
                       </tbody>
@@ -118,7 +127,7 @@ function AdminCommissionInner() {
                   <tbody>
                     {ov.history.map((h) => (
                       <tr key={h.date} onClick={() => { setDate(h.date); setTab("day"); }} onKeyDown={(e) => { if (e.key === "Enter") { setDate(h.date); setTab("day"); } }} tabIndex={0} className="clickable">
-                        <td>{h.date}</td><td>{h.deposits}</td><td>{fmtCash(h.totalAmount)}</td><td>{fmtCash(h.totalCommission)}</td><td>{h.model === "revshare" ? `RevShare ${h.rate}%` : h.model === "turnover" ? `Turnover ${h.rate}%` : "Legacy"}</td>
+                        <td>{h.date}</td><td>{h.deposits}</td><td>{fmtCash(h.totalAmount)}</td><td>{fmtCash(h.totalCommission)}</td><td>{h.model === "revshare" ? `RevShare ${h.rate}%` : h.model === "turnover" ? `Turnover ${h.rate}%` : h.model === "mixed" ? "Mixed" : "Legacy"}</td>
                       </tr>
                     ))}
                   </tbody>

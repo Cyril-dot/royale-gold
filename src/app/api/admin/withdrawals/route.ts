@@ -9,6 +9,8 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
 import { annotateWithdrawalFlags } from "@/lib/withdrawals";
+import { getKycSettings } from "@/lib/kyc-settings";
+import { kycRequiredFor, latestKycStatuses } from "@/lib/kyc";
 
 export async function GET(req: Request) {
   try {
@@ -26,6 +28,11 @@ export async function GET(req: Request) {
     });
     const pending = await prisma.withdrawal.count({ where: { adminId: admin.id, status: { in: ["pending", "admin_approved"] } } });
     const flags = await annotateWithdrawalFlags(rows.map((w) => ({ id: w.id, userId: w.userId, amount: dec(w.amount), user: w.user })));
+    // P1 Batch 4 (O22): the KYC-required warning — a request above the
+    // owner's threshold from a player whose KYC is not Approved gets a
+    // flag. A WARNING only: the request can still be approved.
+    const kycSettings = await getKycSettings();
+    const kycStatuses = await latestKycStatuses(rows.map((w) => w.userId));
     const withdrawals = rows
       .map((w) => ({
         id: w.id,
@@ -40,6 +47,8 @@ export async function GET(req: Request) {
         createdAt: w.createdAt.toISOString(),
         decidedAt: w.decidedAt?.toISOString() ?? null,
         flags: flags.get(w.id) ?? [],
+        kycStatus: kycStatuses.get(w.userId) ?? "not_submitted",
+        kycRequired: kycRequiredFor(dec(w.amount), kycStatuses.get(w.userId) ?? "not_submitted", kycSettings.withdrawalKycThreshold),
       }))
       .filter((w) => !flaggedOnly || w.flags.length > 0);
     return ok({ withdrawals, pending });

@@ -54,6 +54,14 @@ model User {
   referredByAdminId String?
   referredByAdmin  User?    @relation("ReferredUsers", fields: [referredByAdminId], references: [id])
   referredUsers    User[]   @relation("ReferredUsers")
+  // P1 Batch 4 (O24): agent hierarchy — an admin can have a PARENT
+  // admin (a senior agent). The parent sees their own downline PLUS
+  // their child admins' downlines as a read-only rollup on the parent's
+  // Overview / Commission / Players pages. Optional — an admin with no
+  // parent works exactly as before.
+  parentAdminId String?
+  parentAdmin   User?  @relation("AdminHierarchy", fields: [parentAdminId], references: [id])
+  childAdmins   User[] @relation("AdminHierarchy")
   referralCodeUsed String?
   xp               Int      @default(0)
   level            Int      @default(1)
@@ -104,6 +112,8 @@ model User {
   promotionsCreated Promotion[]     @relation("PromotionCreator")
   promotionsTargeted Promotion[]    @relation("PromotionTarget")
   promotionGrants   PromotionGrant[]
+  // P1 Batch 4 (O20): announcements this owner created.
+  announcementsCreated Announcement[] @relation("AnnouncementCreator")
 }
 
 model ReferralCode {
@@ -269,7 +279,7 @@ model AuditLog {
   id        String   @id @default(cuid())
   actorId   String
   actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send" | "promotion.create" | "promotion.grant" | "promotion.cashback" | "promotion.toggle"
+  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send" | "promotion.create" | "promotion.grant" | "promotion.cashback" | "promotion.toggle" | "announcement.create" | "announcement.toggle" | "platform.settings" | "kyc.settings" | "ticket.reassign" | "admin.parent.set"
   targetId  String?
   detail    String?
   createdAt DateTime @default(now())
@@ -287,12 +297,17 @@ model AuditLog {
 // = stakes - payouts) or "turnover" (% of total stakes). Rate is a %
 // (e.g. 10 = 10%). Rules are never deleted — a new rule supersedes the
 // old one from its effectiveFrom date, so past days stay frozen.
+// P1 Batch 4 (O24): parentSharePct — when this admin has a PARENT
+// admin, the parent takes this % of the admin's commission as a
+// REPORTING line on the settlement (shown, never deducted from the
+// child's payout). Default 0 = no split.
 model CommissionRule {
   id            String   @id @default(cuid())
   adminId       String?
   admin         User?    @relation("RuleAdmin", fields: [adminId], references: [id])
   model         String   // "revshare" | "turnover"
   rate          Decimal  @db.Decimal(5, 2)
+  parentSharePct Decimal @default(0) @db.Decimal(5, 2)
   effectiveFrom DateTime @default(now())
   createdAt     DateTime @default(now())
 
@@ -387,6 +402,11 @@ model PaymentMethodConfig {
 // the two wallets. coinsWithdrawable defaults NEVER — coins are
 // play-only; flipping it only records the policy (no coin payout path
 // exists) and is written to the AuditLog.
+// P1 Batch 4 (O21): siteName (the display name in the header, default
+// "Royale Gold"), supportContact (shown on the account page's Support
+// form, empty = not shown), maintenanceMode (when ON, the homepage
+// shows a plain maintenance message and game rooms show an unavailable
+// screen; the owner + admin panels stay reachable).
 model PlatformSettings {
   id                String   @id @default("global")
   globalKill        Boolean  @default(false)
@@ -395,6 +415,9 @@ model PlatformSettings {
   coinMinStake      Int      @default(1)
   conversionRate    Decimal  @default(5) @db.Decimal(12, 2)
   coinsWithdrawable Boolean  @default(false)
+  siteName          String   @default("Royale Gold")
+  supportContact    String   @default("")
+  maintenanceMode   Boolean  @default(false)
   updatedAt         DateTime @updatedAt
 }
 
@@ -513,6 +536,9 @@ model KycSubmission {
   reviewer        User?    @relation("KycReviewer", fields: [reviewedBy], references: [id])
   reviewedAt      DateTime?
   rejectionReason String?
+  // P1 Batch 4 (O22): auto-approved by the URL-host allow-list rule
+  // (KycSettings.autoApprove) — a host check, NOT a document check.
+  autoApproved    Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -589,4 +615,44 @@ model PromotionGrant {
 
   @@index([promotionId, userId])
   @@index([userId, createdAt])
+}
+
+// P1 Batch 4 (O22): owner-level KYC/AML settings — a dedicated model
+// (id always "global"), not fields on PlatformSettings, because it is
+// a distinct settings domain with its own endpoint. acceptedTypes is a
+// comma-separated list of document types the player submit form offers
+// (default all three). autoApprove is OFF by default; when ON, a
+// submission is auto-approved ONLY when its document URL host is on
+// the allow-list (autoApproveHosts, comma-separated) — a URL-host
+// check, NOT a document check (there is no verification service).
+// withdrawalKycThreshold (GH₵, 0 = no requirement) flags withdrawal
+// requests above it from players whose KYC is not Approved — a
+// warning on the queue, NEVER a block.
+model KycSettings {
+  id                      String   @id @default("global")
+  acceptedTypes           String   @default("national_id,passport,drivers_licence")
+  autoApprove             Boolean  @default(false)
+  autoApproveHosts        String   @default("")
+  withdrawalKycThreshold  Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt               DateTime @updatedAt
+}
+
+// P1 Batch 4 (O20): announcements & banners — text only (no images,
+// no links: no file hosting, no link infra). audience: "all" (everyone
+// incl. signed-out), "players" (signed-in players), "admins" (admins +
+// owner). A banner shows only while live: active AND now inside
+// [startsAt, endAt].
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  audience  String   @default("all") // "all" | "players" | "admins"
+  active    Boolean  @default(true)
+  startsAt  DateTime @default(now())
+  endsAt    DateTime?
+  createdBy String
+  creator   User     @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([active, startsAt])
 }

@@ -243,6 +243,9 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   }
 
   const u = detail.user;
+  // P1 Batch 4 (O24): a parent admin viewing a player in a child
+  // admin's downline is READ-ONLY — the action sections below hide.
+  const canAct = !previewId && user.role === "admin" && !detail.readOnly;
   const card = (label: string, value: string) => (
     <div className="sum-card"><span>{label}</span><b>{value}</b></div>
   );
@@ -252,6 +255,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       {previewId && ctx ? <AdminPreviewBanner name={ctx.admin.name} /> : null}
       <div className="rg48-hbar-in">{back}<h2>{u.name}</h2>{u.blockedAt ? <span className="pd-blocked-badge">BLOCKED</span> : null}</div>
       <p className="rg48-sub">{u.email || u.phone || "—"} · Joined {new Date(u.joinedAt).toLocaleDateString("en-GB")}</p>
+      {detail.readOnly ? <p className="rg48-mini">Read-only — this player is in {u.referringAdmin?.name ?? "a child admin"}&apos;s downline. Adjustments, blocks, bonuses, notes, tags and limits are managed by their own admin.</p> : null}
       {u.blockedAt ? <p className="pd-blocked-note">Blocked {new Date(u.blockedAt).toLocaleDateString("en-GB")} — {u.blockedReason || "no reason recorded"}. Betting and deposits are suspended.</p> : null}
       <div className="pd-meta">
         <span className="pd-meta-item"><span className="pd-meta-label">Code used</span>{u.referralCodeUsed ? <b className="code-chip sm">{u.referralCodeUsed}</b> : <b>—</b>}</span>
@@ -346,7 +350,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
         )}
         <p className="rg48-sub"><Link href={previewId ? `/admin/tickets?preview=${previewId}` : "/admin/tickets"}>Open the ticket inbox →</Link></p>
       </section>
-      {!previewId && user.role === "admin" && (
+      {canAct && (
         <>
           <section className="admin-sec">
             <h3>Balance adjustment</h3>
@@ -435,7 +439,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
             ))}
           </div>
         )}
-        {!previewId && user.role === "admin" ? (
+        {canAct ? (
           <form className="pd-note-form" onSubmit={submitNote}>
             <textarea placeholder="Add a note — only admins see this" value={noteText} onChange={(e) => setNoteText(e.target.value)} aria-label="Note" rows={2} maxLength={1000} />
             <button className="btn btn-gold" type="submit" disabled={noteBusy}>{noteBusy ? "Adding…" : "Add note"}</button>
@@ -445,7 +449,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       {/* P1 Batch 2 (A23): send one in-app notification to this player.
           The form is admin-only; the player sees it on their account
           page. A broadcast to all players lives on the Overview page. */}
-      {!previewId && user.role === "admin" ? (
+      {canAct ? (
         <section className="admin-sec">
           <h3>Send notification</h3>
           <p className="rg48-sub">Send a message to this player — it shows on their account page. In-app only, no email or SMS.</p>
@@ -464,12 +468,12 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
           <div className="pd-tags">
             {detail.tags.map((t) => (
               <span key={t} className="tag-pill">{t}
-                {!previewId && user.role === "admin" ? <button type="button" className="tag-x" onClick={() => void removeTag(t)} aria-label={`Remove tag ${t}`}>×</button> : null}
+                {canAct ? <button type="button" className="tag-x" onClick={() => void removeTag(t)} aria-label={`Remove tag ${t}`}>×</button> : null}
               </span>
             ))}
           </div>
         )}
-        {!previewId && user.role === "admin" ? (
+        {canAct ? (
           <form className="pd-tag-form" onSubmit={submitTag}>
             <input type="text" placeholder="Add a tag — e.g. VIP, fraud watch" value={tagInput} onChange={(e) => setTagInput(e.target.value)} aria-label="Tag" maxLength={30} />
             <button className="btn btn-gold" type="submit" disabled={tagBusy}>{tagBusy ? "Adding…" : "Add tag"}</button>
@@ -481,7 +485,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       <section className="admin-sec">
         <h3>Limits</h3>
         <p className="rg48-sub">Per-player limits, enforced server-side on top of the per-game economics. A cool-off blocks play entirely until the date.</p>
-        {!previewId && user.role === "admin" ? (
+        {canAct ? (
           <form className="pd-adjust" onSubmit={submitLimits}>
             <div className="pd-adjust-row">
               <label>Max stake per bet (GH₵)

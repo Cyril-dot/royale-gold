@@ -19,7 +19,7 @@ import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied
 import { WITHDRAWAL_RISK_LABELS, WITHDRAWAL_OWNER_THRESHOLD, type WithdrawalRiskFlag } from "../../../lib/withdrawal-flags";
 
 interface DepositRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; pctInForce: number; commission: number; createdAt: string }
-interface WithdrawalRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; status: string; reason: string | null; decidedBy: string | null; createdAt: string; decidedAt: string | null; flags: string[] }
+interface WithdrawalRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; status: string; reason: string | null; decidedBy: string | null; createdAt: string; decidedAt: string | null; flags: string[]; kycStatus: string; kycRequired: boolean }
 interface LedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; detail: string; stake?: number; payout?: number; method?: string; status?: string; reason?: string; createdAt: string }
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"];
@@ -247,6 +247,13 @@ function AdminMoneyInner() {
                     <span className={`wd-status wd-${w.status}`}>{w.status === "admin_approved" ? "Awaiting owner" : w.status}</span>
                     {w.flags && w.flags.length > 0 ? (
                       <span className="wd-flags">{w.flags.map((f) => <span key={f} className="risk-flag">{WITHDRAWAL_RISK_LABELS[f as WithdrawalRiskFlag] ?? f}</span>)}</span>
+                    ) : null}
+                    {/* P1 Batch 4 (O22): the KYC-required warning — a
+                        request above the owner's threshold from a player
+                        whose KYC is not Approved. A warning only: the
+                        request can still be approved below. */}
+                    {w.kycRequired ? (
+                      <span className="wd-flags"><span className="risk-flag kyc-flag">KYC required — player&apos;s KYC is {w.kycStatus === "not_submitted" ? "not submitted" : w.kycStatus}</span></span>
                     ) : null}
                     {w.reason ? <p className="wd-reason">Reason: {w.reason}</p> : null}
                     {!previewId && (w.status === "pending" || w.status === "admin_approved") && (

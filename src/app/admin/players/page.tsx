@@ -80,6 +80,13 @@ function AdminPlayersInner() {
       <AdminNav />
       <section className="admin-sec">
         <h3>Referred players ({ov.referredUsers.length})</h3>
+        {/* P1 Batch 4 (O24): when this admin has child admins, the
+            list rolls their downlines in — each row says via whom. */}
+        {seg.scope.childAdmins.length > 0 && (
+          <p className="rg48-mini">
+            Includes your child admins&apos; downlines: {seg.scope.childAdmins.map((c) => c.name).join(", ")}.
+          </p>
+        )}
         <div className="money-chips" role="group" aria-label="Filter by segment">
           <button type="button" className={!segment ? "on" : ""} onClick={() => setSegment("")}>All ({seg.total})</button>
           {SEGMENTS.map((s) => (
@@ -104,6 +111,7 @@ function AdminPlayersInner() {
             {users.map((u) => (
               <Link key={u.id} className="user-row" href={playerHref(u.id)}>
                 <b>{u.name}</b><span>{u.email || u.phone || "—"}</span>{u.referralCodeUsed ? <span className="code-chip sm">{u.referralCodeUsed}</span> : <span aria-hidden="true" />}<span>Joined {new Date(u.createdAt).toLocaleDateString("en-GB")}</span>
+                {seg.scope.childAdmins.length > 0 && u.referredByAdminName ? <span className="rg48-mini">via {u.referredByAdminName}</span> : null}
                 {u.tags.length > 0 ? <span className="pd-tags-inline">{u.tags.map((t) => <span key={t} className="tag-pill">{t}</span>)}</span> : null}
               </Link>
             ))}

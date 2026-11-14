@@ -108,6 +108,9 @@ function AdminKycInner() {
                 <div className="kyc-head">
                   <Link href={previewId ? `/admin/players/${r.userId}?preview=${previewId}` : `/admin/players/${r.userId}`}><b>{r.userName}</b></Link>
                   <span className={`kyc-pill kyc-${r.status}`}>{kycLabel(r.status)}</span>
+                  {/* P1 Batch 4 (O22): auto-approved by the URL-host
+                      allow-list — a host check, not a document check. */}
+                  {r.autoApproved ? <span className="kyc-pill kyc-auto">Auto-approved</span> : null}
                 </div>
                 <p className="rg48-sub">{r.userContact ?? "—"} · {r.documentTypeLabel} · Submitted {new Date(r.submittedAt).toLocaleDateString("en-GB")}</p>
                 <p className="kyc-doc">

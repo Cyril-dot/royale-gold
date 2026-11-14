@@ -108,6 +108,13 @@ function AdminOverviewInner() {
         <>
           <section className="admin-sec">
             <h3>Today so far</h3>
+            {/* P1 Batch 4 (O24): when this admin has child admins, the
+                figures above roll their downlines in — read-only. */}
+            {dash.scope.childAdmins.length > 0 && (
+              <p className="rg48-mini">
+                Includes your child admins&apos; downlines: {dash.scope.childAdmins.map((c) => c.name).join(", ")}.
+              </p>
+            )}
             <div className="sum-cards">
               {card("Deposits today", String(dash.today.deposits))}
               {card("Deposited today", fmtCash(dash.today.depositsTotal))}

@@ -22,9 +22,13 @@ export async function GET() {
     });
     const rows = await Promise.all(
       admins.map(async (a) => {
-        const [coinsAgg, summary] = await Promise.all([
+        const [coinsAgg, summary, parent] = await Promise.all([
           prisma.redemption.aggregate({ where: { code: { adminId: a.id } }, _sum: { coins: true } }),
           commissionSummary(a.id),
+          // P1 Batch 4 (O24): the admin's parent admin, if any.
+          a.parentAdminId
+            ? prisma.user.findUnique({ where: { id: a.parentAdminId }, select: { id: true, name: true } })
+            : Promise.resolve(null),
         ]);
         return {
           ...publicUser(a),
@@ -32,6 +36,8 @@ export async function GET() {
           referralCount: a._count.referredUsers,
           coinsGiven: coinsAgg._sum.coins ?? 0,
           commissionAllTime: summary.allTime,
+          parentAdminId: a.parentAdminId,
+          parentName: parent?.name ?? null,
         };
       }),
     );

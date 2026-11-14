@@ -6,6 +6,7 @@ import { dec } from "@/lib/money";
 import { getGame } from "@/lib/games";
 import { playerCommission } from "@/lib/commission";
 import { latestKycStatus } from "@/lib/kyc";
+import { adminScopeAdminIds } from "@/lib/hierarchy";
 
 /**
  * User detail for the admin panel: profile, joined date, code used,
@@ -32,8 +33,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       include: { referredByAdmin: { select: { id: true, name: true, email: true } } },
     });
     if (!user) return fail("User not found", 404);
-    if (me.role === "admin" && user.referredByAdminId !== me.id) {
-      return fail("This user was not referred by you", 404);
+    // P1 Batch 4 (O24): a parent admin may also view players in their
+    // child admins' downlines — read-only (the detail page hides the
+    // action sections and shows a "read-only" note).
+    const readOnly =
+      me.role === "admin" && user.referredByAdminId !== null && user.referredByAdminId !== me.id;
+    if (me.role === "admin") {
+      const scopeIds = await adminScopeAdminIds(me.id);
+      if (!user.referredByAdminId || !scopeIds.includes(user.referredByAdminId)) {
+        return fail("This user was not referred by you", 404);
+      }
     }
     const [deposits, redemptions, rounds, tickets, notes, tags, limit, kyc] = await Promise.all([
       prisma.depositEvent.findMany({
@@ -75,11 +84,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // the rules engine for the viewing admin. For the owner it is the
     // referring admin's commission; a player with no referring admin
     // earns nobody anything.
-    const commissionAdminId = me.role === "admin" ? me.id : user.referredByAdminId;
+    // P1 Batch 4 (O24): for a child-downline player the commission is
+    // the REFERRING (child) admin's — that is the figure that feeds the
+    // parent's rollup. For an own-downline player that IS the viewer.
+    const commissionAdminId = user.referredByAdminId;
     const commission = commissionAdminId
       ? await playerCommission(commissionAdminId, id)
       : { total: 0, model: "none" as const, rate: 0 };
     return ok({
+      // P1 Batch 4 (O24): readOnly — the player is in a child admin's
+      // downline, so the detail page hides the action sections.
+      readOnly,
       user: {
         id: user.id,
         name: user.name,

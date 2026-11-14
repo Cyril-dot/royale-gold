@@ -7,6 +7,7 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { isKycDocumentType, KYC_DOCUMENT_LABELS } from "@/lib/kyc";
+import { getKycSettings, hostIsAllowListed } from "@/lib/kyc-settings";
 
 export async function POST(req: Request) {
   try {
@@ -15,6 +16,12 @@ export async function POST(req: Request) {
     if (!body) return fail("Invalid JSON body");
     if (!isKycDocumentType(body.documentType)) {
       return fail("documentType must be national_id, passport or drivers_licence");
+    }
+    // P1 Batch 4 (O22): the accepted document types come from the
+    // owner's KYC settings — a type the owner removed is not accepted.
+    const settings = await getKycSettings();
+    if (!settings.acceptedTypes.includes(body.documentType)) {
+      return fail(`${KYC_DOCUMENT_LABELS[body.documentType]} is not accepted right now`);
     }
     const documentUrl = (body.documentUrl ?? "").trim();
     if (documentUrl.length < 8 || documentUrl.length > 2000) return fail("Paste the link to your document");
@@ -25,14 +32,32 @@ export async function POST(req: Request) {
       where: { userId: me.id, status: "pending" },
     });
     if (pending) return fail("You already have a submission under review", 409);
+    // P1 Batch 4 (O22): the auto-approve rule — when ON, a submission
+    // whose document URL host is on the owner's allow-list is approved
+    // at once. This is a URL-host check, NOT a document check (there is
+    // no verification service); the submission stays visible in the
+    // queue as "auto-approved".
+    const autoApproved = settings.autoApprove && hostIsAllowListed(documentUrl, settings.autoApproveHosts);
     const row = await prisma.$transaction(async (tx) => {
       const created = await tx.kycSubmission.create({
-        data: { userId: me.id, documentType: body.documentType as string, documentUrl, status: "pending" },
+        data: {
+          userId: me.id,
+          documentType: body.documentType as string,
+          documentUrl,
+          status: autoApproved ? "approved" : "pending",
+          autoApproved,
+          reviewedBy: autoApproved ? me.id : null,
+          reviewedAt: autoApproved ? new Date() : null,
+        },
       });
       await tx.auditLog.create({
         data: {
-          actorId: me.id, action: "kyc.submit", targetId: created.id,
-          detail: `KYC: ${me.name} submitted a ${KYC_DOCUMENT_LABELS[body.documentType as keyof typeof KYC_DOCUMENT_LABELS]}`,
+          actorId: me.id,
+          action: autoApproved ? "kyc.approve" : "kyc.submit",
+          targetId: created.id,
+          detail: autoApproved
+            ? `KYC: ${me.name}'s ${KYC_DOCUMENT_LABELS[body.documentType as keyof typeof KYC_DOCUMENT_LABELS]} auto-approved (allow-listed host)`
+            : `KYC: ${me.name} submitted a ${KYC_DOCUMENT_LABELS[body.documentType as keyof typeof KYC_DOCUMENT_LABELS]}`,
         },
       });
       return created;
@@ -43,6 +68,7 @@ export async function POST(req: Request) {
         documentType: row.documentType,
         documentUrl: row.documentUrl,
         status: row.status,
+        autoApproved: row.autoApproved,
         submittedAt: row.createdAt.toISOString(),
       },
     }, 201);

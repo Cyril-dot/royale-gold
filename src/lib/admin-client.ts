@@ -29,20 +29,27 @@ export interface AdminIdentity {
 export interface AdminOverview {
   admin: AdminIdentity;
   codes: { id: string; code: string; active: boolean; createdAt: string }[];
-  referredUsers: { id: string; name: string; email: string | null; phone: string | null; referralCodeUsed: string | null; createdAt: string }[];
+  referredUsers: { id: string; name: string; email: string | null; phone: string | null; referralCodeUsed: string | null; referredByAdminName: string | null; createdAt: string }[];
   coinsGiven: number;
   redemptions: number;
   commission: { today: number; yesterday: number; last7d: number; last30d: number; allTime: number };
-  history: { date: string; deposits: number; totalAmount: number; totalCommission: number; totalStakes?: number; totalPayouts?: number; model?: string; rate?: number }[];
+  history: { date: string; deposits: number; totalAmount: number; totalCommission: number; totalStakes?: number; totalPayouts?: number; model?: string; rate?: number; parentSharePct?: number }[];
+  // P1 Batch 4 (O24): the child admins rolled into these figures.
+  scope: { childAdmins: { id: string; name: string }[] };
 }
 
 export interface DayDetail {
   date: string;
-  deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; pctInForce: number; commission: number; time: string }[];
+  deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; pctInForce: number; commission: number; time: string; adminName: string }[];
   totals: { deposits: number; totalAmount: number; totalCommission: number; totalStakes?: number; totalPayouts?: number; model?: string; rate?: number };
+  // P1 Batch 4 (O24): the child admins rolled into this day.
+  scope: { childAdmins: { id: string; name: string }[] };
 }
 
 export interface UserDetail {
+  // P1 Batch 4 (O24): true when the player is in a child admin's
+  // downline — the detail page hides the action sections.
+  readOnly: boolean;
   user: { id: string; name: string; email: string | null; phone: string | null; role: string; cash: number; coins: number; joinedAt: string; referralCodeUsed: string | null; referringAdmin: { id: string; name: string; email: string } | null; blockedAt: string | null; blockedReason: string | null };
   deposits: { id: string; amount: number; method: string; pctInForce: number; commission: number; createdAt: string }[];
   totals: { deposits: number; totalDeposited: number; totalCommission: number; coinsGiven: number };
@@ -68,6 +75,8 @@ export interface AdminDashboardData {
   today: { deposits: number; depositsTotal: number; newPlayers: number; activePlayers: number; commission: number };
   week: { date: string; deposits: number; total: number }[];
   topPlayers: { id: string; name: string; contact: string | null; deposits: number; totalDeposited: number }[];
+  // P1 Batch 4 (O24): the child admins rolled into these figures.
+  scope: { childAdmins: { id: string; name: string }[] };
 }
 
 export interface DownlineNode {
@@ -266,6 +275,9 @@ export interface PlayerSegmentRow {
   email: string | null;
   phone: string | null;
   referralCodeUsed: string | null;
+  // P1 Batch 4 (O24): the referring admin — a parent admin's list
+  // shows which admin each player came through.
+  referredByAdminName: string | null;
   createdAt: string;
   totalDeposited: number;
   lastPlayedAt: string | null;
@@ -275,12 +287,12 @@ export interface PlayerSegmentRow {
 
 /** P1 Batch 1 (A14): the Players list with segment flags + counts. */
 export function useAdminSegments(previewId: string | null) {
-  const [data, setData] = useState<{ players: PlayerSegmentRow[]; counts: Record<PlayerSegmentKey, number>; total: number } | null>(null);
+  const [data, setData] = useState<{ players: PlayerSegmentRow[]; counts: Record<PlayerSegmentKey, number>; total: number; scope: { childAdmins: { id: string; name: string }[] } } | null>(null);
   const [err, setErr] = useState("");
   const load = useCallback(async () => {
     try {
       const url = previewId ? `/api/admin/players/segments?adminId=${previewId}` : "/api/admin/players/segments";
-      setData(await api<{ players: PlayerSegmentRow[]; counts: Record<PlayerSegmentKey, number>; total: number }>(url));
+      setData(await api<{ players: PlayerSegmentRow[]; counts: Record<PlayerSegmentKey, number>; total: number; scope: { childAdmins: { id: string; name: string }[] } }>(url));
       setErr("");
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Could not load players.");
@@ -331,6 +343,9 @@ export interface KycRow {
   documentTypeLabel: string;
   documentUrl: string;
   status: string;
+  // P1 Batch 4 (O22): true when the submission was auto-approved by
+  // the URL-host allow-list rule (a host check, not a document check).
+  autoApproved?: boolean;
   reviewedBy: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;

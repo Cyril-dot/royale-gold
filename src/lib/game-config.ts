@@ -42,6 +42,10 @@ export interface PlatformSettingsShape {
   coinMinStake: number;
   conversionRate: number;
   coinsWithdrawable: boolean;
+  // P1 Batch 4 (O21): platform settings & branding.
+  siteName: string;
+  supportContact: string;
+  maintenanceMode: boolean;
 }
 
 export interface PaymentMethodShape {
@@ -59,6 +63,9 @@ export const PLATFORM_DEFAULTS: PlatformSettingsShape = {
   coinMinStake: 1, // coin stakes are whole coins
   conversionRate: 5, // GH₵5 = 1 coin (the old CONVERSION_RATE)
   coinsWithdrawable: false, // coins are play-only, never withdrawable
+  siteName: "Royale Gold",
+  supportContact: "",
+  maintenanceMode: false,
 };
 
 export async function getPlatformSettings(): Promise<PlatformSettingsShape> {
@@ -71,6 +78,9 @@ export async function getPlatformSettings(): Promise<PlatformSettingsShape> {
     coinMinStake: row.coinMinStake,
     conversionRate: dec(row.conversionRate),
     coinsWithdrawable: row.coinsWithdrawable,
+    siteName: row.siteName || PLATFORM_DEFAULTS.siteName,
+    supportContact: row.supportContact || "",
+    maintenanceMode: row.maintenanceMode,
   };
 }
 

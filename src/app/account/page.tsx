@@ -114,6 +114,16 @@ export default function AccountPage() {
   const [kycDocType, setKycDocType] = useState("national_id");
   const [kycDocUrl, setKycDocUrl] = useState("");
   const [kycBusy, setKycBusy] = useState(false);
+  // P1 Batch 4 (O22): the document types the owner accepts, read from
+  // the public KYC settings (defaults to all three until it lands).
+  const [kycTypes, setKycTypes] = useState<{ type: string; label: string }[]>([
+    { type: "national_id", label: "National ID" },
+    { type: "passport", label: "Passport" },
+    { type: "drivers_licence", label: "Driver's licence" },
+  ]);
+  // P1 Batch 4 (O21): the support contact the owner set (email or
+  // WhatsApp number), shown on the Support form. Empty = not shown.
+  const [supportContact, setSupportContact] = useState("");
   // P1 Batch 2 (A23): in-app notifications from your admin.
   const [myNotifs, setMyNotifs] = useState<{ id: string; title: string; body: string; from: string; readAt: string | null; createdAt: string }[] | null>(null);
   const [notifUnread, setNotifUnread] = useState(0);
@@ -137,6 +147,24 @@ export default function AccountPage() {
     if (!user) return;
     void loadKyc();
     void loadNotifs();
+    // P1 Batch 4 (O22/O21): the accepted document types + the support
+    // contact, both owner-set. A type the owner removed disappears from
+    // the submit form; the selected type is clamped to the list.
+    fetch("/api/kyc/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j || !Array.isArray(j.acceptedTypes) || j.acceptedTypes.length === 0) return;
+        const list = j.acceptedTypes.map((t: string) => ({ type: t, label: j.labels?.[t] ?? t }));
+        setKycTypes(list);
+        setKycDocType((cur) => (list.some((x: { type: string }) => x.type === cur) ? cur : list[0].type));
+      })
+      .catch(() => {});
+    fetch("/api/games/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.supportContact) setSupportContact(j.supportContact);
+      })
+      .catch(() => {});
   }, [user]);
 
   useEffect(() => {
@@ -481,9 +509,9 @@ export default function AccountPage() {
               )}
               <form className="code-form" onSubmit={submitKyc}>
                 <select value={kycDocType} onChange={(e) => setKycDocType(e.target.value)} aria-label="Document type">
-                  <option value="national_id">National ID</option>
-                  <option value="passport">Passport</option>
-                  <option value="drivers_licence">Driver&apos;s licence</option>
+                  {kycTypes.map((t) => (
+                    <option key={t.type} value={t.type}>{t.label}</option>
+                  ))}
                 </select>
                 <input type="url" placeholder="Link to your document (https://…)" value={kycDocUrl} onChange={(e) => setKycDocUrl(e.target.value)} required />
                 <button className="btn btn-gold" type="submit" disabled={kycBusy}>{kycBusy ? "Submitting…" : "Submit for review"}</button>
@@ -498,6 +526,9 @@ export default function AccountPage() {
         <section className="ac-sec">
           <h3>Support</h3>
           <p className="rg48-mini">Stuck on something? Send a ticket to your admin — they reply here, on your account.</p>
+          {supportContact && (
+            <p className="rg48-mini">Or reach support directly: <strong>{supportContact}</strong></p>
+          )}
           <form className="tk-form" onSubmit={submitTicket}>
             <div className="rg48-f"><label htmlFor="tkSubject">Subject</label><input id="tkSubject" type="text" placeholder="e.g. My deposit has not landed" value={tkSubject} onChange={(e) => setTkSubject(e.target.value)} maxLength={120} required /></div>
             <div className="rg48-f"><label htmlFor="tkBody">What happened?</label><textarea id="tkBody" rows={3} placeholder="Describe the problem…" value={tkBody} onChange={(e) => setTkBody(e.target.value)} maxLength={2000} required /></div>

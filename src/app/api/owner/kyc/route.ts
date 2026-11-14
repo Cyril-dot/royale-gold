@@ -46,6 +46,7 @@ export async function GET(req: Request) {
         documentTypeLabel: KYC_DOCUMENT_LABELS[r.documentType as keyof typeof KYC_DOCUMENT_LABELS] ?? r.documentType,
         documentUrl: r.documentUrl,
         status: r.status,
+        autoApproved: r.autoApproved,
         reviewedBy: r.reviewer?.name ?? null,
         reviewedAt: r.reviewedAt?.toISOString() ?? null,
         rejectionReason: r.rejectionReason,

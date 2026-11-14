@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
-import { depositsForAdminOn } from "@/lib/commission";
+import { depositsForAdminOnScoped } from "@/lib/hierarchy";
 import { dec, todayStr } from "@/lib/money";
 
 /**
@@ -18,7 +18,9 @@ export async function GET(req: Request) {
     if (adminId) {
       const admin = await prisma.user.findUnique({ where: { id: adminId } });
       if (!admin || admin.role !== "admin") return fail("Admin not found", 404);
-      return ok({ admin: { id: admin.id, name: admin.name }, ...(await depositsForAdminOn(adminId, date)) });
+      // P1 Batch 4 (O24): the owner preview shows the admin's own view —
+      // a parent admin's day detail rolls their child downlines in.
+      return ok({ admin: { id: admin.id, name: admin.name }, ...(await depositsForAdminOnScoped(adminId, date)) });
     }
     const start = new Date(`${date}T00:00:00.000Z`);
     const end = new Date(`${date}T23:59:59.999Z`);

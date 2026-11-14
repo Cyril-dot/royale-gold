@@ -61,3 +61,35 @@ export async function latestKycStatus(userId: string): Promise<KycStatusRow> {
     rejectionReason: row.rejectionReason,
   };
 }
+
+/**
+ * P1 Batch 4 (O22): the latest KYC status for many users at once —
+ * one query for the withdrawal queue, so each row can carry its
+ * "KYC required" warning without an N+1.
+ */
+export async function latestKycStatuses(userIds: string[]): Promise<Map<string, KycStatus>> {
+  const out = new Map<string, KycStatus>();
+  if (userIds.length === 0) return out;
+  const subs = await prisma.kycSubmission.findMany({
+    where: { userId: { in: userIds } },
+    orderBy: { createdAt: "desc" },
+    select: { userId: true, status: true },
+  });
+  for (const s of subs) {
+    if (!out.has(s.userId)) out.set(s.userId, (s.status as KycStatus) ?? "not_submitted");
+  }
+  for (const id of userIds) {
+    if (!out.has(id)) out.set(id, "not_submitted");
+  }
+  return out;
+}
+
+/**
+ * P1 Batch 4 (O22): the KYC-required warning for a withdrawal request.
+ * True when the owner set a threshold (0 = no requirement) AND the
+ * request amount is above it AND the player's KYC is not Approved.
+ * A WARNING only — KYC must never block a withdrawal outright.
+ */
+export function kycRequiredFor(amount: number, status: KycStatus, threshold: number): boolean {
+  return threshold > 0 && amount > threshold && status !== "approved";
+}

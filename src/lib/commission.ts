@@ -27,6 +27,8 @@ export interface CommissionRuleRow {
   adminName: string | null;
   model: CommissionModel;
   rate: number;
+  // P1 Batch 4 (O24): the parent-share % on this rule.
+  parentSharePct: number;
   effectiveFrom: string;
   createdAt: string;
 }
@@ -38,8 +40,13 @@ export interface CommissionDay {
   totalStakes: number;
   totalPayouts: number;
   totalCommission: number;
-  model: CommissionModel | "legacy";
+  model: CommissionModel | "legacy" | "mixed";
   rate: number;
+  // P1 Batch 4 (O24): the parent-share % in force on this day (0 when
+  // the admin has no parent, or the rule sets no split). The parent's
+  // share of this day's commission is totalCommission × pct / 100 — a
+  // REPORTING line only, never deducted from the child's payout.
+  parentSharePct: number;
 }
 
 export interface CommissionSummary {
@@ -87,6 +94,8 @@ export interface RuleTimelineEntry {
   adminId: string | null;
   model: CommissionModel;
   rate: number;
+  // P1 Batch 4 (O24): the parent-share % on this rule.
+  parentSharePct: number;
   effectiveFrom: Date;
 }
 
@@ -101,6 +110,7 @@ async function ruleTimeline(adminId: string): Promise<RuleTimelineEntry[]> {
     adminId: r.adminId,
     model: (r.model === "turnover" ? "turnover" : "revshare") as CommissionModel,
     rate: dec(r.rate),
+    parentSharePct: dec(r.parentSharePct),
     effectiveFrom: new Date(r.effectiveFrom),
   }));
 }
@@ -204,6 +214,7 @@ export async function dayCommissions(
       totalCommission,
       model,
       rate,
+      parentSharePct: rule?.parentSharePct ?? 0,
     });
   }
   return days;
@@ -399,6 +410,7 @@ export async function listCommissionRules(): Promise<CommissionRuleRow[]> {
     adminName: r.admin?.name ?? null,
     model: (r.model === "turnover" ? "turnover" : "revshare") as CommissionModel,
     rate: dec(r.rate),
+    parentSharePct: dec(r.parentSharePct),
     effectiveFrom: dateStr(new Date(r.effectiveFrom)),
     createdAt: new Date(r.createdAt).toISOString(),
   }));

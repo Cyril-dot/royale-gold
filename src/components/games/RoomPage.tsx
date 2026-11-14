@@ -37,6 +37,9 @@ export default function RoomPage({ slug }: { slug: string }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!live || !j || !Array.isArray(j.games)) return;
+        // P1 Batch 4 (O21): maintenance mode — every room shows an
+        // unavailable screen (checked before the kill/hide gates).
+        if (j.maintenanceMode) { setClosedMsg("Royale Gold is under maintenance — back soon"); return; }
         if (j.globalKill) { setClosedMsg("All games are paused by the owner"); return; }
         const g = j.games.find((x: { slug: string }) => x.slug === slug);
         if (g && (g.killed || g.visible === false)) {

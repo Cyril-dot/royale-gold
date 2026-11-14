@@ -36,6 +36,26 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const { jackpotText } = useJackpot();
+  // P1 Batch 4 (O21): the site name comes from the public config
+  // endpoint (the owner sets it in Platform settings). Default
+  // "Royale Gold" until the fetch lands; last word in <em> like the
+  // original brand lockup.
+  const [siteName, setSiteName] = useState("Royale Gold");
+  useEffect(() => {
+    let live = true;
+    fetch("/api/games/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (live && j?.siteName) setSiteName(j.siteName);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const nameParts = siteName.trim().split(/\s+/).filter(Boolean);
+  const brandFirst = nameParts.length > 1 ? nameParts.slice(0, -1).join(" ") : "";
+  const brandLast = nameParts.length > 1 ? nameParts[nameParts.length - 1] : siteName;
 
   useEffect(() => {
     const onScroll = () => {
@@ -118,12 +138,15 @@ export default function Header() {
     <div className="hdr-zone" style={{ transform: hidden ? "translateY(-110%)" : "translateY(0)", transition: "transform .3s ease", position: "sticky", top: 0, zIndex: 60 }}>
       <header className="site" id="siteHdr">
         <div className="wrap hdr-main">
-          <Link className="brand" href="/" aria-label="Royale Gold home">
+          <Link className="brand" href="/" aria-label={`${siteName} home`}>
             <span className="coin-mark">
               <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2C9 7 4 9 4 13a8 8 0 0 0 16 0c0-4-5-6-8-11z" /></svg>
             </span>
             <span className="brand-text">
-              <span className="brand-name">Royale <em>Gold</em></span>
+              <span className="brand-name">
+                {brandFirst ? `${brandFirst} ` : ""}
+                <em>{brandLast}</em>
+              </span>
               <small>CASINO · ACCRA</small>
             </span>
           </Link>

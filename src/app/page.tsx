@@ -5,7 +5,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Hero from "../components/Hero";
 import GameTile from "../components/GameTile";
 import VerbTilt from "../components/VerbTilt";
@@ -13,6 +13,26 @@ import { BottleRoom } from "../components/games/quick";
 import { getGame } from "../lib/games";
 import { LIVE_WINS, TILE_GAMES, TOP_PLAYERS } from "../lib/tiles";
 import { fmtCash } from "../lib/api";
+
+interface AnnouncementItem {
+  id: string;
+  title: string;
+  body: string;
+  audience: string;
+}
+
+// P1 Batch 4 (O20): announcements are dismissible per session — the
+// dismissed ids live in sessionStorage, so a banner comes back on the
+// next visit but stays gone for the rest of this session.
+const DISMISSED_KEY = "rg-dismissed-announcements";
+function loadDismissed(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(DISMISSED_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
 
 // The homepage Bottle showcase plays the same room as
 // /games/spin-da-bottle (the artifact's #bottle section, playable on
@@ -27,13 +47,93 @@ const fmtPodium = (n: number) => `GH₵ ${n.toLocaleString("en-GH")}`;
 
 export default function Home() {
   const [filter, setFilter] = useState<"all" | "cash" | "coins" | "crash">("all");
+  // P1 Batch 4 (O20/O21): the owner-set announcements + the maintenance
+  // flag, both read from public endpoints. maintenance is null while
+  // loading — the normal page shows until the flag resolves, so a
+  // maintenance flip can flash the page once (client-side gate, same
+  // pattern as the game-room gate in RoomPage).
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [maintenance, setMaintenance] = useState<boolean | null>(null);
+  useEffect(() => {
+    setDismissed(loadDismissed());
+    let live = true;
+    fetch("/api/announcements")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (live && Array.isArray(j?.announcements)) setAnnouncements(j.announcements);
+      })
+      .catch(() => {});
+    fetch("/api/games/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (live && typeof j?.maintenanceMode === "boolean") setMaintenance(j.maintenanceMode);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const dismiss = (id: string) => {
+    const next = new Set(dismissed);
+    next.add(id);
+    setDismissed(next);
+    try {
+      sessionStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]));
+    } catch {
+      /* storage unavailable — the banner just stays for this page load */
+    }
+  };
+  const visible = announcements.filter((a) => !dismissed.has(a.id));
+
   const shown = TILE_GAMES.filter((g) =>
     filter === "all" ? true : filter === "crash" ? g.meta.tag === "crash" : g.currency === filter
   );
 
+  // P1 Batch 4 (O21): maintenance mode — the homepage is a plain
+  // message. The owner + admin panels stay reachable by direct URL so
+  // the owner can switch it back OFF.
+  if (maintenance) {
+    return (
+      <main id="top">
+        <section className="block">
+          <div className="wrap">
+            <div className="rg-maint">
+              <h2>Royale Gold is under maintenance — back soon</h2>
+              <p>We are making things better. Please check back in a little while.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main id="top">
       <Hero />
+
+      {/* P1 Batch 4 (O20): owner announcements — text only, one strip
+          per announcement, dismissible for this session. */}
+      {visible.length > 0 && (
+        <div className="wrap rg-announce-wrap" role="region" aria-label="Announcements">
+          {visible.map((a) => (
+            <div key={a.id} className="rg-announce">
+              <div className="rg-announce-text">
+                <strong>{a.title}</strong>
+                <span>{a.body}</span>
+              </div>
+              <button
+                type="button"
+                className="rg-announce-x"
+                aria-label={`Dismiss: ${a.title}`}
+                onClick={() => dismiss(a.id)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <section className="block" id="games">
         <div className="wrap">

@@ -1,5 +1,12 @@
 import { prisma } from "./prisma";
-import { commissionHistoryDays, commissionSummary, playerCommission, referredUserIds } from "./commission";
+import { playerCommission } from "./commission";
+import {
+  adminScopeAdminIds,
+  adminScopeInfo,
+  scopedCommissionSummary,
+  scopedDayCommissions,
+  scopedReferredUserIds,
+} from "./hierarchy";
 import { dec, round2, todayStr } from "./money";
 import { parsePermissions } from "./rbac";
 
@@ -31,14 +38,29 @@ export async function adminContext(adminId: string) {
   };
 }
 
-/** The admin's referred users (the Players list + the Referrals page). */
+/** The admin's referred users (the Players list + the Referrals page).
+ * P1 Batch 4 (O24): scoped — a parent admin sees their child admins'
+ * downlines too, each row labelled with the referring admin. */
 export async function referredUsers(adminId: string) {
+  const scopeIds = await adminScopeAdminIds(adminId);
   const users = await prisma.user.findMany({
-    where: { referredByAdminId: adminId },
+    where: { referredByAdminId: { in: scopeIds } },
     orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, email: true, phone: true, referralCodeUsed: true, createdAt: true },
+    select: { id: true, name: true, email: true, phone: true, referralCodeUsed: true, referredByAdminId: true, createdAt: true },
   });
-  return users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }));
+  const adminNameById = new Map<string, string>();
+  if (scopeIds.length > 1) {
+    const admins = await prisma.user.findMany({
+      where: { id: { in: scopeIds } },
+      select: { id: true, name: true },
+    });
+    for (const a of admins) adminNameById.set(a.id, a.name);
+  }
+  return users.map((u) => ({
+    ...u,
+    referredByAdminName: u.referredByAdminId ? (adminNameById.get(u.referredByAdminId) ?? null) : null,
+    createdAt: u.createdAt.toISOString(),
+  }));
 }
 
 /** The admin panel payload — used by /api/admin/overview and by the owner's preview. */
@@ -46,6 +68,16 @@ export async function adminOverview(adminId: string) {
   const admin = await prisma.user.findUnique({ where: { id: adminId } });
   if (!admin) return null;
 
+  const scopeIds = await adminScopeAdminIds(adminId);
+  const scope = await adminScopeInfo(adminId);
+  const adminNameById = new Map<string, string>();
+  if (scope.childAdmins.length > 0) {
+    const admins = await prisma.user.findMany({
+      where: { id: { in: scopeIds } },
+      select: { id: true, name: true },
+    });
+    for (const a of admins) adminNameById.set(a.id, a.name);
+  }
   const [codes, referredUsers, coinsGivenAgg, summary, history] = await Promise.all([
     prisma.referralCode.findMany({
       where: { adminId },
@@ -53,17 +85,17 @@ export async function adminOverview(adminId: string) {
       select: { id: true, code: true, active: true, createdAt: true },
     }),
     prisma.user.findMany({
-      where: { referredByAdminId: adminId },
+      where: { referredByAdminId: { in: scopeIds } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, email: true, phone: true, referralCodeUsed: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, referralCodeUsed: true, referredByAdminId: true, createdAt: true },
     }),
     prisma.redemption.aggregate({
-      where: { code: { adminId } },
+      where: { code: { adminId: { in: scopeIds } } },
       _sum: { coins: true },
       _count: true,
     }),
-    commissionSummary(adminId),
-    commissionHistoryDays(adminId),
+    scopedCommissionSummary(adminId),
+    scopedDayCommissions(adminId),
   ]);
 
   return {
@@ -76,11 +108,18 @@ export async function adminOverview(adminId: string) {
       permissions: parsePermissions(admin.permissions),
     },
     codes: codes.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
-    referredUsers: referredUsers.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() })),
+    referredUsers: referredUsers.map((u) => ({
+      ...u,
+      referredByAdminName: u.referredByAdminId ? (adminNameById.get(u.referredByAdminId) ?? null) : null,
+      createdAt: u.createdAt.toISOString(),
+    })),
     coinsGiven: coinsGivenAgg._sum.coins ?? 0,
     redemptions: coinsGivenAgg._count,
     commission: summary,
     history,
+    // P1 Batch 4 (O24): the child admins rolled into these figures.
+    // Empty when this admin has no children (not a parent).
+    scope,
   };
 }
 
@@ -88,24 +127,29 @@ export interface AdminDashboardData {
   today: { deposits: number; depositsTotal: number; newPlayers: number; activePlayers: number; commission: number };
   week: { date: string; deposits: number; total: number }[];
   topPlayers: { id: string; name: string; contact: string | null; deposits: number; totalDeposited: number }[];
+  // P1 Batch 4 (O24): the child admins rolled into these figures.
+  scope: { childAdmins: { id: string; name: string }[] };
 }
 
 /** P0 Batch 4 (A1): the enhanced dashboard — "today so far", the last
  * 7 days of deposits, and the top 5 players by total deposited. Every
  * figure comes from the real tables (DepositEvent / User / GameResult /
- * the commission rules engine); nothing is invented. */
+ * the commission rules engine); nothing is invented.
+ * P1 Batch 4 (O24): scoped — a parent admin's figures roll their child
+ * admins' downlines in, labelled via `scope`. */
 export async function adminDashboard(adminId: string): Promise<AdminDashboardData> {
   const today = todayStr();
   const fromDate = dayStart(addDays(today, -6));
   const toDate = dayStart(addDays(today, 1));
-  const userIds = await referredUserIds(adminId);
+  const scopeIds = await adminScopeAdminIds(adminId);
+  const userIds = await scopedReferredUserIds(adminId);
   const [deposits, newPlayers, activeRounds, summary] = await Promise.all([
     prisma.depositEvent.findMany({
-      where: { adminId, createdAt: { gte: fromDate, lt: toDate } },
+      where: { adminId: { in: scopeIds }, createdAt: { gte: fromDate, lt: toDate } },
       select: { userId: true, amount: true, createdAt: true },
     }),
     prisma.user.count({
-      where: { referredByAdminId: adminId, createdAt: { gte: dayStart(today), lt: toDate } },
+      where: { referredByAdminId: { in: scopeIds }, createdAt: { gte: dayStart(today), lt: toDate } },
     }),
     userIds.length === 0
       ? []
@@ -113,7 +157,7 @@ export async function adminDashboard(adminId: string): Promise<AdminDashboardDat
           where: { userId: { in: userIds }, createdAt: { gte: dayStart(today), lt: toDate } },
           select: { userId: true },
         }),
-    commissionSummary(adminId),
+    scopedCommissionSummary(adminId),
   ]);
   const week: { date: string; deposits: number; total: number }[] = [];
   for (let i = 6; i >= 0; i--) week.push({ date: addDays(today, -i), deposits: 0, total: 0 });
@@ -156,6 +200,7 @@ export async function adminDashboard(adminId: string): Promise<AdminDashboardDat
       deposits: v.deposits,
       totalDeposited: v.total,
     })),
+    scope: await adminScopeInfo(adminId),
   };
 }
 

@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2, todayStr } from "@/lib/money";
 import { settlementForAdmin } from "@/lib/commission";
+import { parentShareOwed } from "@/lib/hierarchy";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "bank", "cash"] as const;
 
@@ -30,17 +31,34 @@ export async function GET(req: Request) {
     const admins = await prisma.user.findMany({
       where: { role: "admin" },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true, active: true },
+      select: { id: true, name: true, email: true, active: true, parentAdminId: true },
     });
     const rows = [];
     for (const a of admins) {
       const s = await settlementForAdmin(a.id, from, to);
-      rows.push({ adminId: a.id, adminName: a.name, adminEmail: a.email, active: a.active, ...s });
+      // P1 Batch 4 (O24): the parent's share of this admin's commission
+      // over the period — a REPORTING line only, never deducted from the
+      // child's payout. 0 when the admin has no parent or no split.
+      const parentShare = await parentShareOwed(a.id, from, to);
+      const parent = a.parentAdminId
+        ? await prisma.user.findUnique({ where: { id: a.parentAdminId }, select: { name: true } })
+        : null;
+      rows.push({
+        adminId: a.id,
+        adminName: a.name,
+        adminEmail: a.email,
+        active: a.active,
+        parentAdminId: a.parentAdminId,
+        parentName: parent?.name ?? null,
+        parentShare,
+        ...s,
+      });
     }
     const totals = {
       owed: round2(rows.reduce((s, r) => s + r.owed, 0)),
       paid: round2(rows.reduce((s, r) => s + r.paid, 0)),
       balance: round2(rows.reduce((s, r) => s + r.balance, 0)),
+      parentShare: round2(rows.reduce((s, r) => s + r.parentShare, 0)),
     };
     return ok({ from, to, rows, totals });
   } catch (err) {

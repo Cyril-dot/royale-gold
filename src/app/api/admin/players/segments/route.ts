@@ -12,6 +12,7 @@ import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
+import { adminScopeAdminIds, adminScopeInfo } from "@/lib/hierarchy";
 
 export type PlayerSegment = "new" | "active" | "dormant" | "high-roller" | "at-risk";
 
@@ -36,11 +37,19 @@ export async function GET(req: Request) {
     if (me.role === "owner" && !adminId) return fail("adminId is required");
     if (!adminId) return fail("adminId is required");
 
+    // P1 Batch 4 (O24): scoped — a parent admin's segments roll their
+    // child admins' downlines in, each row labelled with the referring admin.
+    const scopeIds = await adminScopeAdminIds(adminId);
     const users = await prisma.user.findMany({
-      where: { referredByAdminId: adminId },
+      where: { referredByAdminId: { in: scopeIds } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, email: true, phone: true, referralCodeUsed: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, referralCodeUsed: true, referredByAdminId: true, createdAt: true },
     });
+    const scopeAdmins = await prisma.user.findMany({
+      where: { id: { in: scopeIds } },
+      select: { id: true, name: true },
+    });
+    const adminNameById = new Map(scopeAdmins.map((a) => [a.id, a.name]));
     const ids = users.map((u) => u.id);
     const now = Date.now();
     const d7 = new Date(now - 7 * 24 * 60 * 60 * 1000);
@@ -98,6 +107,7 @@ export async function GET(req: Request) {
         email: u.email,
         phone: u.phone,
         referralCodeUsed: u.referralCodeUsed,
+        referredByAdminName: u.referredByAdminId ? (adminNameById.get(u.referredByAdminId) ?? null) : null,
         createdAt: u.createdAt.toISOString(),
         totalDeposited: total,
         lastPlayedAt: last !== undefined ? new Date(last).toISOString() : null,
@@ -111,7 +121,7 @@ export async function GET(req: Request) {
     };
     for (const p of players) for (const s of p.segments) counts[s] += 1;
 
-    return ok({ players, counts, total: players.length });
+    return ok({ players, counts, total: players.length, scope: await adminScopeInfo(adminId) });
   } catch (err) {
     return toErrorResponse(err);
   }

@@ -23,7 +23,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const owner = await requireRole("owner");
-    const body = await readJson<{ adminId?: string | null; model?: string; rate?: number; effectiveFrom?: string }>(req);
+    const body = await readJson<{ adminId?: string | null; model?: string; rate?: number; parentSharePct?: number; effectiveFrom?: string }>(req);
     if (!body) return fail("Invalid JSON body");
     const model = body.model;
     if (model !== "revshare" && model !== "turnover") {
@@ -32,6 +32,12 @@ export async function POST(req: Request) {
     const rate = Number(body.rate);
     if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
       return fail("rate must be between 0 and 100");
+    }
+    // P1 Batch 4 (O24): the parent's share % of this admin's commission
+    // — a REPORTING line on the settlement, never a deduction.
+    const parentSharePct = body.parentSharePct === undefined || body.parentSharePct === null ? 0 : Number(body.parentSharePct);
+    if (!Number.isFinite(parentSharePct) || parentSharePct < 0 || parentSharePct > 100) {
+      return fail("parentSharePct must be between 0 and 100");
     }
     const effectiveFrom = body.effectiveFrom ?? todayStr();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return fail("effectiveFrom must be YYYY-MM-DD");
@@ -48,6 +54,7 @@ export async function POST(req: Request) {
           adminId,
           model,
           rate: Number(rate.toFixed(2)),
+          parentSharePct: Number(parentSharePct.toFixed(2)),
           effectiveFrom: new Date(`${effectiveFrom}T00:00:00.000Z`),
         },
       });
@@ -56,7 +63,7 @@ export async function POST(req: Request) {
           actorId: owner.id,
           action: "commission.rule.set",
           targetId: adminId ?? "global",
-          detail: `Set ${model} ${rate}% ${adminId ? `for ${adminName}` : "as the global default"} from ${effectiveFrom}`,
+          detail: `Set ${model} ${rate}%${parentSharePct > 0 ? ` (parent share ${parentSharePct}%)` : ""} ${adminId ? `for ${adminName}` : "as the global default"} from ${effectiveFrom}`,
         },
       });
       return rule;
@@ -69,6 +76,7 @@ export async function POST(req: Request) {
           adminName,
           model: created.model,
           rate: Number(created.rate.toString()),
+          parentSharePct: Number(created.parentSharePct.toString()),
           effectiveFrom,
           createdAt: created.createdAt.toISOString(),
         },
