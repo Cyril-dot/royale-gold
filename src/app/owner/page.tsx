@@ -19,6 +19,171 @@ interface AdminRow {
 interface RollupDay { date: string; adminId: string; adminName: string; deposits: number; totalAmount: number; totalCommission: number }
 interface OwnerDayAdmin { admin: { id: string; name: string }; deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; pctInForce: number; commission: number; time: string }[]; totalAmount: number; totalCommission: number }
 
+// P0 Batch 2 — one game row: visibility + kill toggles and the four
+// economics fields, saved per row. Number inputs hold text locally so
+// an empty field means "clear the override" (back to the catalogue
+// default) instead of 0.
+function OwnerGameRow({ g, onSave }: {
+  g: { slug: string; name: string; currency: string; visible: boolean; killed: boolean; minBet: number | null; maxBet: number | null; maxPayout: number | null; maxMultiplier: number; note: string };
+  onSave: (slug: string, patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const [minBet, setMinBet] = useState(g.minBet == null ? "" : String(g.minBet));
+  const [maxBet, setMaxBet] = useState(g.maxBet == null ? "" : String(g.maxBet));
+  const [maxPayout, setMaxPayout] = useState(g.maxPayout == null ? "" : String(g.maxPayout));
+  const [maxMult, setMaxMult] = useState(String(g.maxMultiplier));
+  const [busy, setBusy] = useState(false);
+  const unit = g.currency === "coins" ? "coins" : "GH₵";
+  const numOrNull = (s: string): number | null => {
+    const t = s.trim();
+    if (t === "") return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : NaN;
+  };
+  const save = async () => {
+    const patch: Record<string, unknown> = {};
+    const a = numOrNull(minBet);
+    const b = numOrNull(maxBet);
+    const c = numOrNull(maxPayout);
+    const d = numOrNull(maxMult);
+    if (Number.isNaN(a) || Number.isNaN(b) || Number.isNaN(c) || Number.isNaN(d)) return;
+    if (a !== g.minBet) patch.minBet = a;
+    if (b !== g.maxBet) patch.maxBet = b;
+    if (c !== g.maxPayout) patch.maxPayout = c;
+    if (d !== null && d !== g.maxMultiplier) patch.maxMultiplier = d;
+    if (Object.keys(patch).length === 0) return;
+    setBusy(true);
+    try { await onSave(g.slug, patch); } finally { setBusy(false); }
+  };
+  return (
+    <div className={`ow-game-row${g.killed ? " ow-game-killed" : ""}${!g.visible ? " ow-game-hidden" : ""}`}>
+      <div className="ow-game-head">
+        <b>{g.name}</b>
+        <span className="ow-game-cur">{g.currency === "coins" ? "Coins" : "Cash"}</span>
+        <span className="ow-game-mult">max ×{g.maxMultiplier}</span>
+        {g.killed && <span className="ow-game-flag bad">KILLED</span>}
+        {!g.visible && <span className="ow-game-flag">HIDDEN</span>}
+      </div>
+      <p className="ow-game-note">{g.note}</p>
+      <div className="ow-game-toggles">
+        <button
+          type="button"
+          className={`btn btn-sm ${g.visible ? "btn-gold" : "btn-ghost"}`}
+          disabled={busy}
+          onClick={() => void onSave(g.slug, { visible: !g.visible })}
+          aria-pressed={g.visible}
+        >{g.visible ? "Visible" : "Hidden"}</button>
+        <button
+          type="button"
+          className={`btn btn-sm ${g.killed ? "btn-danger" : "btn-ghost"}`}
+          disabled={busy}
+          onClick={() => {
+            if (!g.killed && !window.confirm(`Kill ${g.name}? No one can play it until you unkill it.`)) return;
+            void onSave(g.slug, { killed: !g.killed });
+          }}
+          aria-pressed={g.killed}
+        >{g.killed ? "Killed — tap to resume" : "Kill switch"}</button>
+      </div>
+      <div className="ow-game-econ">
+        <label>Min bet ({unit}) <input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={minBet} onChange={(e) => setMinBet(e.target.value)} placeholder="Default" aria-label={`${g.name} minimum bet`} /></label>
+        <label>Max bet ({unit}) <input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={maxBet} onChange={(e) => setMaxBet(e.target.value)} placeholder="No cap" aria-label={`${g.name} maximum bet`} /></label>
+        <label>Max payout ({unit}) <input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={maxPayout} onChange={(e) => setMaxPayout(e.target.value)} placeholder="No cap" aria-label={`${g.name} maximum payout`} /></label>
+        <label>Max × <input type="number" min={0.01} step={0.01} value={maxMult} onChange={(e) => setMaxMult(e.target.value)} aria-label={`${g.name} maximum multiplier`} /></label>
+        <button className="btn btn-gold btn-sm" type="button" disabled={busy} onClick={() => void save()}>Save</button>
+      </div>
+    </div>
+  );
+}
+
+function OwnerPayRow({ m, onSave }: {
+  m: { method: string; enabled: boolean; minDeposit: number | null; maxDeposit: number | null };
+  onSave: (method: string, patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const [minDep, setMinDep] = useState(m.minDeposit == null ? "" : String(m.minDeposit));
+  const [maxDep, setMaxDep] = useState(m.maxDeposit == null ? "" : String(m.maxDeposit));
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const patch: Record<string, unknown> = {};
+    const a = minDep.trim() === "" ? null : Number(minDep);
+    const b = maxDep.trim() === "" ? null : Number(maxDep);
+    if (a !== m.minDeposit) patch.minDeposit = a;
+    if (b !== m.maxDeposit) patch.maxDeposit = b;
+    if (Object.keys(patch).length === 0) return;
+    setBusy(true);
+    try { await onSave(m.method, patch); } finally { setBusy(false); }
+  };
+  return (
+    <div className={`ow-pay-row${!m.enabled ? " ow-pay-off" : ""}`}>
+      <div className="ow-game-head">
+        <b>{m.method}</b>
+        {!m.enabled && <span className="ow-game-flag bad">DISABLED</span>}
+      </div>
+      <div className="ow-game-toggles">
+        <button
+          type="button"
+          className={`btn btn-sm ${m.enabled ? "btn-gold" : "btn-ghost"}`}
+          disabled={busy}
+          onClick={() => void onSave(m.method, { enabled: !m.enabled })}
+          aria-pressed={m.enabled}
+        >{m.enabled ? "Enabled" : "Disabled"}</button>
+      </div>
+      <div className="ow-game-econ">
+        <label>Min deposit (GH₵) <input type="number" min={0} step={0.01} value={minDep} onChange={(e) => setMinDep(e.target.value)} placeholder="Platform min" aria-label={`${m.method} minimum deposit`} /></label>
+        <label>Max deposit (GH₵) <input type="number" min={0} step={0.01} value={maxDep} onChange={(e) => setMaxDep(e.target.value)} placeholder="No cap" aria-label={`${m.method} maximum deposit`} /></label>
+        <button className="btn btn-gold btn-sm" type="button" disabled={busy} onClick={() => void save()}>Save</button>
+      </div>
+    </div>
+  );
+}
+
+function OwnerWalletForm({ w, onSave }: {
+  w: { cashMinDeposit: number; cashMinStake: number; coinMinStake: number; conversionRate: number; coinsWithdrawable: boolean };
+  onSave: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const [dep, setDep] = useState(String(w.cashMinDeposit));
+  const [stake, setStake] = useState(String(w.cashMinStake));
+  const [coin, setCoin] = useState(String(w.coinMinStake));
+  const [rate, setRate] = useState(String(w.conversionRate));
+  const [wd, setWd] = useState(w.coinsWithdrawable);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const patch: Record<string, unknown> = {};
+    const a = Number(dep);
+    const b = Number(stake);
+    const c = Number(coin);
+    const d = Number(rate);
+    if (Number.isFinite(a) && a !== w.cashMinDeposit) patch.cashMinDeposit = a;
+    if (Number.isFinite(b) && b !== w.cashMinStake) patch.cashMinStake = b;
+    if (Number.isFinite(c) && c !== w.coinMinStake) patch.coinMinStake = c;
+    if (Number.isFinite(d) && d !== w.conversionRate) patch.conversionRate = d;
+    if (wd !== w.coinsWithdrawable) patch.coinsWithdrawable = wd;
+    if (Object.keys(patch).length === 0) return;
+    setBusy(true);
+    try { await onSave(patch); } finally { setBusy(false); }
+  };
+  return (
+    <div className="ow-wallet">
+      <label>Cash min deposit (GH₵)
+        <input type="number" min={0} step={0.01} value={dep} onChange={(e) => setDep(e.target.value)} aria-label="Cash minimum deposit" />
+      </label>
+      <label>Cash min stake (GH₵)
+        <input type="number" min={0.01} step={0.01} value={stake} onChange={(e) => setStake(e.target.value)} aria-label="Cash minimum stake" />
+      </label>
+      <label>Coin min stake (coins)
+        <input type="number" min={1} step={1} value={coin} onChange={(e) => setCoin(e.target.value)} aria-label="Coin minimum stake" />
+      </label>
+      <label>Conversion rate (GH₵ = 1 coin)
+        <input type="number" min={1} step={0.01} value={rate} onChange={(e) => setRate(e.target.value)} aria-label="Conversion rate" />
+      </label>
+      <label className="ow-check">
+        <input type="checkbox" checked={wd} onChange={(e) => setWd(e.target.checked)} />
+        Coins are withdrawable
+      </label>
+      <p className="ow-day-cap">Coins are play-only by default. Turning this on records the policy only — no coin payout path exists yet, so coins still cannot be paid out.</p>
+      <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void save()}>Save wallet config</button>
+    </div>
+  );
+}
+
 export default function OwnerPage() {
   const { user, openAuth, toast } = useStore();
   const [admins, setAdmins] = useState<AdminRow[]>([]);
@@ -93,6 +258,106 @@ export default function OwnerPage() {
     } catch { setOwnerLedger([]); }
   }, [ownerLedType, ownerLedQ, ownerLedFrom, ownerLedTo, ownerLedAdmin]);
   useEffect(() => { void loadOwnerLedger(); }, [loadOwnerLedger]);
+
+  // P0 Batch 2 (O1): global P&L — GGR, deposits, approved withdrawals,
+  // commissions owed, net profit, for a selectable period.
+  interface Pnl { from: string | null; to: string | null; roundsCash: number; stakesCash: number; payoutsCash: number; ggrCash: number; roundsCoins: number; stakesCoins: number; payoutsCoins: number; ggrCoins: number; deposits: number; depositsCount: number; withdrawals: number; withdrawalsCount: number; commissions: number; netProfit: number; formula: string }
+  const [pnlPreset, setPnlPreset] = useState<"today" | "week" | "month" | "custom">("today");
+  const [pnlFrom, setPnlFrom] = useState("");
+  const [pnlTo, setPnlTo] = useState("");
+  const [pnl, setPnl] = useState<Pnl | null>(null);
+  const loadPnl = useCallback(async () => {
+    const today = todayStr();
+    let from = today;
+    let to = today;
+    if (pnlPreset === "week") {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - 6);
+      from = d.toISOString().slice(0, 10);
+    } else if (pnlPreset === "month") {
+      from = `${today.slice(0, 8)}01`;
+    } else if (pnlPreset === "custom") {
+      from = pnlFrom || today;
+      to = pnlTo || today;
+    }
+    try {
+      setPnl(await api<Pnl>(`/api/owner/pnl?from=${from}&to=${to}`));
+    } catch { setPnl(null); }
+  }, [pnlPreset, pnlFrom, pnlTo]);
+  useEffect(() => { void loadPnl(); }, [loadPnl]);
+
+  // P0 Batch 2 (O9/O10/O11): game catalogue — visibility, kill switch,
+  // and per-game economics for all 46 games.
+  interface OwnerGameCfg { slug: string; name: string; currency: string; visible: boolean; killed: boolean; minBet: number | null; maxBet: number | null; maxPayout: number | null; maxMultiplier: number; note: string }
+  const [ownerGames, setOwnerGames] = useState<OwnerGameCfg[] | null>(null);
+  const [ownerGamesQ, setOwnerGamesQ] = useState("");
+  const [globalKill, setGlobalKill] = useState(false);
+  const loadOwnerGames = useCallback(async () => {
+    try {
+      const g = await api<{ globalKill: boolean; games: OwnerGameCfg[] }>("/api/games/config");
+      setOwnerGames(g.games);
+      setGlobalKill(g.globalKill);
+    } catch { setOwnerGames([]); }
+  }, []);
+  useEffect(() => { void loadOwnerGames(); }, [loadOwnerGames]);
+  const toggleGlobalKill = async () => {
+    const next = !globalKill;
+    if (next && !window.confirm("Pause ALL games? No one can play until you resume them.")) return;
+    try {
+      await api("/api/owner/platform/kill", { method: "POST", body: JSON.stringify({ killed: next }) });
+      toast(next ? "All games paused" : "All games resumed", next ? "lose" : "win");
+      await loadOwnerGames();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Kill switch failed", "lose");
+    }
+  };
+  const saveOwnerGame = async (slug: string, patch: Partial<OwnerGameCfg>) => {
+    try {
+      await api(`/api/owner/games/${slug}`, { method: "POST", body: JSON.stringify(patch) });
+      toast("Game updated", "win");
+      await loadOwnerGames();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Update failed", "lose");
+    }
+  };
+
+  // P0 Batch 2 (O12): payment methods — enable/disable + per-method min/max.
+  interface OwnerPayMethod { method: string; enabled: boolean; minDeposit: number | null; maxDeposit: number | null }
+  const [ownerPay, setOwnerPay] = useState<OwnerPayMethod[] | null>(null);
+  const loadOwnerPay = useCallback(async () => {
+    try {
+      setOwnerPay((await api<{ methods: OwnerPayMethod[] }>("/api/owner/payment-methods")).methods);
+    } catch { setOwnerPay([]); }
+  }, []);
+  useEffect(() => { void loadOwnerPay(); }, [loadOwnerPay]);
+  const saveOwnerPay = async (method: string, patch: Partial<OwnerPayMethod>) => {
+    try {
+      await api(`/api/owner/payment-methods/${method}`, { method: "POST", body: JSON.stringify(patch) });
+      toast(`${method} updated`, "win");
+      await loadOwnerPay();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Update failed", "lose");
+    }
+  };
+
+  // P0 Batch 2 (O13): wallet config — the platform rules for both wallets.
+  interface OwnerWalletCfg { globalKill: boolean; cashMinDeposit: number; cashMinStake: number; coinMinStake: number; conversionRate: number; coinsWithdrawable: boolean }
+  const [ownerWallet, setOwnerWallet] = useState<OwnerWalletCfg | null>(null);
+  const loadOwnerWallet = useCallback(async () => {
+    try {
+      setOwnerWallet(await api<OwnerWalletCfg>("/api/owner/wallet-config"));
+    } catch { setOwnerWallet(null); }
+  }, []);
+  useEffect(() => { void loadOwnerWallet(); }, [loadOwnerWallet]);
+  const saveOwnerWallet = async (patch: Partial<OwnerWalletCfg>) => {
+    try {
+      await api("/api/owner/wallet-config", { method: "POST", body: JSON.stringify(patch) });
+      toast("Wallet config saved", "win");
+      await loadOwnerWallet();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Update failed", "lose");
+    }
+  };
 
   // Per-admin referral link copy (first active code) — the admin's own
   // panel lives on the /admin routes; "Preview panel" links there with
@@ -397,6 +662,88 @@ export default function OwnerPage() {
                 );
               })}
             </div>
+          )}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Profit &amp; loss</h3>
+          <p className="rg48-sub">Gross gaming revenue, deposits, approved withdrawals, commissions owed, and net profit — all from the real tables, nothing invented.</p>
+          <div className="money-chips" role="group" aria-label="P&L period">
+            {(["today", "week", "month", "custom"] as const).map((p) => (
+              <button key={p} type="button" className={pnlPreset === p ? "on" : ""} onClick={() => setPnlPreset(p)}>
+                {p === "today" ? "Today" : p === "week" ? "Last 7 days" : p === "month" ? "This month" : "Custom"}
+              </button>
+            ))}
+          </div>
+          {pnlPreset === "custom" && (
+            <div className="money-dates">
+              <label>From <input type="date" value={pnlFrom} max={todayStr()} onChange={(e) => setPnlFrom(e.target.value)} /></label>
+              <label>To <input type="date" value={pnlTo} max={todayStr()} onChange={(e) => setPnlTo(e.target.value)} /></label>
+            </div>
+          )}
+          {pnl === null ? <p>Loading P&amp;L…</p> : (
+            <>
+              <div className="sum-cards">
+                <div className="sum-card"><span>GGR (cash)</span><b>{fmtCash(pnl.ggrCash)}</b></div>
+                <div className="sum-card"><span>Deposits</span><b>{fmtCash(pnl.deposits)}</b></div>
+                <div className="sum-card"><span>Withdrawals (approved)</span><b>{fmtCash(pnl.withdrawals)}</b></div>
+                <div className="sum-card"><span>Commissions owed</span><b>{fmtCash(pnl.commissions)}</b></div>
+                <div className="sum-card"><span>Net profit</span><b>{fmtCash(pnl.netProfit)}</b></div>
+              </div>
+              <p className="ow-day-cap">
+                {pnl.roundsCash} cash rounds ({fmtCash(pnl.stakesCash)} staked − {fmtCash(pnl.payoutsCash)} paid out) · {pnl.roundsCoins} coin rounds ({pnl.stakesCoins} staked − {pnl.payoutsCoins} paid out, GGR {pnl.ggrCoins} coins) · {pnl.depositsCount} deposits · {pnl.withdrawalsCount} approved withdrawals.
+              </p>
+              <p className="ow-day-cap">{pnl.formula}</p>
+            </>
+          )}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Games ({ownerGames ? ownerGames.length : "…"})</h3>
+          <p className="rg48-sub">Hide a game to take it off the games page, kill one to stop all play on it at once. Economics are per game — empty means the catalogue default, and a max payout above the cap is cut down to it, never rejected.</p>
+          <div className="ow-killbar">
+            <div>
+              <b>Global kill switch</b>
+              <span>{globalKill ? " ALL games are paused right now." : " All games live."}</span>
+            </div>
+            <button type="button" className={`btn ${globalKill ? "btn-danger" : "btn-ghost"}`} onClick={() => void toggleGlobalKill()}>
+              {globalKill ? "Resume all games" : "Pause all games"}
+            </button>
+          </div>
+          <label className="players-search">
+            <input type="search" placeholder="Search games…" value={ownerGamesQ} onChange={(e) => setOwnerGamesQ(e.target.value)} aria-label="Search games" />
+          </label>
+          {ownerGames === null ? <p>Loading games…</p> : (
+            <div className="ow-games">
+              {ownerGames
+                .filter((g) => !ownerGamesQ.trim() || g.name.toLowerCase().includes(ownerGamesQ.trim().toLowerCase()))
+                .map((g) => (
+                  <OwnerGameRow key={g.slug} g={g} onSave={saveOwnerGame} />
+                ))}
+              {ownerGames.filter((g) => !ownerGamesQ.trim() || g.name.toLowerCase().includes(ownerGamesQ.trim().toLowerCase())).length === 0 && (
+                <p>No games match that search.</p>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Payment methods</h3>
+          <p className="rg48-sub">Which deposit methods are live, and their per-method limits. Demo cashier only — this connects no gateway.</p>
+          {ownerPay === null ? <p>Loading payment methods…</p> : (
+            <div className="ow-games">
+              {ownerPay.map((m) => (
+                <OwnerPayRow key={m.method} m={m} onSave={saveOwnerPay} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Wallet config</h3>
+          <p className="rg48-sub">The platform rules for both wallets. The conversion rate is enforced server-side; the wallet card still reads GH₵5 = 1 coin until its text is updated.</p>
+          {ownerWallet === null ? <p>Loading wallet config…</p> : (
+            <OwnerWalletForm key={JSON.stringify(ownerWallet)} w={ownerWallet} onSave={saveOwnerWallet} />
           )}
         </section>
       </div>

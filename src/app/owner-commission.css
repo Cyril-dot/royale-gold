@@ -15,3 +15,40 @@
 }
 .ow-day-cap{margin:10px 0 0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
 .ow-commission .sum-cards{margin:4px 0 0}
+
+/* --- P0 Batch 2: owner control (P&L, games, payment methods, wallet) ---
+   Same visual language as the rest of the owner panel: stat tiles,
+   tab-style pills, dark inputs with gold borders. Amounts stay Outfit
+   bold, never Anton. Inputs are 16px (no iOS zoom); buttons 44px. */
+.ow-killbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 14px;padding:12px;border:1px solid var(--line,rgba(255,246,216,.14));border-radius:12px;background:rgba(4,6,13,.5)}
+.ow-killbar b{display:block;font-size:15px}
+.ow-killbar span{font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+.btn-danger{background:#E5322D;border-color:#E5322D;color:#FFF6D8}
+.btn-danger:disabled{opacity:.5}
+.ow-games{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.ow-game-row{padding:12px;border:1px solid var(--line,rgba(255,246,216,.14));border-radius:12px;background:rgba(4,6,13,.5)}
+.ow-game-killed{border-color:rgba(229,50,45,.6)}
+.ow-game-hidden{opacity:.75}
+.ow-game-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ow-game-head b{font-size:15px}
+.ow-game-cur{font-size:11px;font-weight:800;letter-spacing:.06em;padding:2px 8px;border-radius:99px;border:1px solid rgba(242,194,48,.5);color:var(--gold-2,#F2C230)}
+.ow-game-mult{font-size:12px;font-weight:800;color:var(--muted,rgba(255,246,216,.7))}
+.ow-game-flag{font-size:11px;font-weight:900;letter-spacing:.06em;padding:2px 8px;border-radius:99px;border:1px solid rgba(255,246,216,.35);color:var(--muted,rgba(255,246,216,.7))}
+.ow-game-flag.bad{border-color:#E5322D;color:#FF8580}
+.ow-game-note{margin:6px 0 0;font-size:12.5px;color:var(--muted,rgba(255,246,216,.7))}
+.ow-game-toggles{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ow-game-econ{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:10px;align-items:end}
+.ow-game-econ label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
+.ow-game-econ input{width:100%;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font-family:var(--font);font-weight:800;font-size:16px}
+.ow-game-econ .btn{align-self:end;min-height:44px}
+.ow-pay-row{padding:12px;border:1px solid var(--line,rgba(255,246,216,.14));border-radius:12px;background:rgba(4,6,13,.5)}
+.ow-pay-off{opacity:.75}
+.ow-wallet{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px;align-items:end}
+.ow-wallet label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
+.ow-wallet input[type=number]{width:100%;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font-family:var(--font);font-weight:800;font-size:16px}
+.ow-wallet .btn{min-height:44px}
+.ow-check{flex-direction:row !important;align-items:center !important;gap:8px !important;font-size:14px !important;color:var(--ink,#FFF6D8) !important}
+.ow-check input{width:20px;height:20px;accent-color:var(--gold,#F2C230)}
+@media (hover:hover) and (pointer:fine){
+  .btn-danger:hover{background:#c62a26}
+}

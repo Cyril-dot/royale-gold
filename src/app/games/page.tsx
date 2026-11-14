@@ -61,9 +61,25 @@ function GamesInner() {
     setQ(params.get("q") || "");
   }, [params]);
   const { user, wallet } = useStore();
+  // P0 Batch 2 (O9): games the owner hid never render here. The config
+  // is public; a failed fetch fails OPEN (all games show) — the server
+  // still blocks play on a hidden game, so this is display only.
+  const [hiddenSlugs, setHiddenSlugs] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/games/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!live || !j || !Array.isArray(j.games)) return;
+        setHiddenSlugs(new Set(j.games.filter((g: { visible?: boolean }) => g.visible === false).map((g: { slug: string }) => g.slug)));
+      })
+      .catch(() => { /* fail open — all games show */ });
+    return () => { live = false; };
+  }, []);
 
   const list = useMemo(() => {
     return GAMES_PAGE_GAMES.filter((g) => {
+      if (hiddenSlugs && hiddenSlugs.has(g.slug)) return false;
       if (filter === "cash" || filter === "coins") { if (g.currency !== filter) return false; }
       // Round 17: a category chip must show exactly the row of that name.
       // The old predicates read the raw tile flags (meta.beginner / meta.tag),
@@ -74,7 +90,7 @@ function GamesInner() {
       if (q && !g.name.toLowerCase().includes(q.toLowerCase())) return false;
       return true;
     });
-  }, [filter, q]);
+  }, [filter, q, hiddenSlugs]);
 
   const rows = useMemo(() => {
     if (CATEGORY_FILTERS[filter]) {

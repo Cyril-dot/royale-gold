@@ -217,3 +217,47 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([action, createdAt])
 }
+
+// P0 Batch 2 (O9/O10/O11): per-game owner control. One row per game the
+// owner has touched; a game with NO row runs on the catalogue defaults
+// (src/lib/games.ts): visible, not killed, no bet/payout caps, the
+// catalogue maxMultiplier. Null numeric = no override (use the default).
+model GameConfig {
+  slug          String   @id // matches games.ts slug
+  visible       Boolean  @default(true)
+  killed        Boolean  @default(false)
+  minBet        Float?
+  maxBet        Float?
+  maxPayout     Float?
+  maxMultiplier Float?
+  updatedBy     String?
+  updatedAt     DateTime @updatedAt
+}
+
+// P0 Batch 2 (O12): per-method deposit control. Rows are seeded lazily
+// (a method with no row is enabled with no min/max). Deposits stay demo
+// cashier only — this toggles/limits the methods, it connects no gateway.
+model PaymentMethodConfig {
+  method     String   @id // "MTN" | "Telecel" | "AirtelTigo" | "card"
+  enabled    Boolean  @default(true)
+  minDeposit Float?
+  maxDeposit Float?
+  updatedAt  DateTime @updatedAt
+}
+
+// P0 Batch 2 (O11 global kill + O13 wallet config): the platform's
+// single settings row (id always "global"). The global kill switch
+// stops ALL play at once; the wallet fields are the platform rules for
+// the two wallets. coinsWithdrawable defaults NEVER — coins are
+// play-only; flipping it only records the policy (no coin payout path
+// exists) and is written to the AuditLog.
+model PlatformSettings {
+  id                String   @id @default("global")
+  globalKill        Boolean  @default(false)
+  cashMinDeposit    Float  @default(1)
+  cashMinStake      Float  @default(1)
+  coinMinStake      Int      @default(1)
+  conversionRate    Float  @default(5)
+  coinsWithdrawable Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+}

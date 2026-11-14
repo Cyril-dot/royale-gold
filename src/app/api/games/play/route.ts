@@ -5,6 +5,14 @@ import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { drawRoulette, PLAY_GATED_GAMES, type RouletteBetKind } from "@/lib/play";
 import { round2 } from "@/lib/money";
 import { settleGame } from "@/lib/settle";
+// P0 Batch 2 (O9/O10/O11): per-game owner control — the draw must not
+// run for a killed/hidden game or a stake outside the game's limits.
+import {
+  getGameConfig,
+  getPlatformSettings,
+  isGameBlocked,
+  platformMinStake,
+} from "@/lib/game-config";
 
 /**
  * Server-decided play (round 6, SIM-vs-LIVE economy).
@@ -52,6 +60,22 @@ export async function POST(req: Request) {
     }
     const stake = Number(body.stake);
     if (!Number.isFinite(stake) || stake <= 0) return fail("Stake must be > 0");
+    // P0 Batch 2 (O9/O10/O11): check before the draw, so a killed/hidden
+    // game or an out-of-range stake never draws (settleGame re-checks
+    // the same rules on the REAL path as defence in depth).
+    const cfg = await getGameConfig(game.slug);
+    const settings = await getPlatformSettings();
+    if (cfg) {
+      const blocked = isGameBlocked(cfg, settings);
+      if (blocked) return fail(blocked, 403);
+      const minBet = cfg.minBet ?? platformMinStake(game.currency, settings);
+      if (stake < minBet) {
+        return fail(`Minimum stake for ${game.name} is ${game.currency === "coins" ? `${minBet} coins` : `GH₵ ${minBet.toFixed(2)}`}`);
+      }
+      if (cfg.maxBet != null && stake > cfg.maxBet) {
+        return fail(`Maximum stake for ${game.name} is ${game.currency === "coins" ? `${cfg.maxBet} coins` : `GH₵ ${cfg.maxBet.toFixed(2)}`}`);
+      }
+    }
     const mode = body.mode === "SIM" ? "SIM" : "REAL";
     const betKind = body.choice?.betKind;
     if (!betKind || !BET_KINDS.has(betKind)) return fail("A valid bet type is required");
@@ -63,7 +87,12 @@ export async function POST(req: Request) {
     const lifetimeDeposited = await getLifetimeDeposited(user.id);
     const factor = winFactorFor({ mode, currency: game.currency, lifetimeDeposited });
     const { pocket, won, mult } = drawRoulette(betKind as RouletteBetKind, pick, factor);
-    const payout = round2(stake * mult);
+    // P0 Batch 2 (O10): the owner's max-payout cap applies to the drawn
+    // payout too (SIM and REAL alike) — settleGame re-caps on the REAL path.
+    let payout = round2(stake * mult);
+    if (cfg?.maxPayout != null && payout > cfg.maxPayout) {
+      payout = game.currency === "coins" ? Math.floor(cfg.maxPayout) : round2(cfg.maxPayout);
+    }
 
     if (mode === "SIM") {
       return ok({
@@ -77,7 +106,7 @@ export async function POST(req: Request) {
       economy: { mode, factor, lifetimeDeposited },
     }, { viaPlay: true });
     return ok({
-      game: game.slug, currency: game.currency, stake, payout,
+      game: game.slug, currency: game.currency, stake, payout: settled.payout,
       pocket, won, mult, factor, mode, lifetimeDeposited,
       cash: settled.cash, coins: settled.coins, sim: settled.sim,
       xp: settled.xp, level: settled.level,

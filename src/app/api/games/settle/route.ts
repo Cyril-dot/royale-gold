@@ -40,7 +40,9 @@ export async function POST(req: Request) {
       game: body.game,
       currency: body.currency,
       stake,
-      payout,
+      // The effective payout — equal to the requested one unless the
+      // owner's per-game max-payout cap (O10) cut it down.
+      payout: settled.payout,
       cash: settled.cash,
       coins: settled.coins,
       sim: settled.sim,

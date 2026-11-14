@@ -177,10 +177,14 @@ export function useGameRoom(game: GameDef) {
         body: JSON.stringify({ game: game.slug, currency: game.currency, stake, payout, result, roundId: roundId || undefined }),
       });
       setWallet({ cash: r.cash, coins: r.coins, sim: r.sim });
-      const won = payout > stake;
-      const amt = isCoin ? `${fmtCoins(payout)} coins` : fmtCash(payout);
-      toast(won ? `You won ${amt}` : payout > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtCash(stake)}`, won ? "win" : "lose");
-      if (won) { playSfx("cheer", muted); fireConfetti(); } else if (payout === 0) playSfx("groan", muted);
+      // P0 Batch 2 (O10): the toast shows the EFFECTIVE payout the
+      // server settled — equal to the requested one unless the owner's
+      // per-game max-payout cap cut it down.
+      const effPayout = typeof r.payout === "number" ? r.payout : payout;
+      const won = effPayout > stake;
+      const amt = isCoin ? `${fmtCoins(effPayout)} coins` : fmtCash(effPayout);
+      toast(won ? `You won ${amt}` : effPayout > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtCash(stake)}`, won ? "win" : "lose");
+      if (won) { playSfx("cheer", muted); fireConfetti(); } else if (effPayout === 0) playSfx("groan", muted);
       await loadStats();
       return true;
     } catch (ex) {

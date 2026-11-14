@@ -2,6 +2,8 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2, toDecimal } from "@/lib/money";
+// P0 Batch 2 (O12/O13): owner-controlled payment methods + wallet config.
+import { getPaymentMethodConfig, getPlatformSettings } from "@/lib/game-config";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -27,6 +29,21 @@ export async function POST(req: Request) {
     const me = await prisma.user.findUnique({ where: { id: user.id } });
     // P0 Batch 1 (A8): a blocked player cannot deposit.
     if (me?.blockedAt) return fail("This account is blocked and cannot deposit", 403);
+
+    // P0 Batch 2 (O12/O13): owner-controlled payment methods + wallet
+    // config. A disabled method is rejected; a per-method min/max (or
+    // the platform cash minimum deposit when the method sets none) is
+    // enforced here, server-side.
+    const pm = await getPaymentMethodConfig(method);
+    if (!pm.enabled) return fail(`${method} deposits are currently disabled`, 403);
+    const settings = await getPlatformSettings();
+    const minDeposit = pm.minDeposit ?? settings.cashMinDeposit;
+    if (amount < minDeposit) {
+      return fail(`Minimum deposit via ${method} is GH₵ ${round2(minDeposit).toFixed(2)}`);
+    }
+    if (pm.maxDeposit != null && amount > pm.maxDeposit) {
+      return fail(`Maximum deposit via ${method} is GH₵ ${round2(pm.maxDeposit).toFixed(2)}`);
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const fresh = await tx.user.findUnique({ where: { id: user.id } });

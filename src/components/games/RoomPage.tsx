@@ -2,6 +2,8 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGame } from "../../lib/games";
 import CrashRoom from "./crash";
@@ -23,7 +25,37 @@ import { BingoBlitzRoom, BrickBreakerRoom, StackTowerRoom, BubbleShooterRoom, Bu
 
 export default function RoomPage({ slug }: { slug: string }) {
   const game = getGame(slug);
+  // P0 Batch 2 (O9/O11): a hidden, killed, or globally-paused game
+  // shows an unavailable screen instead of the room. The gate starts
+  // OPEN so normal rooms render instantly; it closes once the public
+  // config arrives. A failed fetch stays open — the server still blocks
+  // play/settle, so this is display only.
+  const [closedMsg, setClosedMsg] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/games/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!live || !j || !Array.isArray(j.games)) return;
+        if (j.globalKill) { setClosedMsg("All games are paused by the owner"); return; }
+        const g = j.games.find((x: { slug: string }) => x.slug === slug);
+        if (g && (g.killed || g.visible === false)) {
+          setClosedMsg(`${game?.name ?? slug} is currently unavailable`);
+        }
+      })
+      .catch(() => { /* fail open — the room renders */ });
+    return () => { live = false; };
+  }, [slug, game?.name]);
   if (!game) notFound();
+  if (closedMsg) {
+    return (
+      <main className="rg48-page-main"><div className="wrap">
+        <h2>{game.name}</h2>
+        <p>{closedMsg} — check back later.</p>
+        <Link className="btn btn-gold" href="/games">All games</Link>
+      </div></main>
+    );
+  }
 
   switch (slug) {
     case "aviator-gold": return <CrashRoom game={game} skin="aviator" />;
