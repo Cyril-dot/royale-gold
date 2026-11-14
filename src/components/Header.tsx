@@ -139,8 +139,12 @@ export default function Header() {
       <header className="site" id="siteHdr">
         <div className="wrap hdr-main">
           <Link className="brand" href="/" aria-label={`${siteName} home`}>
+            {/* Header mark — the Gemini logo roundel (/icon.png). The
+                .coin-mark span keeps its v48 sizing (44px desktop, 32px
+                phone); its coin styling is stripped in hdr-menu.css so
+                the roundel fills the circle. */}
             <span className="coin-mark">
-              <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2C9 7 4 9 4 13a8 8 0 0 0 16 0c0-4-5-6-8-11z" /></svg>
+              <img src="/icon.png" alt="" aria-hidden="true" />
             </span>
             <span className="brand-text">
               <span className="brand-name">

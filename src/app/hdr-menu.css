@@ -127,3 +127,11 @@ header#siteHdr .acct-chip .ac-bals{display:flex;flex-direction:column;line-heigh
   header#siteHdr .hdr-row-3 .btn-acct{flex:0 0 auto}
 }
       
+/* ============ Header mark — Gemini logo roundel ============
+   The brand mark is the Gemini logo (/icon.png, the crown + RG chip
+   roundel) — not the old gold-coin SVG. The .coin-mark span keeps its
+   v48 sizing (44px desktop, 32px phone); only its coin styling is
+   stripped so the roundel image fills the circle. Scoped to the header
+   brand so nothing else using .coin-mark is touched. */
+header.site .brand .coin-mark{background:none;border:none;box-shadow:none}
+header.site .brand .coin-mark img{display:block;width:100%;height:100%;border-radius:50%}
