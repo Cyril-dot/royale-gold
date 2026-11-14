@@ -1,0 +1,7 @@
+/* --- Admin panel: Players list (Round 31) ---
+   Search box for the new /admin/players list page. 16px font so iOS
+   never zooms the page on focus; full width; brand tokens only. */
+.players-search{display:block;margin:0 0 12px}
+.players-search input{width:100%;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit;font-size:16px}
+.players-search input::placeholder{color:rgba(255,246,216,.45)}
+.players-search input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}

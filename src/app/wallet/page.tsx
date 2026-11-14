@@ -5,8 +5,10 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { fmtCash, fmtCoins } from "../../lib/api";
+import { api, fmtCash, fmtCoins, type GameHistoryRow } from "../../lib/api";
+import { getGame } from "../../lib/games";
 import { useStore } from "../../lib/store";
 import WalletCard from "../../components/WalletCard";
 import CoinCard from "../../components/CoinCard";
@@ -14,6 +16,19 @@ import CoinConverter from "../../components/CoinConverter";
 
 export default function WalletPage() {
   const { user, wallet, mode, simSession, topUpSim, openAuth, setDepositOpen } = useStore();
+  // Round 31: wallet history — game rounds are the only money movement
+  // retrievable without a new API (/api/games/history). Deposits and
+  // conversions have no GET endpoint (and withdrawals are not tracked at
+  // all), so they cannot be listed; the caption below says so plainly.
+  const [history, setHistory] = useState<GameHistoryRow[] | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    let live = true;
+    api<{ history: GameHistoryRow[] }>("/api/games/history?limit=20")
+      .then((r) => { if (live) setHistory(r.history); })
+      .catch(() => { if (live) setHistory([]); });
+    return () => { live = false; };
+  }, [user]);
 
   if (!user) {
     return (
@@ -70,6 +85,36 @@ export default function WalletPage() {
             deposit centre above stays as-is; this section is the new work.
             (The "coins are play-only" line lives inside the converter now.) */}
         <CoinConverter />
+        {/* Round 31: History — recent game rounds (stake out, payout in),
+            the only wallet movement an existing endpoint returns. */}
+        <section className="wallet-hist" aria-label="Wallet history">
+          <h3>History</h3>
+          <p className="wallet-hist-cap">Recent game rounds. Deposits and conversions can’t be listed here yet — no endpoint returns them.</p>
+          {history === null ? (
+            <p>Loading history…</p>
+          ) : history.length === 0 ? (
+            <p>No rounds yet — play a game and it will show here.</p>
+          ) : (
+            <div className="wallet-hist-list">
+              {history.map((h) => {
+                const net = Number(h.payout || 0) - Number(h.stake || 0);
+                const isCoin = h.currency === "coins";
+                const netTxt = isCoin
+                  ? `${net >= 0 ? "+" : "−"}${Math.abs(Math.round(net))} coins`
+                  : `${net >= 0 ? "+" : "−"}${fmtCash(Math.abs(net))}`;
+                return (
+                  <div key={h.id} className="wallet-hist-row">
+                    <span className="wallet-hist-txt">
+                      <b>{getGame(h.game)?.name || h.game}</b>
+                      <span>{new Date(h.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {isCoin ? `${fmtCoins(h.stake)} coins staked` : `${fmtCash(h.stake)} staked`}</span>
+                    </span>
+                    <b className={net >= 0 ? "wallet-hist-win" : "wallet-hist-lose"}>{netTxt}</b>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );

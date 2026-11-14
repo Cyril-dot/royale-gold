@@ -1,0 +1,18 @@
+/* --- Admin panel: Commission tabs (Round 31) ---
+   The Day detail and History views were stacked cards on one long page;
+   now a tab bar switches between them — the same treatment as the owner
+   commission tabs (Round 30). Visual language matches .admin-nav
+   (44px pills, gold active tab). Brand tokens only; amounts stay
+   Outfit bold, never Anton. */
+.ac-tabs{display:flex;gap:8px;margin:0 0 16px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ac-tabs::-webkit-scrollbar{display:none}
+.ac-tab{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:11px 18px;border-radius:11px;border:1px solid var(--line,rgba(255,246,216,.14));background:var(--steel,#141828);color:var(--ink,#FFF6D8);font:inherit;font-weight:800;font-size:14.5px;white-space:nowrap;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.ac-tab-active{background:var(--gold,#F2C230);color:#231a02;border-color:var(--gold,#F2C230)}
+.ac-tab:focus-visible{outline:2px solid var(--gold,#F2C230);outline-offset:2px}
+.ac-tab:active{transform:scale(.98)}
+@media (hover:hover) and (pointer:fine){
+  .ac-tab:hover{border-color:rgba(242,194,48,.55)}
+  .ac-tab-active:hover{background:var(--gold,#F2C230)}
+}
+.ac-day-cap{margin:10px 0 0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+.ac-commission .sum-cards{margin:4px 0 0}

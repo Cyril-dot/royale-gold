@@ -141,7 +141,15 @@ export default function OwnerPage() {
 
         <section className="admin-sec">
           <h3>Overall totals</h3>
-          {rollup && <p>{rollup.totals.deposits} deposits · {fmtCash(rollup.totals.totalAmount)} deposited · {fmtCash(rollup.totals.totalCommission)} commission across all admins</p>}
+          {/* Round 31: was one plain sentence; now 3 stat tiles, same
+              .sum-card style as the commission tiles below. */}
+          {rollup && (
+            <div className="sum-cards">
+              <div className="sum-card"><span>Deposits</span><b>{rollup.totals.deposits}</b></div>
+              <div className="sum-card"><span>Total deposited</span><b>{fmtCash(rollup.totals.totalAmount)}</b></div>
+              <div className="sum-card"><span>Commission</span><b>{fmtCash(rollup.totals.totalCommission)}</b></div>
+            </div>
+          )}
         </section>
 
         <section className="admin-sec">
