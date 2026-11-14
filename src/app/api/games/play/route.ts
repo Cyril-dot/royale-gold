@@ -2,6 +2,7 @@ import { requireAuth } from "@/lib/auth";
 import { getGame } from "@/lib/games";
 import { getLifetimeDeposited, winFactorFor } from "@/lib/economy";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
+import { AuthError } from "@/lib/errors";
 import { drawRoulette, PLAY_GATED_GAMES, type RouletteBetKind } from "@/lib/play";
 import { round2 } from "@/lib/money";
 import { settleGame } from "@/lib/settle";
@@ -119,6 +120,7 @@ export async function POST(req: Request) {
       gameResultId: settled.gameResult.id,
     });
   } catch (err) {
+    if (err instanceof AuthError) return toErrorResponse(err);
     if (err instanceof Error) return fail(err.message, 400);
     return toErrorResponse(err);
   }

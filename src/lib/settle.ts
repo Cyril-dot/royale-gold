@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { AuthError } from "./errors";
 import { prisma } from "./prisma";
 import { getGame } from "./games";
 import { dec, round2, toDecimal } from "./money";
@@ -87,7 +88,7 @@ export async function settleGame(
   // this is the single enforcement point; the play route re-checks
   // before the draw so a limited player never draws.
   const limitErr = await checkPlayLimits(userId, stake, currency);
-  if (limitErr) throw new Error(limitErr);
+  if (limitErr) throw new AuthError(403, limitErr);
   let effPayout = payout;
   if (cfg?.maxPayout != null && effPayout > cfg.maxPayout) {
     effPayout = currency === "coins" ? Math.floor(cfg.maxPayout) : round2(cfg.maxPayout);
@@ -117,7 +118,7 @@ export async function settleGame(
     // P0 Batch 1 (A8): a blocked player cannot place a bet. This covers
     // /api/games/settle and the REAL path of /api/games/play (which calls
     // settleGame); the play route also checks before the SIM draw.
-    if (user.blockedAt) throw new Error("This account is blocked and cannot place bets");
+    if (user.blockedAt) throw new AuthError(403, "This account is blocked and cannot place bets");
     if (currency === "cash") {
       if (dec(user.cashBalance) < stake) throw new Error("Insufficient cash balance");
     } else if (user.coins < stake) {

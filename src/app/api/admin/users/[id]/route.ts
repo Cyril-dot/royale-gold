@@ -7,6 +7,9 @@ import { getGame } from "@/lib/games";
 import { playerCommission } from "@/lib/commission";
 import { latestKycStatus } from "@/lib/kyc";
 import { adminScopeAdminIds } from "@/lib/hierarchy";
+// P2 Batch 1 (A26): the player's VIP status, computed live from the
+// deposit ledger.
+import { vipStatusFor } from "@/lib/vip";
 
 /**
  * User detail for the admin panel: profile, joined date, code used,
@@ -91,6 +94,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const commission = commissionAdminId
       ? await playerCommission(commissionAdminId, id)
       : { total: 0, model: "none" as const, rate: 0 };
+    // P2 Batch 1 (A26): VIP status — the tier this player has reached
+    // from their total deposited, plus progress to the next tier.
+    const vip = await vipStatusFor(id, me.id);
     return ok({
       // P1 Batch 4 (O24): readOnly — the player is in a child admin's
       // downline, so the detail page hides the action sections.
@@ -144,6 +150,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       kycSubmittedAt: kyc.submittedAt,
       kycRejectionReason: kyc.rejectionReason,
       commission,
+      // P2 Batch 1 (A26): VIP status for the player detail.
+      vip: {
+        totalDeposited: vip.totalDeposited,
+        tier: vip.tier ? { name: vip.tier.name, minDeposited: vip.tier.minDeposited, perks: vip.tier.perks } : null,
+        nextTier: vip.nextTier ? { name: vip.nextTier.name, minDeposited: vip.nextTier.minDeposited } : null,
+        progressPct: vip.progressPct,
+        toNext: vip.toNext,
+      },
       tickets: tickets.map((t) => ({
         id: t.id,
         subject: t.subject,
@@ -166,6 +180,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             maxDepositPerDay: limit.maxDepositPerDay == null ? null : dec(limit.maxDepositPerDay),
             maxLossPerDay: limit.maxLossPerDay == null ? null : dec(limit.maxLossPerDay),
             coolOffUntil: limit.coolOffUntil?.toISOString() ?? null,
+            // P2 Batch 1 (A29): self-exclusion + reality check.
+            selfExcludedUntil: limit.selfExcludedUntil?.toISOString() ?? null,
+            selfExclusionReason: limit.selfExclusionReason ?? null,
+            realityCheckMinutes: limit.realityCheckMinutes ?? 0,
           }
         : null,
     });

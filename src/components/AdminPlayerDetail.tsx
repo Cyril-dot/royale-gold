@@ -54,6 +54,11 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   const [limitMaxDeposit, setLimitMaxDeposit] = useState("");
   const [limitMaxLoss, setLimitMaxLoss] = useState("");
   const [limitCoolOff, setLimitCoolOff] = useState("");
+  // P2 Batch 1 (A29): self-exclusion (until + reason) + the reality
+  // check interval (0 = off).
+  const [limitSelfExcl, setLimitSelfExcl] = useState("");
+  const [limitSelfExclReason, setLimitSelfExclReason] = useState("");
+  const [limitRealityCheck, setLimitRealityCheck] = useState("");
   const [limitBusy, setLimitBusy] = useState(false);
   const [limitsSeeded, setLimitsSeeded] = useState(false);
   // P1 Batch 2 (A23): send one in-app notification to this player.
@@ -66,6 +71,10 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       setLimitMaxDeposit(detail.limits?.maxDepositPerDay != null ? String(detail.limits.maxDepositPerDay) : "");
       setLimitMaxLoss(detail.limits?.maxLossPerDay != null ? String(detail.limits.maxLossPerDay) : "");
       setLimitCoolOff(detail.limits?.coolOffUntil ? detail.limits.coolOffUntil.slice(0, 10) : "");
+      // P2 Batch 1 (A29): self-exclusion + reality check.
+      setLimitSelfExcl(detail.limits?.selfExcludedUntil ? detail.limits.selfExcludedUntil.slice(0, 10) : "");
+      setLimitSelfExclReason(detail.limits?.selfExclusionReason ?? "");
+      setLimitRealityCheck(detail.limits?.realityCheckMinutes ? String(detail.limits.realityCheckMinutes) : "");
       setLimitsSeeded(true);
     }
   }, [detail, limitsSeeded]);
@@ -182,6 +191,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   };
 
   // P1 Batch 1 (A20): save the per-player limits (empty = no limit).
+  // P2 Batch 1 (A29): self-exclusion + reality check ride the same save.
   const submitLimits = async (e: React.FormEvent) => {
     e.preventDefault();
     setLimitBusy(true);
@@ -193,6 +203,9 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
           maxDepositPerDay: limitMaxDeposit.trim() === "" ? null : Number(limitMaxDeposit),
           maxLossPerDay: limitMaxLoss.trim() === "" ? null : Number(limitMaxLoss),
           coolOffUntil: limitCoolOff || null,
+          selfExcludedUntil: limitSelfExcl || null,
+          selfExclusionReason: limitSelfExclReason.trim() || null,
+          realityCheckMinutes: limitRealityCheck.trim() === "" ? 0 : Number(limitRealityCheck),
         }),
       });
       toast("Limits saved — enforced from the next bet or deposit", "win");
@@ -246,6 +259,9 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   // P1 Batch 4 (O24): a parent admin viewing a player in a child
   // admin's downline is READ-ONLY — the action sections below hide.
   const canAct = !previewId && user.role === "admin" && !detail.readOnly;
+  // P2 Batch 1 (A29): self-exclusion is live right now (the date is
+  // in the future) — badge + note, like the blocked state.
+  const selfExcludedNow = !!detail.limits?.selfExcludedUntil && new Date(detail.limits.selfExcludedUntil).getTime() > Date.now();
   const card = (label: string, value: string) => (
     <div className="sum-card"><span>{label}</span><b>{value}</b></div>
   );
@@ -253,10 +269,11 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   return (
     <>
       {previewId && ctx ? <AdminPreviewBanner name={ctx.admin.name} /> : null}
-      <div className="rg48-hbar-in">{back}<h2>{u.name}</h2>{u.blockedAt ? <span className="pd-blocked-badge">BLOCKED</span> : null}</div>
+      <div className="rg48-hbar-in">{back}<h2>{u.name}</h2>{u.blockedAt ? <span className="pd-blocked-badge">BLOCKED</span> : null}{selfExcludedNow ? <span className="pd-blocked-badge">SELF-EXCLUDED</span> : null}</div>
       <p className="rg48-sub">{u.email || u.phone || "—"} · Joined {new Date(u.joinedAt).toLocaleDateString("en-GB")}</p>
       {detail.readOnly ? <p className="rg48-mini">Read-only — this player is in {u.referringAdmin?.name ?? "a child admin"}&apos;s downline. Adjustments, blocks, bonuses, notes, tags and limits are managed by their own admin.</p> : null}
       {u.blockedAt ? <p className="pd-blocked-note">Blocked {new Date(u.blockedAt).toLocaleDateString("en-GB")} — {u.blockedReason || "no reason recorded"}. Betting and deposits are suspended.</p> : null}
+      {selfExcludedNow ? <p className="pd-blocked-note">Self-excluded until {new Date(detail.limits!.selfExcludedUntil!).toLocaleDateString("en-GB")}{detail.limits?.selfExclusionReason ? ` — ${detail.limits.selfExclusionReason}` : ""}. They cannot deposit, play or settle until then.</p> : null}
       <div className="pd-meta">
         <span className="pd-meta-item"><span className="pd-meta-label">Code used</span>{u.referralCodeUsed ? <b className="code-chip sm">{u.referralCodeUsed}</b> : <b>—</b>}</span>
         <span className="pd-meta-item"><span className="pd-meta-label">Referring admin</span><b>{u.referringAdmin?.name || "—"}</b></span>
@@ -311,6 +328,35 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
                   : "No activity yet — nothing earned on this player."}
           {" "}The Commission page is the source of truth.
         </p>
+      </section>
+      {/* P2 Batch 1 (A26): VIP — the tier this player has reached from
+          their total deposited, with progress to the next tier and its
+          perks. A label + perks only: VIP changes no economy, limits
+          or payouts. The owner edits the tiers; the admin only sees them. */}
+      <section className="admin-sec">
+        <h3>VIP</h3>
+        {detail.vip.tier ? (
+          <>
+            <div className="sum-cards">
+              {card("Tier", detail.vip.tier.name)}
+              {card("Deposited", fmtCash(detail.vip.totalDeposited))}
+              {card("Next tier", detail.vip.nextTier ? `${detail.vip.nextTier.name} · ${fmtCash(detail.vip.nextTier.minDeposited)}` : "Top tier")}
+            </div>
+            {detail.vip.nextTier ? (
+              <p className="rg48-sub">
+                {detail.vip.progressPct}% of the way to {detail.vip.nextTier.name} — {fmtCash(detail.vip.toNext)} more to deposit.
+              </p>
+            ) : (
+              <p className="rg48-sub">Top tier — nothing above this one.</p>
+            )}
+            {detail.vip.tier.perks.length > 0 ? (
+              <p className="rg48-sub">Perks: {detail.vip.tier.perks.join(", ")}.</p>
+            ) : null}
+          </>
+        ) : (
+          <p>No VIP tier yet — tiers start at GH₵ 0, so this player will have one once the owner saves the tiers.</p>
+        )}
+        <p className="rg48-mini">VIP is a label and perks only — it changes no economy, limits or payouts. The owner edits the tiers on the Owner panel.</p>
       </section>
       <section className="admin-sec">
         <h3>Bet history ({detail.rounds.length})</h3>
@@ -481,10 +527,12 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
         ) : null}
       </section>
       {/* P1 Batch 1 (A20): per-player limits. The form is admin-only; the
-          limits in force show for the owner too. Empty = no limit. */}
+          limits in force show for the owner too. Empty = no limit.
+          P2 Batch 1 (A29): self-exclusion (a hard stop until the date)
+          + the reality check interval ride the same save. */}
       <section className="admin-sec">
         <h3>Limits</h3>
-        <p className="rg48-sub">Per-player limits, enforced server-side on top of the per-game economics. A cool-off blocks play entirely until the date.</p>
+        <p className="rg48-sub">Per-player limits, enforced server-side on top of the per-game economics. A cool-off blocks play entirely until the date. Self-exclusion is stronger — no deposit, play or settle until the date.</p>
         {canAct ? (
           <form className="pd-adjust" onSubmit={submitLimits}>
             <div className="pd-adjust-row">
@@ -501,6 +549,18 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
                 <input type="date" value={limitCoolOff} onChange={(e) => setLimitCoolOff(e.target.value)} aria-label="Cool-off until" />
               </label>
             </div>
+            <div className="pd-adjust-row">
+              <label>Self-excluded until
+                <input type="date" value={limitSelfExcl} onChange={(e) => setLimitSelfExcl(e.target.value)} aria-label="Self-excluded until" />
+              </label>
+              <label>Self-exclusion reason
+                <input type="text" placeholder="Why — required when excluding" value={limitSelfExclReason} onChange={(e) => setLimitSelfExclReason(e.target.value)} aria-label="Self-exclusion reason" />
+              </label>
+              <label>Reality check every (minutes, 0 = off)
+                <input type="number" min={0} max={480} step="1" inputMode="numeric" placeholder="0" value={limitRealityCheck} onChange={(e) => setLimitRealityCheck(e.target.value)} aria-label="Reality check minutes" />
+              </label>
+            </div>
+            <p className="rg48-mini">Self-exclusion blocks deposits, play and settling until the date. The reality check shows the player a session summary in the game room every N minutes (0 = off).</p>
             <button className="btn btn-gold" type="submit" disabled={limitBusy}>{limitBusy ? "Saving…" : "Save limits"}</button>
           </form>
         ) : (
@@ -509,6 +569,8 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
             {card("Max deposit / day", detail.limits?.maxDepositPerDay != null ? fmtCash(detail.limits.maxDepositPerDay) : "No limit")}
             {card("Max loss / day", detail.limits?.maxLossPerDay != null ? fmtCash(detail.limits.maxLossPerDay) : "No limit")}
             {card("Cool-off", detail.limits?.coolOffUntil ? `Until ${new Date(detail.limits.coolOffUntil).toLocaleDateString("en-GB")}` : "None")}
+            {card("Self-excluded", selfExcludedNow ? `Until ${new Date(detail.limits!.selfExcludedUntil!).toLocaleDateString("en-GB")}` : "No")}
+            {card("Reality check", detail.limits?.realityCheckMinutes ? `Every ${detail.limits.realityCheckMinutes} min` : "Off")}
           </div>
         )}
       </section>

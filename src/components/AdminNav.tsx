@@ -33,6 +33,10 @@ const TABS: { path: string; section: AdminSection; label: string }[] = [
   { path: "/admin/kyc", section: "kyc", label: "KYC" },
   { path: "/admin/reports", section: "reports", label: "Reports" },
   { path: "/admin/fraud", section: "fraud", label: "Fraud" },
+  // P2 Batch 1: CRM campaigns (A25), tournaments (A27), live feed (A28).
+  { path: "/admin/campaigns", section: "campaigns", label: "Campaigns" },
+  { path: "/admin/tournaments", section: "tournaments", label: "Tournaments" },
+  { path: "/admin/live", section: "live", label: "Live" },
 ];
 
 export function AdminNav() {

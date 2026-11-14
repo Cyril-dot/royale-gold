@@ -68,7 +68,16 @@ export interface UserDetail {
   // P1 Batch 1 (A19/A20): admin-only notes + tags, and per-player limits.
   notes: { id: string; text: string; authorId: string; authorName: string; createdAt: string }[];
   tags: string[];
-  limits: { maxStake: number | null; maxDepositPerDay: number | null; maxLossPerDay: number | null; coolOffUntil: string | null } | null;
+  limits: { maxStake: number | null; maxDepositPerDay: number | null; maxLossPerDay: number | null; coolOffUntil: string | null; selfExcludedUntil: string | null; selfExclusionReason: string | null; realityCheckMinutes: number } | null;
+  // P2 Batch 1 (A26): VIP status — the tier this player has reached
+  // from their total deposited, plus progress to the next tier.
+  vip: {
+    totalDeposited: number;
+    tier: { name: string; minDeposited: number; perks: string[] } | null;
+    nextTier: { name: string; minDeposited: number } | null;
+    progressPct: number;
+    toNext: number;
+  };
 }
 
 export interface AdminDashboardData {
@@ -427,4 +436,213 @@ export function useAdminSentNotifications(previewId: string | null) {
   }, [previewId]);
   useEffect(() => { void load(); }, [load]);
   return { data, err, load };
+}
+
+// P2 Batch 1 (A25): CRM campaigns — the admin's drafts + sent
+// campaigns (preview: the owner's endpoint for that admin).
+export interface CampaignRow {
+  id: string;
+  name: string;
+  message: string;
+  audience: string;
+  segment: string | null;
+  targetPlayerIds: string[] | null;
+  status: string;
+  recipientCount: number;
+  audienceLabel: string;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+export function useAdminCampaigns(previewId: string | null) {
+  const [data, setData] = useState<{ campaigns: CampaignRow[] } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/owner/campaigns?adminId=${previewId}` : "/api/admin/campaigns";
+      setData(await api<{ campaigns: CampaignRow[] }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load campaigns.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+// P2 Batch 1 (A26): VIP tiers + each downline player's tier.
+export interface VipTierRow {
+  id: string;
+  name: string;
+  minDeposited: number;
+  perks: string[];
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface VipPlayerRow {
+  id: string;
+  name: string;
+  contact: string | null;
+  totalDeposited: number;
+  tier: { id: string; name: string; minDeposited: number; perks: string[] } | null;
+}
+
+export function useAdminVipTiers(previewId: string | null) {
+  const [data, setData] = useState<{ tiers: VipTierRow[]; players: VipPlayerRow[] } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/admin/vip-tiers?adminId=${previewId}` : "/api/admin/vip-tiers";
+      setData(await api<{ tiers: VipTierRow[]; players: VipPlayerRow[] }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load VIP tiers.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+// P2 Batch 1 (A27): tournaments — the admin's list, and one
+// tournament with its leaderboard.
+export interface TournamentRow {
+  id: string;
+  name: string;
+  gameSlug: string;
+  gameName: string;
+  startAt: string;
+  endAt: string;
+  prizePool: number;
+  status: string;
+  winnerId: string | null;
+  winnerName?: string | null;
+  createdAt: string;
+}
+
+export interface LeaderboardRow {
+  rank: number;
+  userId: string;
+  userName: string;
+  userContact: string | null;
+  points: number;
+}
+
+export function useAdminTournaments(previewId: string | null) {
+  const [data, setData] = useState<{ tournaments: TournamentRow[] } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/owner/tournaments?adminId=${previewId}` : "/api/admin/tournaments";
+      setData(await api<{ tournaments: TournamentRow[] }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load tournaments.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+export function useAdminTournament(previewId: string | null, id: string | null) {
+  const [data, setData] = useState<{ tournament: TournamentRow; leaderboard: LeaderboardRow[] } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    if (!id) { setData(null); return; }
+    try {
+      const url = previewId ? `/api/owner/tournaments/${id}` : `/api/admin/tournaments/${id}`;
+      setData(await api<{ tournament: TournamentRow; leaderboard: LeaderboardRow[] }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load this tournament.");
+    }
+  }, [previewId, id]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+// P2 Batch 1 (A28): the live feed — the 20 most recent rounds from
+// the admin's downline + the active-players count. The page polls
+// this every 15 seconds; the hook is a plain load (the page re-arms).
+export interface LiveFeedRow {
+  id: string;
+  userId: string;
+  userName: string;
+  game: string;
+  gameName: string;
+  currency: string;
+  stake: number;
+  payout: number;
+  net: number;
+  createdAt: string;
+}
+
+export function useAdminLiveFeed(previewId: string | null) {
+  const [data, setData] = useState<{ feed: LiveFeedRow[]; activePlayers: number; fetchedAt: string } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/owner/live-feed?adminId=${previewId}` : "/api/admin/live-feed";
+      setData(await api<{ feed: LiveFeedRow[]; activePlayers: number; fetchedAt: string }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load the live feed.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+// P2 Batch 1 (A29): the responsible-gambling list — players with an
+// active cool-off or self-exclusion, with their until dates.
+export interface ResponsibleRow {
+  id: string;
+  name: string;
+  contact: string | null;
+  coolOffUntil: string | null;
+  selfExcludedUntil: string | null;
+  selfExclusionReason: string | null;
+}
+
+export function useAdminResponsible(previewId: string | null) {
+  const [data, setData] = useState<{ players: ResponsibleRow[] } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/admin/players/responsible?adminId=${previewId}` : "/api/admin/players/responsible";
+      setData(await api<{ players: ResponsibleRow[] }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load responsible-gambling players.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+// P2 Batch 1 (A29): the signed-in player's own limits — the account
+// page (self-exclusion banner + Take a break) and the game room
+// (reality check) read this.
+export interface PlayerLimits {
+  maxStake: number | null;
+  maxDepositPerDay: number | null;
+  maxLossPerDay: number | null;
+  coolOffUntil: string | null;
+  selfExcludedUntil: string | null;
+  selfExclusionReason: string | null;
+  realityCheckMinutes: number;
+}
+
+export function usePlayerLimits() {
+  const [limits, setLimits] = useState<PlayerLimits | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const data = await api<{ limits: PlayerLimits }>("/api/player/limits");
+      setLimits(data.limits);
+    } catch {
+      setLimits(null);
+    }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  return { limits, load };
 }

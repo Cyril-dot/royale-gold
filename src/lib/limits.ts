@@ -18,6 +18,12 @@ export interface PlayerLimitRow {
   maxDepositPerDay: number | null;
   maxLossPerDay: number | null;
   coolOffUntil: string | null;
+  // P2 Batch 1 (A29): self-exclusion (a hard stop — no deposit, play
+  // or settle until the date) + the reality-check interval in minutes
+  // (0 = off).
+  selfExcludedUntil: string | null;
+  selfExclusionReason: string | null;
+  realityCheckMinutes: number;
 }
 
 export async function getPlayerLimit(userId: string): Promise<PlayerLimitRow | null> {
@@ -28,6 +34,9 @@ export async function getPlayerLimit(userId: string): Promise<PlayerLimitRow | n
     maxDepositPerDay: row.maxDepositPerDay == null ? null : dec(row.maxDepositPerDay),
     maxLossPerDay: row.maxLossPerDay == null ? null : dec(row.maxLossPerDay),
     coolOffUntil: row.coolOffUntil?.toISOString() ?? null,
+    selfExcludedUntil: row.selfExcludedUntil?.toISOString() ?? null,
+    selfExclusionReason: row.selfExclusionReason ?? null,
+    realityCheckMinutes: row.realityCheckMinutes ?? 0,
   };
 }
 
@@ -63,6 +72,12 @@ export async function todayDeposited(userId: string): Promise<number> {
 export async function checkPlayLimits(userId: string, stake: number, currency: "cash" | "coins"): Promise<string | null> {
   const limit = await getPlayerLimit(userId);
   if (!limit) return null;
+  // P2 Batch 1 (A29): self-exclusion is a hard stop — it is checked
+  // FIRST, before the cool-off, so a self-excluded player can never
+  // bet even if the cool-off has expired.
+  if (limit.selfExcludedUntil && new Date(limit.selfExcludedUntil).getTime() > Date.now()) {
+    return `This account is self-excluded until ${new Date(limit.selfExcludedUntil).toLocaleDateString("en-GB")} — play is suspended`;
+  }
   if (limit.coolOffUntil && new Date(limit.coolOffUntil).getTime() > Date.now()) {
     return `This account is on a cool-off until ${new Date(limit.coolOffUntil).toLocaleDateString("en-GB")} — play is suspended`;
   }
@@ -83,7 +98,14 @@ export async function checkPlayLimits(userId: string, stake: number, currency: "
 /** The deposit check for the deposit route. Null = allowed. */
 export async function checkDepositLimit(userId: string, amount: number): Promise<string | null> {
   const limit = await getPlayerLimit(userId);
-  if (!limit || limit.maxDepositPerDay == null) return null;
+  if (!limit) return null;
+  // P2 Batch 1 (A29): self-exclusion blocks deposits too (a cool-off
+  // does not — it is a break from play, and the daily deposit max is
+  // the deposit-side rule for it).
+  if (limit.selfExcludedUntil && new Date(limit.selfExcludedUntil).getTime() > Date.now()) {
+    return `This account is self-excluded until ${new Date(limit.selfExcludedUntil).toLocaleDateString("en-GB")} — deposits are suspended`;
+  }
+  if (limit.maxDepositPerDay == null) return null;
   const today = await todayDeposited(userId);
   if (today + amount > limit.maxDepositPerDay) {
     return `Your daily deposit limit is GH₵ ${limit.maxDepositPerDay.toFixed(2)} (GH₵ ${today.toFixed(2)} deposited today)`;

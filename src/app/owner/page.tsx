@@ -768,6 +768,44 @@ export default function OwnerPage() {
     } catch { setCashier(null); }
   }, []);
   useEffect(() => { void loadCashier(); }, [loadCashier]);
+  // P2 Batch 1 (A26): VIP tiers — the OWNER edits the thresholds here
+  // (name, min deposited, perks). The tiers are computed live from the
+  // deposit ledger; one tier must start at GH₵ 0. Save replaces all.
+  interface VipTierRow { id: string; name: string; minDeposited: number; perks: string[]; sortOrder: number }
+  const [vipTiers, setVipTiers] = useState<VipTierRow[]>([]);
+  const [vipBusy, setVipBusy] = useState(false);
+  const loadVipTiers = useCallback(async () => {
+    try {
+      const r = await api<{ tiers: VipTierRow[] }>("/api/owner/vip-tiers");
+      setVipTiers(r.tiers ?? []);
+    } catch { setVipTiers([]); }
+  }, []);
+  useEffect(() => { void loadVipTiers(); }, [loadVipTiers]);
+  const saveVipTiers = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const tiers = vipTiers.map((t, i) => ({
+      name: t.name.trim(),
+      minDeposited: Number(t.minDeposited),
+      perks: t.perks.join(", "),
+      sortOrder: i,
+    }));
+    if (tiers.some((t) => !t.name)) { toast("Every tier needs a name", "lose"); return; }
+    if (tiers.length === 0 || Math.min(...tiers.map((t) => t.minDeposited)) !== 0) {
+      toast("One tier must start at GH₵ 0", "lose");
+      return;
+    }
+    setVipBusy(true);
+    try {
+      await api("/api/owner/vip-tiers", { method: "POST", body: JSON.stringify({ tiers }) });
+      toast("VIP tiers saved", "win");
+      await loadVipTiers();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "VIP tiers failed", "lose");
+    } finally { setVipBusy(false); }
+  };
+  const setVipTier = (idx: number, patch: Partial<VipTierRow>) => {
+    setVipTiers((cur) => cur.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+  };
 
   if (!user) {
     return (
@@ -1957,6 +1995,35 @@ export default function OwnerPage() {
               <p className="rg48-mini">Expected = total deposits − total approved withdrawals − total commission paid out ({fmtCash(cashier.reconciliation.totalDeposited)} − {fmtCash(cashier.reconciliation.totalWithdrawn)} − {fmtCash(cashier.reconciliation.totalCommissionPaid)}). Actual = the sum of every player&apos;s cash balance. The difference is the house&apos;s net position — game winnings come from the house, so the two will differ; it is not an error.</p>
             </>
           )}
+        </section>
+        {/* P2 Batch 1 (A26): VIP tiers — only the owner edits them (name,
+            min deposited, perks). Admins only SEE the tiers, on their
+            Players list and the player detail. A tier is a label +
+            perks only — it changes no economy, limits or payouts. */}
+        <section className="admin-sec">
+          <h3>VIP tiers</h3>
+          <p className="rg48-sub">A player&apos;s tier is their total deposited, read live from the ledger — Bronze ≥ GH₵ 0, Silver ≥ GH₵ 500, Gold ≥ GH₵ 2,000 to start. Saving replaces all tiers at once; one tier must start at GH₵ 0.</p>
+          <form className="owner-add" onSubmit={saveVipTiers}>
+            {vipTiers.map((t, i) => (
+              <div key={t.id} className="pd-adjust-row">
+                <label>Name
+                  <input type="text" value={t.name} onChange={(e) => setVipTier(i, { name: e.target.value })} aria-label={`Tier ${i + 1} name`} maxLength={40} />
+                </label>
+                <label>Min deposited (GH₵)
+                  <input type="number" min={0} step="0.01" inputMode="decimal" value={t.minDeposited} onChange={(e) => setVipTier(i, { minDeposited: Number(e.target.value) })} aria-label={`Tier ${i + 1} minimum deposited`} />
+                </label>
+                <label>Perks (comma-separated)
+                  <input type="text" value={t.perks.join(", ")} onChange={(e) => setVipTier(i, { perks: e.target.value.split(",").map((p) => p.trim()).filter(Boolean) })} aria-label={`Tier ${i + 1} perks`} placeholder="Priority support, Higher limits" />
+                </label>
+                <button className="btn btn-ghost" type="button" onClick={() => setVipTiers((cur) => cur.filter((_, j) => j !== i))}>Remove</button>
+              </div>
+            ))}
+            <div className="pd-adjust-row">
+              <button className="btn btn-ghost" type="button" onClick={() => setVipTiers((cur) => [...cur, { id: `new-${Date.now()}`, name: "", minDeposited: 0, perks: [], sortOrder: cur.length }])}>Add tier</button>
+              <button className="btn btn-gold" type="submit" disabled={vipBusy}>{vipBusy ? "Saving…" : "Save tiers"}</button>
+            </div>
+          </form>
+          <p className="rg48-mini">VIP is a label and perks only — it changes no economy, limits or payouts.</p>
         </section>
       </div>
     </main>

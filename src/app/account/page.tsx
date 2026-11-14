@@ -127,6 +127,29 @@ export default function AccountPage() {
   // P1 Batch 2 (A23): in-app notifications from your admin.
   const [myNotifs, setMyNotifs] = useState<{ id: string; title: string; body: string; from: string; readAt: string | null; createdAt: string }[] | null>(null);
   const [notifUnread, setNotifUnread] = useState(0);
+  // P2 Batch 1 (A29): my own limits — self-exclusion banner + the
+  // Take a break buttons. Read from the same limits table the admin
+  // edits; a self-exclusion or a live cool-off shows here.
+  const [myLimits, setMyLimits] = useState<{ selfExcludedUntil: string | null; selfExclusionReason: string | null; coolOffUntil: string | null; realityCheckMinutes: number } | null>(null);
+  const [breakBusy, setBreakBusy] = useState(false);
+
+  const loadMyLimits = async () => {
+    try {
+      const r = await api<{ limits: { selfExcludedUntil: string | null; selfExclusionReason: string | null; coolOffUntil: string | null; realityCheckMinutes: number } }>("/api/player/limits");
+      setMyLimits(r.limits);
+    } catch { setMyLimits(null); }
+  };
+
+  const takeBreak = async (days: number) => {
+    setBreakBusy(true);
+    try {
+      const r = await api<{ limits: { coolOffUntil: string } }>("/api/player/break", { method: "POST", body: JSON.stringify({ days }) });
+      toast(`Cool-off set until ${new Date(r.limits.coolOffUntil).toLocaleDateString("en-GB")} — play is off until then`, "win");
+      await loadMyLimits();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not set the break", "lose");
+    } finally { setBreakBusy(false); }
+  };
 
   const loadKyc = async () => {
     try {
@@ -147,6 +170,7 @@ export default function AccountPage() {
     if (!user) return;
     void loadKyc();
     void loadNotifs();
+    void loadMyLimits();
     // P1 Batch 4 (O22/O21): the accepted document types + the support
     // contact, both owner-set. A type the owner removed disappears from
     // the submit form; the selected type is clamped to the list.
@@ -579,6 +603,30 @@ export default function AccountPage() {
             </>
           )}
         </section>
+        {/* P2 Batch 1 (A29): self-exclusion banner + Take a break. A
+            break only ever EXTENDS a cool-off — it never shortens one,
+            and a self-excluded player cannot take a break (they are
+            already fully out). */}
+        {myLimits?.selfExcludedUntil && new Date(myLimits.selfExcludedUntil).getTime() > Date.now() ? (
+          <section className="ac-sec">
+            <h3>Self-excluded</h3>
+            <p className="pd-blocked-note">Self-excluded until {new Date(myLimits.selfExcludedUntil).toLocaleDateString("en-GB")}{myLimits.selfExclusionReason ? ` — ${myLimits.selfExclusionReason}` : ""}. You cannot deposit, play or settle until then. If you need this lifted early, contact your admin.</p>
+          </section>
+        ) : (
+          <section className="ac-sec">
+            <h3>Take a break</h3>
+            <p className="rg48-sub">Set a cool-off for yourself — play is off until it ends. A break only ever extends a cool-off, never shortens one.</p>
+            {myLimits?.coolOffUntil && new Date(myLimits.coolOffUntil).getTime() > Date.now() ? (
+              <p className="pd-blocked-note">You are on a cool-off until {new Date(myLimits.coolOffUntil).toLocaleDateString("en-GB")} — play is off until then.</p>
+            ) : null}
+            <div className="money-chips" role="group" aria-label="Take a break for">
+              <button type="button" disabled={breakBusy} onClick={() => void takeBreak(1)}>24 hours</button>
+              <button type="button" disabled={breakBusy} onClick={() => void takeBreak(7)}>7 days</button>
+              <button type="button" disabled={breakBusy} onClick={() => void takeBreak(30)}>30 days</button>
+            </div>
+            <p className="rg48-mini">Deposits still work during a cool-off — only play is blocked. Self-exclusion blocks both.</p>
+          </section>
+        )}
         <section className="ac-sec ac-session">
           <h3>Session</h3>
           <nav className="ac-menu" aria-label="Session">
