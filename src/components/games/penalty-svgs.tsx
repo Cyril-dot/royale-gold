@@ -94,8 +94,8 @@ export function KeeperSvg() {
 }
 
 // Striker kit is parametrised (shirt gradient + sleeve tones + shirt
-// number) so the team picker can re-kit him; defaults are the original
-// gold #9. Shorts stay navy and socks gold for every team.
+// number); defaults are the original gold #9, which is what the room
+// always shows now. Shorts stay navy and socks gold.
 export interface StrikerKit { s1: string; s2: string; s3: string; sl: string; sd: string }
 export const GOLD_KIT: StrikerKit = { s1: "#FFD964", s2: "#F2C230", s3: "#D9A41C", sl: "#D9A41C", sd: "#B57F0E" };
 

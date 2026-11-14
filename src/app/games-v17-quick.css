@@ -335,14 +335,6 @@
 .pn2-result span{display:block;font-family:var(--font);font-weight:800;font-size:20px;color:#FFF6D8;text-shadow:0 2px 8px rgba(0,0,0,.6)}
 .pn2-result.saved b{color:#FF8580;text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 34px rgba(229,50,45,.5)}
 @keyframes pn2Pop{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
-/* Team crest row — our own drawn badges, horizontally scrollable */
-.pn2-teams{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;width:min(640px,100%);margin:14px auto 0;padding:2px 2px 6px}
-.pn2-teams::-webkit-scrollbar{display:none}
-.pn2-crest{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
-.pn2-badge{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,246,216,.25);box-shadow:0 4px 10px rgba(0,0,0,.4);font-family:var(--font);font-weight:900;font-size:13px;color:#10131F;text-shadow:0 1px 0 rgba(255,255,255,.35);transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
-.pn2-crest.sel .pn2-badge{border-color:var(--gold-2);box-shadow:0 0 0 3px rgba(242,194,48,.4),0 0 16px rgba(242,194,48,.5);transform:scale(1.08)}
-.pn2-tname{font-size:9.5px;font-weight:800;letter-spacing:.06em;color:var(--muted);white-space:nowrap}
-.pn2-crest.sel .pn2-tname{color:var(--gold-2)}
 /* Bet controls — Min/−, amount, +/Max */
 .pn2-bet{width:min(640px,100%);margin:12px auto 0}
 .pn2-bet-row{display:flex;align-items:stretch;gap:8px}

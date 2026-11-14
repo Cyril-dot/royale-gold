@@ -1,13 +1,12 @@
 // Penalty Shoot Out — LALIGA-style rebuild (video spec, not a copy):
 // 5 tap-to-aim target zones over the goal, a doubling multiplier ladder
-// [1.96, 3.92, 7.84, 15.68, 31.36] as a top bar, a scrollable team row
-// (our own drawn crests — the striker's jersey + number change with the
-// pick), bet controls (Min/−, amount, +/Max; Min 0.10, Max 4,000.00),
-// a big green Kick! button (tap a zone to aim, or Kick! for a random
-// target), GOAL! / NO GOAL! states, and a gold Cash Out after each goal
-// or Kick!! to climb the ladder. Keeper logic follows the classic
-// zone-match pattern (adhkr81/Penalty-Shooter- reference): the keeper
-// dives to a zone; if it is the shot's zone the shot is saved. Save
+// [1.96, 3.92, 7.84, 15.68, 31.36] as a top bar, bet controls (Min/−,
+// amount, +/Max; Min 0.10, Max 4,000.00), a big green Kick! button
+// (tap a zone to aim, or Kick! for a random target), GOAL! / NO GOAL!
+// states, and a gold Cash Out after each goal or Kick!! to climb the
+// ladder. The striker always wears the gold #9 kit (no team picker).
+// Keeper logic follows the classic zone-match pattern
+// (adhkr81/Penalty-Shooter- reference): the keeper dives to a zone; if it is the shot's zone the shot is saved. Save
 // chance is 40% per shot, so a goal is the common outcome; one save
 // ends the run and the stake is gone. One stake rides the whole
 // shootout (unchanged settle flow — settle() still computes the payout
@@ -21,7 +20,7 @@ import { fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx } from "../../lib/store";
 import { RoomShell, useGameRoom } from "./shared";
-import { KeeperSvg, StrikerSvg, StrikerKit, GOLD_KIT } from "./penalty-svgs";
+import { KeeperSvg, StrikerSvg } from "./penalty-svgs";
 
 const LADDER = [1.96, 3.92, 7.84, 15.68, 31.36];
 const SAVE_CHANCE = 0.4;
@@ -38,26 +37,12 @@ const ZONES: Zone[] = [
   { id: "br", label: "Bottom right", fx: 0.88, fy: 0.8 },
 ];
 
-interface Team { id: string; name: string; abbr: string; kit: StrikerKit; num: number }
-// Our own clubs — drawn crests, no real logos, no real names.
-const TEAMS: Team[] = [
-  { id: "royale", name: "Royale Gold", abbr: "RG", kit: GOLD_KIT, num: 9 },
-  { id: "sky", name: "Sky Stripes", abbr: "SK", kit: { s1: "#D6F0FD", s2: "#7EC8F2", s3: "#3E9BD6", sl: "#7EC8F2", sd: "#3E9BD6" }, num: 10 },
-  { id: "verde", name: "Verde", abbr: "VE", kit: { s1: "#FFFFFF", s2: "#DFF2E4", s3: "#1E7A46", sl: "#FFFFFF", sd: "#1E7A46" }, num: 20 },
-  { id: "rojo", name: "Rojo", abbr: "RJ", kit: { s1: "#FF8A84", s2: "#E5322D", s3: "#8B1A1A", sl: "#E5322D", sd: "#8B1A1A" }, num: 7 },
-  { id: "azul", name: "Azul", abbr: "AZ", kit: { s1: "#A9C2FA", s2: "#2B5CE6", s3: "#14213D", sl: "#2B5CE6", sd: "#14213D" }, num: 11 },
-  { id: "amarillo", name: "Amarillo", abbr: "AM", kit: { s1: "#FFF3B0", s2: "#FFD964", s3: "#C99612", sl: "#FFD964", sd: "#C99612" }, num: 8 },
-  { id: "esmeralda", name: "Esmeralda", abbr: "ES", kit: { s1: "#A9EBC6", s2: "#1E9E5A", s3: "#0B5C2E", sl: "#1E9E5A", sd: "#0B5C2E" }, num: 5 },
-  { id: "violeta", name: "Violeta", abbr: "VI", kit: { s1: "#DCD2FE", s2: "#8B5CF6", s3: "#4C1D95", sl: "#8B5CF6", sd: "#4C1D95" }, num: 4 },
-];
-
 interface Aim { sx: number; sy: number; x: number; y: number; cx: number; cy: number; fx: number; fy: number; gl: number; gt: number; gw: number; gh: number; label: string }
 
 export default function PenaltyRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(1);
   const [betText, setBetText] = useState("1");
-  const [team, setTeam] = useState<Team>(TEAMS[0]);
   const [selected, setSelected] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -348,7 +333,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
           ))}
         </div>
         <div className="pn-grass"><span className="pn-spot" aria-hidden="true" /></div>
-        <div className={`pn-striker ${strikerPose}`} aria-hidden="true"><StrikerSvg kit={team.kit} num={team.num} /></div>
+        <div className={`pn-striker ${strikerPose}`} aria-hidden="true"><StrikerSvg /></div>
         <div className="pn-ball" ref={ballRef} aria-hidden="true" style={ballStyle} />
         {result && (
           <div className={`pn2-result ${result.kind === "saved" ? "saved" : ""}`} aria-live="polite">
@@ -356,22 +341,6 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
             {result.kind === "goal" && result.mult !== undefined && <span>×{result.mult}</span>}
           </div>
         )}
-      </div>
-      <div className="pn2-teams" role="group" aria-label="Pick your team">
-        {TEAMS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`pn2-crest${t.id === team.id ? " sel" : ""}`}
-            onClick={() => { if (!busy) setTeam(t); }}
-            disabled={busy}
-            aria-pressed={t.id === team.id}
-            aria-label={`Play as ${t.name}, number ${t.num}`}
-          >
-            <span className="pn2-badge" style={{ background: `linear-gradient(180deg, ${t.kit.s1}, ${t.kit.s2} 55%, ${t.kit.s3})` }} aria-hidden="true">{t.abbr}</span>
-            <span className="pn2-tname">{t.name}</span>
-          </button>
-        ))}
       </div>
       <div className="pn2-bet" aria-label="Bet amount">
         <div className="pn2-bet-row">
