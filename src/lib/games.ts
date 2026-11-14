@@ -27,7 +27,7 @@ export const CASH_GAMES: GameDef[] = [
   { slug: "jet-fly", name: "Jet Fly", currency: "cash", maxMultiplier: 50, note: "Crash engine, display cap ×50" },
   { slug: "car-crash", name: "Car Crash", currency: "cash", maxMultiplier: 50, note: "Crash engine, display cap ×50" },
   { slug: "rocket-shooter", name: "Rocket Shooter", currency: "cash", maxMultiplier: 50, note: "Crash engine, display cap ×50" },
-  { slug: "penalty-shoot-out", name: "Penalty Shoot Out", currency: "cash", maxMultiplier: 12.5, note: "5-shot ladder top rung ×12.5" },
+  { slug: "penalty-shoot-out", name: "Penalty Shoot Out", currency: "cash", maxMultiplier: 31.36, note: "5-shot ladder top rung ×31.36" },
   { slug: "mines", name: "Mines", currency: "cash", maxMultiplier: 5000, note: "Top prize ×5,000" },
   { slug: "plinko", name: "Plinko Drop", currency: "cash", maxMultiplier: 29, note: "8 rows / 9 bins, edge ×29" },
   { slug: "coin-flip", name: "Coin Flip", currency: "cash", maxMultiplier: 2, note: "Pays ×2" },

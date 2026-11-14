@@ -311,3 +311,54 @@
 .rg-confetti i{position:absolute;top:-4vh;display:block;border-radius:2px;animation-name:rg-confetti-fall;animation-timing-function:cubic-bezier(.25,.5,.55,1);animation-fill-mode:forwards;will-change:transform}
 @keyframes rg-confetti-fall{from{transform:translate3d(0,-6vh,0) rotate(0deg)}to{transform:translate3d(0,112vh,0) rotate(var(--rot,540deg))}}
 @media (prefers-reduced-motion: reduce){.rg-confetti{display:none}}
+
+/* ============ Penalty Shoot Out — LALIGA-style rebuild (5 zones, ladder bar, teams, Kick!) ============ */
+.pn2-ladderbar{position:relative;display:flex;justify-content:space-between;align-items:flex-start;width:min(640px,100%);margin:14px auto 0;padding:0 8px}
+.pn2-ladderbar::before{content:"";position:absolute;left:12%;right:12%;top:7px;height:4px;border-radius:99px;background:rgba(255,246,216,.16)}
+.pn2-rung2{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.pn2-dot{width:14px;height:14px;border-radius:50%;background:#0C2B22;border:2px solid rgba(255,246,216,.4)}
+.pn2-rung2 b{font-family:var(--font);font-weight:800;font-size:12px;color:var(--muted)}
+.pn2-rung2.done .pn2-dot{background:#3ED97E;border-color:#3ED97E}
+.pn2-rung2.done b{color:#3ED97E}
+.pn2-rung2.next .pn2-dot{background:var(--gold);border-color:var(--gold-2);box-shadow:0 0 12px rgba(242,194,48,.7)}
+.pn2-rung2.next b{color:var(--gold-2)}
+/* Target zones — tappable circles over the goal mouth (3 top, 2 low corners) */
+.pn2-zone{position:absolute;z-index:3;width:15%;aspect-ratio:1;transform:translate(-50%,-50%);border:0;background:transparent;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.pn2-zone-in{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:50%;border:2.5px solid rgba(255,255,255,.9);background:radial-gradient(circle at 50% 38%,rgba(255,255,255,.28),rgba(255,255,255,.06) 65%);box-shadow:0 2px 10px rgba(0,0,0,.35),inset 0 0 12px rgba(255,255,255,.12);transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.pn2-zone-in::after{content:"";width:34%;height:34%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#D8D2BD 60%,#A79E83)}
+.pn2-zone:hover .pn2-zone-in{transform:scale(1.08)}
+.pn2-zone.sel .pn2-zone-in{border-color:var(--gold-2);box-shadow:0 0 0 3px rgba(242,194,48,.35),0 0 18px rgba(242,194,48,.55);transform:scale(1.1)}
+.pn2-zone:disabled{cursor:default}
+/* GOAL! / NO GOAL! overlay */
+.pn2-result{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);z-index:10;text-align:center;pointer-events:none;animation:pn2Pop .45s cubic-bezier(.2,1.4,.4,1)}
+.pn2-result b{display:block;font-family:var(--disp);font-size:clamp(44px,13vw,72px);letter-spacing:.04em;color:var(--gold-2);text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 34px rgba(242,194,48,.45)}
+.pn2-result span{display:block;font-family:var(--font);font-weight:800;font-size:20px;color:#FFF6D8;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.pn2-result.saved b{color:#FF8580;text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 34px rgba(229,50,45,.5)}
+@keyframes pn2Pop{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
+/* Team crest row — our own drawn badges, horizontally scrollable */
+.pn2-teams{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;width:min(640px,100%);margin:14px auto 0;padding:2px 2px 6px}
+.pn2-teams::-webkit-scrollbar{display:none}
+.pn2-crest{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
+.pn2-badge{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,246,216,.25);box-shadow:0 4px 10px rgba(0,0,0,.4);font-family:var(--font);font-weight:900;font-size:13px;color:#10131F;text-shadow:0 1px 0 rgba(255,255,255,.35);transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.pn2-crest.sel .pn2-badge{border-color:var(--gold-2);box-shadow:0 0 0 3px rgba(242,194,48,.4),0 0 16px rgba(242,194,48,.5);transform:scale(1.08)}
+.pn2-tname{font-size:9.5px;font-weight:800;letter-spacing:.06em;color:var(--muted);white-space:nowrap}
+.pn2-crest.sel .pn2-tname{color:var(--gold-2)}
+/* Bet controls — Min/−, amount, +/Max */
+.pn2-bet{width:min(640px,100%);margin:12px auto 0}
+.pn2-bet-row{display:flex;align-items:stretch;gap:8px}
+.pn2-bet-row>button{min-width:44px;min-height:44px;border-radius:12px;border:1px solid var(--line-gold);background:var(--steel);color:var(--gold-2);font-family:var(--font);font-weight:800;font-size:15px;cursor:pointer;touch-action:manipulation}
+.pn2-bet-row>button:disabled{opacity:.45}
+.pn2-bet-amt{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--line-gold);border-radius:12px;background:rgba(4,6,13,.5);padding:4px 8px}
+.pn2-bet-amt small{font-size:9.5px;font-weight:800;letter-spacing:.12em;color:var(--faint)}
+.pn2-bet-amt input{width:100%;background:none;border:0;text-align:center;font-family:var(--font);font-weight:800;font-size:19px;color:#FFF6D8;outline:none}
+.pn2-bet-cap{display:flex;justify-content:space-between;margin-top:5px;font-size:11px;font-weight:700;color:var(--muted)}
+/* Big green Kick! circle + the post-goal Cash Out / Kick!! row */
+.pn2-kickwrap{display:flex;flex-direction:column;align-items:center;gap:4px;margin:14px auto 0;width:min(640px,100%)}
+.pn2-kick{width:96px;height:96px;border-radius:50%;border:3px solid #B8E986;background:radial-gradient(circle at 50% 28%,#7BE3A8,#22B45E 55%,#0B7A38);color:#06280F;font-family:var(--font);font-weight:900;font-size:21px;box-shadow:0 14px 30px rgba(62,217,126,.35),inset 0 2px 0 rgba(255,255,255,.5);cursor:pointer;touch-action:manipulation}
+.pn2-kick:disabled{opacity:.5}
+.pn2-kickwrap small{font-size:12px;font-weight:800;color:var(--muted)}
+.pn2-actions{display:flex;gap:10px;width:min(640px,100%);margin:14px auto 0}
+.pn2-actions .btn{flex:1;min-height:52px;font-size:16px}
+.pn2-kick2{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.pn2-kick2 small{font-size:11px;font-weight:800;opacity:.85}
+@media (prefers-reduced-motion: reduce){.pn2-result{animation:none}}

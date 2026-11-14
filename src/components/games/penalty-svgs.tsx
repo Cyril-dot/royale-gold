@@ -8,7 +8,7 @@ export function KeeperSvg() {
   return (
 <svg className="kp-svg" viewBox="0 0 120 150" aria-hidden="true">
             <defs>
-              <linearGradient id="kpKit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2DD4BF"/><stop offset=".55" stopColor="#0EA5A4"/><stop offset="1" stopColor="#0B7373"/></linearGradient>
+              <linearGradient id="kpKit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFE98A"/><stop offset=".55" stopColor="#F2C230"/><stop offset="1" stopColor="#C99612"/></linearGradient>
               <linearGradient id="kpGlove" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFFDF4"/><stop offset="1" stopColor="#E9E2CC"/></linearGradient>
             </defs>
             
@@ -93,11 +93,17 @@ export function KeeperSvg() {
   );
 }
 
-export function StrikerSvg() {
+// Striker kit is parametrised (shirt gradient + sleeve tones + shirt
+// number) so the team picker can re-kit him; defaults are the original
+// gold #9. Shorts stay navy and socks gold for every team.
+export interface StrikerKit { s1: string; s2: string; s3: string; sl: string; sd: string }
+export const GOLD_KIT: StrikerKit = { s1: "#FFD964", s2: "#F2C230", s3: "#D9A41C", sl: "#D9A41C", sd: "#B57F0E" };
+
+export function StrikerSvg({ kit = GOLD_KIT, num = 9 }: { kit?: StrikerKit; num?: number }) {
   return (
 <svg viewBox="0 0 80 120" aria-hidden="true">
             <defs>
-              <linearGradient id="stKit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFD964"/><stop offset=".6" stopColor="#F2C230"/><stop offset="1" stopColor="#D9A41C"/></linearGradient>
+              <linearGradient id="stKit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={kit.s1}/><stop offset=".6" stopColor={kit.s2}/><stop offset="1" stopColor={kit.s3}/></linearGradient>
             </defs>
             
             <path d="M35 62 L32.5 84 L31 100" fill="none" stroke="#604134" strokeWidth="8.6" strokeLinecap="round"/>
@@ -116,13 +122,13 @@ export function StrikerSvg() {
             
             <g className="st-upper">
               <g className="st-arm l">
-                <path d="M28.5 28 L21 40 L17 52" fill="none" stroke="#D9A41C" strokeWidth="8.6" strokeLinecap="round"/>
+                <path d="M28.5 28 L21 40 L17 52" fill="none" stroke={kit.sl} strokeWidth="8.6" strokeLinecap="round"/>
                 <path d="M21.5 39 L18.5 47 L16 57" fill="none" stroke="#604134" strokeWidth="6.8" strokeLinecap="round"/>
                 <path d="M27 26.5 L22.5 34" fill="none" stroke="#14213D" strokeWidth="3" strokeLinecap="round" opacity=".8"/>
                 <circle cx="15.6" cy="59.5" r="3.6" fill="#604134"/>
               </g>
               <g className="st-arm r">
-                <path d="M51.5 28 L59 40 L63 52" fill="none" stroke="#B57F0E" strokeWidth="8.6" strokeLinecap="round"/>
+                <path d="M51.5 28 L59 40 L63 52" fill="none" stroke={kit.sd} strokeWidth="8.6" strokeLinecap="round"/>
                 <path d="M58.5 39 L61.5 47 L64 57" fill="none" stroke="#4E3428" strokeWidth="6.8" strokeLinecap="round"/>
                 <path d="M53 26.5 L57.5 34" fill="none" stroke="#14213D" strokeWidth="3" strokeLinecap="round" opacity=".8"/>
                 <circle cx="64.4" cy="59.5" r="3.6" fill="#4E3428"/>
@@ -137,7 +143,7 @@ export function StrikerSvg() {
               <path d="M55.2 30 Q53 40 53.8 51.5 L56 52 Q56.6 40 55.2 30 Z" fill="#14213D" opacity=".9"/>
               <path d="M47 23.4 Q52 24.8 52.5 25.5 L56 52 Q51.5 53.8 46.5 54.6 Z" fill="#B57F0E" opacity=".35"/>
               <path d="M33 22.6 Q40 25.4 47 22.6 L46 26.6 Q40 28.8 34 26.6 Z" fill="#14213D"/>
-              <text x="40" y="47.5" fontFamily="Arial, sans-serif" fontSize="19" fontWeight="900" fill="#14213D" textAnchor="middle">9</text>
+              <text x="40" y="47.5" fontFamily="Arial, sans-serif" fontSize="19" fontWeight="900" fill="#14213D" textAnchor="middle">{num}</text>
               
               <rect x="36.4" y="19.5" width="7.2" height="6" rx="2.6" fill="#4E3428"/>
               <circle cx="29.6" cy="14.6" r="2.7" fill="#604134"/>
