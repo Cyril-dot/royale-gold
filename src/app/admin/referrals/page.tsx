@@ -9,8 +9,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
 import { useStore } from "../../../lib/store";
-import { useAdminOverview, copyText, shareLink } from "../../../lib/admin-client";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../../../components/AdminNav";
+import { useAdminContext, useAdminReferrals, copyText, shareLink } from "../../../lib/admin-client";
+import { canAccessSection } from "../../../lib/rbac";
+import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
 
 export default function AdminReferralsPage() {
   return (
@@ -28,15 +29,23 @@ function AdminReferralsInner() {
   const { user, toast } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ov, err, load } = useAdminOverview(previewId);
+  const { ctx, err: ctxErr } = useAdminContext(previewId);
+  const { data, err: refErr, load } = useAdminReferrals(previewId);
   const [newCode, setNewCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<{ id: string; kind: "code" | "link" } | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!user) return <AdminLoginPrompt />;
-  if (err) return <AdminError err={err} />;
-  if (!ov) return <p>Loading admin panel…</p>;
+  if (ctxErr) return <AdminError err={ctxErr} />;
+  if (!ctx) return <p>Loading admin panel…</p>;
+  // P0 Batch 3 (O3): the server 403s this section too — this is the
+  // friendly face of that denial (the owner bypasses it in preview).
+  if (!previewId && !canAccessSection(user, "referrals")) return <AdminDenied section="referrals" />;
+  if (refErr) return <AdminError err={refErr} />;
+  if (!data) return <p>Loading admin panel…</p>;
+
+  const ov = { admin: ctx.admin, ...data };
 
   const copyRef = (id: string, kind: "code" | "link", text: string, doneMsg: string) => {
     void copyText(text).then(() => {

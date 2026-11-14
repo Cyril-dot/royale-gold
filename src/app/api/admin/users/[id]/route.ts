@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
@@ -11,6 +12,7 @@ import { dec } from "@/lib/money";
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const me = await requireRole("admin", "owner");
+    if (me.role === "admin") requirePermission(me, "players");
     const { id } = await params;
     const user = await prisma.user.findUnique({
       where: { id },

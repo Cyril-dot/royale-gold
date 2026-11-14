@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { parsePermissions } from "@/lib/rbac";
 
 export interface PublicUser {
   id: string;
@@ -16,6 +17,10 @@ export interface PublicUser {
   referredByAdminId: string | null;
   referralCodeUsed: string | null;
   createdAt: string;
+  // P0 Batch 3 (O2/O3): the admin's allowed sections, or null = all.
+  permissions: string[] | null;
+  // P0 Batch 3 (A13): whether TOTP 2FA is enabled (the secret is never exposed).
+  totpEnabled: boolean;
 }
 
 export function publicUser(u: {
@@ -34,6 +39,8 @@ export function publicUser(u: {
   referredByAdminId: string | null;
   referralCodeUsed: string | null;
   createdAt: Date;
+  permissions?: string | null;
+  totpEnabled?: boolean;
 }): PublicUser {
   return {
     id: u.id,
@@ -51,6 +58,8 @@ export function publicUser(u: {
     referredByAdminId: u.referredByAdminId,
     referralCodeUsed: u.referralCodeUsed,
     createdAt: u.createdAt.toISOString(),
+    permissions: parsePermissions(u.permissions ?? null),
+    totpEnabled: u.totpEnabled ?? false,
   };
 }
 

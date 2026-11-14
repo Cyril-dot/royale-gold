@@ -1,6 +1,10 @@
 import { cookies } from "next/headers";
 import { jwtVerify, SignJWT } from "jose";
 import { prisma } from "./prisma";
+import { AuthError } from "./errors";
+
+// Re-exported so existing server code can keep importing it from here.
+export { AuthError };
 
 export const SESSION_COOKIE = "rg_session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days, seconds
@@ -14,14 +18,36 @@ function secret(): Uint8Array {
 export interface SessionPayload {
   userId: string;
   role: "owner" | "admin" | "user";
+  /** Session version (User.sessionVersion) at issue time. A token whose
+   * version is older than the user's current version was killed
+   * (P0 Batch 3 O15: deactivate / "Kill all sessions") and is rejected. */
+  sv?: number;
 }
 
-export async function createSession(userId: string, role: SessionPayload["role"]): Promise<string> {
-  return new SignJWT({ userId, role })
+/** Issue a session token. sessionVersion is the user's current
+ * User.sessionVersion — pass it so the token can be killed later. */
+export async function createSession(
+  userId: string,
+  role: SessionPayload["role"],
+  sessionVersion = 0,
+): Promise<string> {
+  return new SignJWT({ userId, role, sv: sessionVersion })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE}s`)
     .sign(secret());
+}
+
+/** Bump a user's session version — every existing JWT for them stops
+ * working at once (their next request fails getSessionUser). Returns the
+ * new version. Used by deactivation and "Kill all sessions". */
+export async function killSessions(userId: string): Promise<number> {
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { sessionVersion: { increment: 1 } },
+    select: { sessionVersion: true },
+  });
+  return updated.sessionVersion;
 }
 
 export async function setSessionCookie(token: string): Promise<void> {
@@ -47,18 +73,25 @@ export async function getSession(): Promise<SessionPayload | null> {
     if (!token) return null;
     const { payload } = await jwtVerify(token, secret());
     if (typeof payload.userId !== "string" || typeof payload.role !== "string") return null;
-    return { userId: payload.userId, role: payload.role as SessionPayload["role"] };
+    return {
+      userId: payload.userId,
+      role: payload.role as SessionPayload["role"],
+      sv: typeof payload.sv === "number" ? payload.sv : 0,
+    };
   } catch {
     return null;
   }
 }
 
-/** Load the session user (or null). Inactive accounts cannot act. */
+/** Load the session user (or null). Inactive accounts cannot act, and a
+ * token issued before the user's sessions were killed (P0 Batch 3 O15)
+ * is rejected — the stored sessionVersion must match the token's. */
 export async function getSessionUser() {
   const session = await getSession();
   if (!session) return null;
   const user = await prisma.user.findUnique({ where: { id: session.userId } });
   if (!user || !user.active) return null;
+  if ((session.sv ?? 0) !== user.sessionVersion) return null;
   return user;
 }
 
@@ -76,12 +109,4 @@ export async function requireRole(...roles: Role[]) {
   const user = await requireAuth();
   if (!roles.includes(user.role as Role)) throw new AuthError(403, "Forbidden for this role");
   return user;
-}
-
-export class AuthError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
 }

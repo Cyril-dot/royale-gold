@@ -2,6 +2,7 @@
 // the admin's own players only (adminId stamped at request time).
 // Nothing pays out without an admin action.
 import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
@@ -9,6 +10,7 @@ import { dec } from "@/lib/money";
 export async function GET(req: Request) {
   try {
     const admin = await requireRole("admin");
+    requirePermission(admin, "money");
     const sp = new URL(req.url).searchParams;
     const status = sp.get("status") || undefined;
     const limit = Math.min(Math.max(Number(sp.get("limit") ?? 50) || 50, 1), 100);

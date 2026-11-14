@@ -98,6 +98,34 @@ export default function AccountPage() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
+  // P0 Batch 3 (A11): support tickets — open one from here; it goes to
+  // the admin who referred you. Your tickets are listed below the form.
+  const [tkSubject, setTkSubject] = useState("");
+  const [tkBody, setTkBody] = useState("");
+  const [tkBusy, setTkBusy] = useState(false);
+  const [myTickets, setMyTickets] = useState<{ id: string; subject: string; status: string; messages: number; updatedAt: string }[] | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    api<{ tickets: { id: string; subject: string; status: string; messages: number; updatedAt: string }[] }>("/api/tickets")
+      .then((r) => setMyTickets(r.tickets ?? []))
+      .catch(() => setMyTickets([]));
+  }, [user]);
+
+  const submitTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTkBusy(true);
+    try {
+      await api("/api/tickets", { method: "POST", body: JSON.stringify({ subject: tkSubject.trim(), body: tkBody.trim() }) });
+      toast("Ticket sent — your admin will reply here", "win");
+      setTkSubject("");
+      setTkBody("");
+      const r = await api<{ tickets: { id: string; subject: string; status: string; messages: number; updatedAt: string }[] }>("/api/tickets");
+      setMyTickets(r.tickets ?? []);
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not send ticket", "lose");
+    } finally { setTkBusy(false); }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -345,6 +373,28 @@ export default function AccountPage() {
         <section className="ac-sec">
           <h3>Daily bonus</h3>
           <button className="btn btn-gold" type="button" onClick={() => void claimCoins()} disabled={claimBusy}>{claimBusy ? "Claiming…" : "Claim daily +5 coins"}</button>
+        </section>
+        <section className="ac-sec">
+          <h3>Support</h3>
+          <p className="rg48-mini">Stuck on something? Send a ticket to your admin — they reply here, on your account.</p>
+          <form className="tk-form" onSubmit={submitTicket}>
+            <div className="rg48-f"><label htmlFor="tkSubject">Subject</label><input id="tkSubject" type="text" placeholder="e.g. My deposit has not landed" value={tkSubject} onChange={(e) => setTkSubject(e.target.value)} maxLength={120} required /></div>
+            <div className="rg48-f"><label htmlFor="tkBody">What happened?</label><textarea id="tkBody" rows={3} placeholder="Describe the problem…" value={tkBody} onChange={(e) => setTkBody(e.target.value)} maxLength={2000} required /></div>
+            <button className="btn btn-gold" type="submit" disabled={tkBusy}>{tkBusy ? "Sending…" : "Send ticket"}</button>
+          </form>
+          {myTickets === null ? null : myTickets.length === 0 ? (
+            <p className="rg48-mini">No tickets yet.</p>
+          ) : (
+            <div className="tk-mine">
+              {myTickets.map((t) => (
+                <div key={t.id} className="tk-mine-row">
+                  <b>{t.subject}</b>
+                  <span className={`tk-status tk-${t.status}`}>{t.status}</span>
+                  <span className="rg48-mini">{t.messages} {t.messages === 1 ? "message" : "messages"} · {new Date(t.updatedAt).toLocaleDateString("en-GB")}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
         <section className="ac-sec ac-session">
           <h3>Session</h3>

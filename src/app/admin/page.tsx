@@ -12,7 +12,8 @@ import { useSearchParams } from "next/navigation";
 import { useStore } from "../../lib/store";
 import { fmtCash } from "../../lib/api";
 import { useAdminOverview } from "../../lib/admin-client";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../../components/AdminNav";
+import { canAccessSection } from "../../lib/rbac";
+import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../components/AdminNav";
 
 export default function AdminOverviewPage() {
   return (
@@ -33,6 +34,8 @@ function AdminOverviewInner() {
   const { ov, err } = useAdminOverview(previewId);
 
   if (!user) return <AdminLoginPrompt />;
+  // P0 Batch 3 (O3): the server 403s this section too.
+  if (!previewId && !canAccessSection(user, "overview")) return <AdminDenied section="overview" />;
   if (err) return <AdminError err={err} />;
   if (!ov) return <p>Loading admin panel…</p>;
 

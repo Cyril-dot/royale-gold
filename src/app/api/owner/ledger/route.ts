@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const result = await buildLedger({
       scopeAdminId: null,
       filters: {
-        type: type && ["deposit", "bet", "withdrawal", "adjustment", "conversion"].includes(type) ? type : undefined,
+        type: type && ["deposit", "bet", "withdrawal", "adjustment", "conversion", "payout"].includes(type) ? type : undefined,
         q: sp.get("q") || undefined,
         from: sp.get("from") || undefined,
         to: sp.get("to") || undefined,

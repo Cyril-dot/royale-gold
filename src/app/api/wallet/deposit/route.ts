@@ -4,15 +4,22 @@ import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2, toDecimal } from "@/lib/money";
 // P0 Batch 2 (O12/O13): owner-controlled payment methods + wallet config.
 import { getPaymentMethodConfig, getPlatformSettings } from "@/lib/game-config";
+// P0 Batch 3 (O4): the commission rule in force decides what a deposit stamps.
+import { getEffectiveRuleNow } from "@/lib/commission";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
 /**
  * Demo cashier deposit. Credits REAL cash (GH₵) only — coins are never
  * involved. If the user was referred, a DepositEvent is recorded with the
- * referring admin, their CURRENT commissionPct frozen as pctInForce, and
- * commission = amount * pct / 100 (2dp). Changing the % later never
- * rewrites this event.
+ * referring admin and the rate in force FROZEN as pctInForce.
+ *
+ * P0 Batch 3 (O4): when a commission rule is in force for the admin, the
+ * commission is earned on ACTIVITY (stakes / net loss), not on the deposit
+ * itself — so pctInForce is the rule's rate and the stamped commission is
+ * 0. With no rule (legacy mode), pctInForce is the admin's flat
+ * commissionPct and commission = amount * pct / 100 as before. Changing
+ * the rule later never rewrites this event.
  */
 export async function POST(req: Request) {
   try {
@@ -51,14 +58,24 @@ export async function POST(req: Request) {
 
       let adminId: string | null = null;
       let pctInForce = 0;
+      let commission = 0;
       if (fresh.referredByAdminId) {
         const admin = await tx.user.findUnique({ where: { id: fresh.referredByAdminId } });
         if (admin && admin.active && admin.role === "admin") {
           adminId = admin.id;
-          pctInForce = dec(admin.commissionPct);
+          // P0 Batch 3 (O4): a rule in force earns commission on activity,
+          // not on the deposit — stamp the rule rate with commission 0.
+          // No rule = legacy flat % of the deposit.
+          const rule = await getEffectiveRuleNow(admin.id);
+          if (rule) {
+            pctInForce = rule.rate;
+            commission = 0;
+          } else {
+            pctInForce = dec(admin.commissionPct);
+            commission = round2((amount * pctInForce) / 100);
+          }
         }
       }
-      const commission = round2((amount * pctInForce) / 100);
 
       const updated = await tx.user.update({
         where: { id: user.id },

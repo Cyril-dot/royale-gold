@@ -4,12 +4,14 @@
 // /api/wallet/deposit). Blocking needs a reason; unblocking does not.
 // The action is written to the audit log.
 import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireRole("admin");
+    requirePermission(admin, "players");
     const { id } = await params;
     const body = await readJson<{ blocked?: boolean; reason?: string }>(req);
     if (!body) return fail("Invalid JSON body");

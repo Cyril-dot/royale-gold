@@ -13,8 +13,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, fmtCash, fmtCoins } from "../../../lib/api";
 import { useStore } from "../../../lib/store";
-import { useAdminOverview, todayStr } from "../../../lib/admin-client";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../../../components/AdminNav";
+import { useAdminContext, todayStr } from "../../../lib/admin-client";
+import { canAccessSection } from "../../../lib/rbac";
+import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
 import { WITHDRAWAL_OWNER_THRESHOLD } from "../../../lib/withdrawals";
 
 interface DepositRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; pctInForce: number; commission: number; createdAt: string }
@@ -22,7 +23,7 @@ interface WithdrawalRow { id: string; userId: string; userName: string; userCont
 interface LedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; detail: string; stake?: number; payout?: number; method?: string; status?: string; reason?: string; createdAt: string }
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"];
-const LEDGER_TYPES = ["deposit", "bet", "withdrawal", "adjustment", "conversion"] as const;
+const LEDGER_TYPES = ["deposit", "bet", "withdrawal", "adjustment", "conversion", "payout"] as const;
 
 export default function AdminMoneyPage() {
   return (
@@ -41,7 +42,7 @@ function AdminMoneyInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ov, err } = useAdminOverview(previewId);
+  const { ctx, err } = useAdminContext(previewId);
   const [tab, setTab] = useState<"deposits" | "withdrawals" | "ledger">("deposits");
 
   // --- Deposits state ---
@@ -120,7 +121,11 @@ function AdminMoneyInner() {
 
   if (!user) return <AdminLoginPrompt />;
   if (err) return <AdminError err={err} />;
-  if (!ov) return <p>Loading admin panel…</p>;
+  if (!ctx) return <p>Loading admin panel…</p>;
+  // P0 Batch 3 (O3): the server 403s this section too.
+  if (!previewId && !canAccessSection(user, "money")) return <AdminDenied section="money" />;
+
+  const ov = { admin: ctx.admin };
 
   const playerHref = (id: string) => (previewId ? `/admin/players/${id}?preview=${previewId}` : `/admin/players/${id}`);
   const goPlayer = (id: string) => router.push(playerHref(id));

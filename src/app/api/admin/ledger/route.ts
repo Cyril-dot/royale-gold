@@ -3,12 +3,14 @@
 // conversion), searchable and filterable. Built only from rows the tables
 // actually hold; see src/lib/ledger.ts.
 import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
 import { ok, toErrorResponse } from "@/lib/http";
 import { buildLedger, type LedgerType } from "@/lib/ledger";
 
 export async function GET(req: Request) {
   try {
     const admin = await requireRole("admin");
+    requirePermission(admin, "money");
     const sp = new URL(req.url).searchParams;
     const type = sp.get("type") as LedgerType | null;
     const minAmount = sp.get("minAmount");
@@ -16,7 +18,7 @@ export async function GET(req: Request) {
     const result = await buildLedger({
       scopeAdminId: admin.id,
       filters: {
-        type: type && ["deposit", "bet", "withdrawal", "adjustment", "conversion"].includes(type) ? type : undefined,
+        type: type && ["deposit", "bet", "withdrawal", "adjustment", "conversion", "payout"].includes(type) ? type : undefined,
         q: sp.get("q") || undefined,
         from: sp.get("from") || undefined,
         to: sp.get("to") || undefined,

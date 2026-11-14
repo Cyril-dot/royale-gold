@@ -14,7 +14,7 @@ import { prisma } from "./prisma";
 import { dec } from "./money";
 import { getGame } from "./games";
 
-export type LedgerType = "deposit" | "bet" | "withdrawal" | "adjustment" | "conversion";
+export type LedgerType = "deposit" | "bet" | "withdrawal" | "adjustment" | "conversion" | "payout";
 
 export interface LedgerRow {
   id: string;
@@ -240,6 +240,36 @@ export async function buildLedger(opts: {
         amount: -amount, wallet: "cash",
         detail: `Converted ${dec(c.cashDebited)} cash -> ${c.coinsGained} coins`,
         createdAt: c.createdAt.toISOString(),
+      });
+    }
+  }
+
+  // --- Commission payouts (P0 Batch 3 O5: cash out of the platform to an
+  // admin, recorded by the owner at settlement). The "user" of a payout
+  // row is the admin being paid. An admin's own-scope ledger shows only
+  // payouts to THEM; the owner's global ledger shows all of them.
+  if (!f.type || f.type === "payout") {
+    const payoutAdminId = opts.scopeAdminId ?? f.adminId ?? undefined;
+    const payouts = await prisma.commissionPayout.findMany({
+      where: {
+        ...(payoutAdminId ? { adminId: payoutAdminId } : {}),
+        createdAt: { gte: from, lte: to },
+      },
+      include: { admin: { select: { id: true, name: true, email: true, phone: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    for (const p of payouts) {
+      const amount = dec(p.amount);
+      if (!matchesAmount(amount)) continue;
+      if (!matchesText(p.admin.name, p.admin.email ?? p.admin.phone ?? null)) continue;
+      rows.push({
+        id: `pay-${p.id}`, type: "payout", userId: p.adminId, userName: p.admin.name,
+        userContact: p.admin.email ?? p.admin.phone ?? null, adminId: p.adminId,
+        adminName: p.admin.name,
+        amount: -amount, wallet: "cash",
+        detail: `Commission payout via ${p.method}${p.reference ? ` · ${p.reference}` : ""}`,
+        method: p.method, createdAt: p.createdAt.toISOString(),
       });
     }
   }

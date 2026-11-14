@@ -24,7 +24,16 @@ export async function POST(req: Request) {
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return fail("Invalid credentials", 401);
 
-    await setSessionCookie(await createSession(user.id, user.role as "owner" | "admin" | "user"));
+    // P0 Batch 3 (A13): 2FA is opt-in per admin/owner. When enabled, the
+    // password step does NOT create a session — the client must complete
+    // the second step (POST /api/auth/login/totp) with a valid code.
+    if (user.totpEnabled && user.totpSecret) {
+      return ok({ totpRequired: true, userId: user.id });
+    }
+
+    await setSessionCookie(
+      await createSession(user.id, user.role as "owner" | "admin" | "user", user.sessionVersion),
+    );
     return ok({ user: publicUser(user) });
   } catch (err) {
     return toErrorResponse(err);

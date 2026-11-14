@@ -11,8 +11,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { fmtCash } from "../../../lib/api";
 import { useStore } from "../../../lib/store";
-import { useAdminOverview, useAdminDay, todayStr } from "../../../lib/admin-client";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../../../components/AdminNav";
+import { useAdminContext, useAdminDay, useAdminHistory, todayStr } from "../../../lib/admin-client";
+import { canAccessSection } from "../../../lib/rbac";
+import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
 
 export default function AdminCommissionPage() {
   return (
@@ -31,7 +32,8 @@ function AdminCommissionInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ov, err } = useAdminOverview(previewId);
+  const { ctx, err: ctxErr } = useAdminContext(previewId);
+  const { days: history, err: histErr } = useAdminHistory(previewId);
   const [date, setDate] = useState(() => sp.get("date") || todayStr());
   const { day } = useAdminDay(previewId, date);
   // Round 31: the Day detail and History views were stacked cards on one
@@ -40,8 +42,14 @@ function AdminCommissionInner() {
   const [tab, setTab] = useState<"day" | "history">("day");
 
   if (!user) return <AdminLoginPrompt />;
-  if (err) return <AdminError err={err} />;
-  if (!ov) return <p>Loading admin panel…</p>;
+  if (ctxErr) return <AdminError err={ctxErr} />;
+  if (!ctx) return <p>Loading admin panel…</p>;
+  // P0 Batch 3 (O3): the server 403s this section too.
+  if (!previewId && !canAccessSection(user, "commission")) return <AdminDenied section="commission" />;
+  if (histErr) return <AdminError err={histErr} />;
+  if (!history) return <p>Loading admin panel…</p>;
+
+  const ov = { admin: ctx.admin, history };
 
   const playerHref = (id: string) => (previewId ? `/admin/players/${id}?preview=${previewId}` : `/admin/players/${id}`);
   const goPlayer = (id: string) => router.push(playerHref(id));
@@ -72,6 +80,16 @@ function AdminCommissionInner() {
                   <div className="sum-card"><span>Commission</span><b>{fmtCash(day.totals.totalCommission)}</b></div>
                 </div>
                 <p className="ac-day-cap">Commission on {day.date}</p>
+                {/* P0 Batch 3 (O4): the rule that priced this day — RevShare
+                    pays on net loss (stakes − payouts), Turnover on stakes,
+                    Legacy is the old flat % of deposits. */}
+                <p className="ac-model-cap">
+                  {day.totals.model === "revshare"
+                    ? `RevShare ${day.totals.rate}% of net loss · stakes ${fmtCash(day.totals.totalStakes ?? 0)} − payouts ${fmtCash(day.totals.totalPayouts ?? 0)}`
+                    : day.totals.model === "turnover"
+                      ? `Turnover ${day.totals.rate}% of stakes · stakes ${fmtCash(day.totals.totalStakes ?? 0)}`
+                      : "Legacy — flat % of deposits (no rule set)"}
+                </p>
                 {day.deposits.length === 0 ? (
                   <p className="bh-empty">No deposits that day.</p>
                 ) : (
@@ -96,11 +114,11 @@ function AdminCommissionInner() {
             {ov.history.length === 0 ? <p>No commission days yet.</p> : (
               <div className="rg48-twrap">
                 <table className="dep-table">
-                  <thead><tr><th>Date</th><th>Deposits</th><th>Total deposited</th><th>Commission</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Deposits</th><th>Total deposited</th><th>Commission</th><th>Model</th></tr></thead>
                   <tbody>
                     {ov.history.map((h) => (
                       <tr key={h.date} onClick={() => { setDate(h.date); setTab("day"); }} onKeyDown={(e) => { if (e.key === "Enter") { setDate(h.date); setTab("day"); } }} tabIndex={0} className="clickable">
-                        <td>{h.date}</td><td>{h.deposits}</td><td>{fmtCash(h.totalAmount)}</td><td>{fmtCash(h.totalCommission)}</td>
+                        <td>{h.date}</td><td>{h.deposits}</td><td>{fmtCash(h.totalAmount)}</td><td>{fmtCash(h.totalCommission)}</td><td>{h.model === "revshare" ? `RevShare ${h.rate}%` : h.model === "turnover" ? `Turnover ${h.rate}%` : "Legacy"}</td>
                       </tr>
                     ))}
                   </tbody>

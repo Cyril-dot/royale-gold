@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "../lib/store";
 
 export default function AuthModal() {
-  const { authOpen, authMode, closeAuth, openAuth, login, register, toast, refPrefill } = useStore();
+  const { authOpen, authMode, closeAuth, openAuth, login, loginTotp, register, toast, refPrefill } = useStore();
   const [tab, setTab] = useState<"login" | "register">(authMode);
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
@@ -15,6 +15,10 @@ export default function AuthModal() {
   const [ref, setRef] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // P0 Batch 3 (A13): the login's second step — set when the password
+  // step returns totpRequired, cleared on close / tab switch.
+  const [totpUserId, setTotpUserId] = useState<string | null>(null);
+  const [totpCode, setTotpCode] = useState("");
 
   useEffect(() => {
     setTab(authMode);
@@ -37,11 +41,34 @@ export default function AuthModal() {
     setErr("");
     setBusy(true);
     try {
-      const u = await login(contact.trim(), pass);
-      toast(`Welcome back, ${u.name.split(" ")[0]}`, "win");
+      const r = await login(contact.trim(), pass);
+      if ("totpRequired" in r) {
+        setTotpUserId(r.userId);
+        setTotpCode("");
+        return;
+      }
+      toast(`Welcome back, ${r.user.name.split(" ")[0]}`, "win");
       closeAuth();
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Login failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doTotp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!totpUserId) return;
+    setErr("");
+    setBusy(true);
+    try {
+      const u = await loginTotp(totpUserId, totpCode.trim());
+      toast(`Welcome back, ${u.name.split(" ")[0]}`, "win");
+      setTotpUserId(null);
+      setTotpCode("");
+      closeAuth();
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Invalid code");
     } finally {
       setBusy(false);
     }
@@ -77,12 +104,22 @@ export default function AuthModal() {
             <button type="button" aria-pressed={tab === "register"} onClick={() => { setTab("register"); setErr(""); }}>Register</button>
           </div>
           {tab === "login" ? (
-            <form onSubmit={doLogin} autoComplete="off">
-              <div className="rg48-f"><label htmlFor="liContact">Email or phone</label><input id="liContact" type="text" placeholder="you@example.com or 0244 000 000" value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
-              <div className="rg48-f"><label htmlFor="liPass">Password</label><input id="liPass" type="password" placeholder="Your password" value={pass} onChange={(e) => setPass(e.target.value)} required /></div>
-              <p className="rg48-err">{err}</p>
-              <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
-            </form>
+            totpUserId ? (
+              <form onSubmit={doTotp} autoComplete="off">
+                <p className="sub">Two-factor auth is on for this account — enter the 6-digit code from your authenticator app.</p>
+                <div className="rg48-f"><label htmlFor="liTotp">Authenticator code</label><input id="liTotp" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6-digit code" value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))} required /></div>
+                <p className="rg48-err">{err}</p>
+                <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy || totpCode.length !== 6}>{busy ? "Verifying…" : "Verify & log in"}</button>
+                <p className="rg48-mini" style={{ marginTop: 10 }}><button type="button" className="linklike" onClick={() => { setTotpUserId(null); setTotpCode(""); setErr(""); }}>← Back to password</button></p>
+              </form>
+            ) : (
+              <form onSubmit={doLogin} autoComplete="off">
+                <div className="rg48-f"><label htmlFor="liContact">Email or phone</label><input id="liContact" type="text" placeholder="you@example.com or 0244 000 000" value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
+                <div className="rg48-f"><label htmlFor="liPass">Password</label><input id="liPass" type="password" placeholder="Your password" value={pass} onChange={(e) => setPass(e.target.value)} required /></div>
+                <p className="rg48-err">{err}</p>
+                <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
+              </form>
+            )
           ) : (
             <form onSubmit={doRegister} autoComplete="off">
               <div className="rg48-f"><label htmlFor="rgName">Full name</label><input id="rgName" type="text" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required /></div>

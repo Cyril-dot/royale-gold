@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
 import { fail, ok, toErrorResponse } from "@/lib/http";
 import { depositsForAdminOn } from "@/lib/commission";
 import { todayStr } from "@/lib/money";
@@ -7,6 +8,7 @@ import { todayStr } from "@/lib/money";
 export async function GET(req: Request) {
   try {
     const admin = await requireRole("admin");
+    requirePermission(admin, "commission");
     const date = new URL(req.url).searchParams.get("date") ?? todayStr();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("date must be YYYY-MM-DD");
     return ok(await depositsForAdminOn(admin.id, date));

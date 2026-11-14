@@ -13,7 +13,10 @@
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ok, toErrorResponse } from "@/lib/http";
-import { dec, round2 } from "@/lib/money";
+import { dec, round2, todayStr } from "@/lib/money";
+// P0 Batch 3 (O4): commissions are RECOMPUTED by the rules engine —
+// the stamped DepositEvent.commission is legacy history, not the figure.
+import { totalCommissionOwed } from "@/lib/commission";
 
 function parseDay(v: string | null): Date | undefined {
   if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return undefined;
@@ -59,7 +62,12 @@ export async function GET(req: Request) {
     const ggrCash = round2(stakesCash - payoutsCash);
     const ggrCoins = Math.round(stakesCoins - payoutsCoins);
     const depositTotal = dec(deposits._sum.amount);
-    const commissionTotal = dec(deposits._sum.commission);
+    // P0 Batch 3 (O4): commissions owed, recomputed from the ledger by
+    // the rules engine over the same period (not the stamped sum).
+    const commissionTotal = await totalCommissionOwed(
+      sp.get("from") ?? "2020-01-01",
+      sp.get("to") ?? todayStr(),
+    );
     const withdrawalTotal = dec(withdrawals._sum.amount);
     const netProfit = round2(ggrCash - commissionTotal);
 

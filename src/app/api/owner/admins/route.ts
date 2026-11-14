@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
 import { publicUser } from "@/lib/serialize";
+// P0 Batch 3 (O4): the all-time commission is RECOMPUTED by the rules
+// engine — not the stamped sum (which is 0 when a rule is in force).
+import { commissionSummary } from "@/lib/commission";
 
 /** All admins with codes / referral counts / coins given / commission. */
 export async function GET() {
@@ -19,16 +22,16 @@ export async function GET() {
     });
     const rows = await Promise.all(
       admins.map(async (a) => {
-        const [coinsAgg, commissionAgg] = await Promise.all([
+        const [coinsAgg, summary] = await Promise.all([
           prisma.redemption.aggregate({ where: { code: { adminId: a.id } }, _sum: { coins: true } }),
-          prisma.depositEvent.aggregate({ where: { adminId: a.id }, _sum: { commission: true } }),
+          commissionSummary(a.id),
         ]);
         return {
           ...publicUser(a),
           codes: a.referralCodes,
           referralCount: a._count.referredUsers,
           coinsGiven: coinsAgg._sum.coins ?? 0,
-          commissionAllTime: dec(commissionAgg._sum.commission),
+          commissionAllTime: summary.allTime,
         };
       }),
     );

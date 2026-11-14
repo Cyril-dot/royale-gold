@@ -142,3 +142,42 @@ main.rg48-page-main.rg23.admin-fb .code-chip.sm{
 .pd-adjust-reason{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700}
 .pd-adjust-reason input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
 .pd-adjust-reason input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+
+/* ---- P0 Batch 3: management / audit / security ---- */
+
+/* Commission day model caption (admin commission page). */
+.ac-model-cap{margin:10px 0 0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+
+/* Owner: per-admin permissions editor + kill sessions (All admins). */
+.ow-perms{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,246,216,.1)}
+.ow-perms-label{display:block;font-size:12.5px;font-weight:700;color:var(--muted,rgba(255,246,216,.7));margin-bottom:8px}
+.ow-perms-checks{display:flex;flex-wrap:wrap;gap:6px 14px}
+.ow-perm-check{display:flex;align-items:center;gap:6px;font-size:13.5px;cursor:pointer;min-height:32px}
+.ow-perm-check input{width:18px;height:18px;accent-color:#F2C230}
+.ow-perms-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ow-2fa-on{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:5px;background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.4)}
+
+/* Tickets: status pills, message thread, reply form, inbox rows. */
+.tk-status{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:5px;white-space:nowrap}
+.tk-open{background:rgba(242,194,48,.14);color:#FFD964;border:1px solid rgba(242,194,48,.5)}
+.tk-answered{background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.4)}
+.tk-closed{background:rgba(255,246,216,.08);color:var(--muted,rgba(255,246,216,.7));border:1px solid rgba(255,246,216,.2)}
+.tk-messages{display:flex;flex-direction:column;gap:10px;margin:14px 0}
+.tk-msg{display:flex;flex-direction:column;gap:4px;padding:11px 13px;border-radius:10px;font-size:14px}
+.tk-msg b{font-size:12.5px}
+.tk-msg small{font-size:11.5px;color:var(--muted,rgba(255,246,216,.7))}
+.tk-msg-admin{background:rgba(242,194,48,.1);border:1px solid rgba(242,194,48,.35)}
+.tk-msg-user{background:rgba(255,246,216,.05);border:1px solid rgba(255,246,216,.14)}
+.tk-reply{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.tk-reply textarea{min-height:80px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px;resize:vertical}
+.tk-reply textarea:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+.tk-row{width:100%;text-align:left;cursor:pointer}
+.tk-form{display:flex;flex-direction:column;gap:12px}
+.tk-form textarea{min-height:80px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px;resize:vertical}
+.tk-form textarea:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+.tk-mine{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.tk-mine-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid rgba(255,246,216,.1)}
+.tk-mine-row b{font-size:14px}
+
+/* 2FA QR code (Settings). */
+.tfa-qr{display:block;background:#FFF6D8;padding:10px;border-radius:12px;margin:12px 0}

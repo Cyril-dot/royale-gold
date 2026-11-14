@@ -12,15 +12,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, fmtCash } from "../lib/api";
 import { useStore } from "../lib/store";
-import { useAdminOverview, type UserDetail } from "../lib/admin-client";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "./AdminNav";
+import { useAdminContext, type UserDetail } from "../lib/admin-client";
+import { canAccessSection } from "../lib/rbac";
+import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "./AdminNav";
 
 export default function AdminPlayerDetail({ id }: { id: string }) {
   const { user } = useStore();
   const router = useRouter();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ov, err } = useAdminOverview(previewId);
+  const { ctx, err } = useAdminContext(previewId);
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [detailErr, setDetailErr] = useState("");
   const { toast } = useStore();
@@ -87,6 +88,8 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
 
   if (!user) return <AdminLoginPrompt />;
   if (err) return <AdminError err={err} />;
+  // P0 Batch 3 (O3): the server 403s this section too.
+  if (!previewId && ctx && !canAccessSection(user, "players")) return <AdminDenied section="players" />;
 
   const back = (
     <button className="gp-back" type="button" onClick={() => router.back()} aria-label="Back"><span className="gp-back-coin">←</span></button>
@@ -108,7 +111,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
 
   return (
     <>
-      {previewId && ov ? <AdminPreviewBanner name={ov.admin.name} /> : null}
+      {previewId && ctx ? <AdminPreviewBanner name={ctx.admin.name} /> : null}
       <div className="rg48-hbar-in">{back}<h2>{u.name}</h2>{u.blockedAt ? <span className="pd-blocked-badge">BLOCKED</span> : null}</div>
       <p className="rg48-sub">{u.email || u.phone || "—"} · Joined {new Date(u.joinedAt).toLocaleDateString("en-GB")}</p>
       {u.blockedAt ? <p className="pd-blocked-note">Blocked {new Date(u.blockedAt).toLocaleDateString("en-GB")} — {u.blockedReason || "no reason recorded"}. Betting and deposits are suspended.</p> : null}

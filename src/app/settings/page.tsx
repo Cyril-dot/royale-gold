@@ -10,6 +10,86 @@ import Link from "next/link";
 import { api, fmtCash, fmtCoins } from "../../lib/api";
 import { useStore } from "../../lib/store";
 
+// P0 Batch 3 (A13) — TOTP two-factor auth, opt-in per admin/owner.
+// Step 1: "Set up" generates a secret + QR code (still disabled).
+// Step 2: the code from the authenticator app turns it on. Turning it
+// off needs a valid current code. The secret is shown once, at setup.
+function TwoFactorSection() {
+  const { user, toast, refresh } = useStore();
+  const [setup, setSetup] = useState<{ secret: string; qrDataUrl: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!user || (user.role !== "admin" && user.role !== "owner")) return null;
+
+  const startSetup = async () => {
+    setBusy(true);
+    try {
+      const res = await api<{ secret: string; qrDataUrl: string }>("/api/auth/2fa/setup", { method: "POST" });
+      setSetup(res);
+      setCode("");
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not start setup", "lose");
+    } finally { setBusy(false); }
+  };
+  const verify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api("/api/auth/2fa/verify", { method: "POST", body: JSON.stringify({ code: code.trim() }) });
+      toast("Two-factor auth is ON — your next login will ask for a code", "win");
+      setSetup(null);
+      setCode("");
+      await refresh();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Invalid code", "lose");
+    } finally { setBusy(false); }
+  };
+  const disable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api("/api/auth/2fa/disable", { method: "POST", body: JSON.stringify({ code: code.trim() }) });
+      toast("Two-factor auth is OFF", "win");
+      setCode("");
+      await refresh();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Invalid code", "lose");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <section className="admin-sec">
+      <h3>Two-factor auth</h3>
+      {user.totpEnabled ? (
+        <>
+          <p>Two-factor auth is <b>ON</b> — logging in asks for a code from your authenticator app after your password.</p>
+          <form onSubmit={disable}>
+            <div className="rg48-f"><label htmlFor="st2faOff">Code from your authenticator app</label><input id="st2faOff" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="6-digit code" required /></div>
+            <button className="btn btn-ghost" type="submit" disabled={busy || code.length !== 6}>{busy ? "Turning off…" : "Turn off two-factor auth"}</button>
+          </form>
+        </>
+      ) : setup ? (
+        <>
+          <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, or any TOTP app), then enter the 6-digit code to turn it on.</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="tfa-qr" src={setup.qrDataUrl} alt="Two-factor auth QR code" width={200} height={200} />
+          <p className="rg48-mini">Or enter this secret by hand: <code>{setup.secret}</code></p>
+          <form onSubmit={verify}>
+            <div className="rg48-f"><label htmlFor="st2faOn">Code from your authenticator app</label><input id="st2faOn" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="6-digit code" required /></div>
+            <button className="btn btn-gold" type="submit" disabled={busy || code.length !== 6}>{busy ? "Verifying…" : "Verify & turn on"}</button>
+            <button className="btn btn-ghost" type="button" onClick={() => { setSetup(null); setCode(""); }}>Cancel</button>
+          </form>
+        </>
+      ) : (
+        <>
+          <p>Optional. When on, logging in asks for a 6-digit code from your authenticator app after your password.</p>
+          <button className="btn btn-gold" type="button" onClick={() => void startSetup()} disabled={busy}>{busy ? "Starting…" : "Set up two-factor auth"}</button>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function SettingsPage() {
   const { user, wallet, mode, setMode, muted, toggleMute, openAuth, toast, refresh } = useStore();
   const [name, setName] = useState("");
@@ -109,6 +189,8 @@ export default function SettingsPage() {
             <button className="btn btn-gold" type="submit" disabled={passBusy}>{passBusy ? "Changing…" : "Change password"}</button>
           </form>
         </section>
+
+        <TwoFactorSection />
 
         <section className="admin-sec">
           <h3>Preferences</h3>

@@ -11,8 +11,9 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../../lib/store";
-import { useAdminOverview } from "../../../lib/admin-client";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../../../components/AdminNav";
+import { useAdminContext, useAdminPlayers } from "../../../lib/admin-client";
+import { canAccessSection } from "../../../lib/rbac";
+import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
 
 export default function AdminPlayersPage() {
   return (
@@ -30,12 +31,19 @@ function AdminPlayersInner() {
   const { user } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ov, err } = useAdminOverview(previewId);
+  const { ctx, err: ctxErr } = useAdminContext(previewId);
+  const { players: referredUsers, err: playersErr } = useAdminPlayers(previewId);
   const [q, setQ] = useState("");
 
   if (!user) return <AdminLoginPrompt />;
-  if (err) return <AdminError err={err} />;
-  if (!ov) return <p>Loading admin panel…</p>;
+  if (ctxErr) return <AdminError err={ctxErr} />;
+  if (!ctx) return <p>Loading admin panel…</p>;
+  // P0 Batch 3 (O3): the server 403s this section too.
+  if (!previewId && !canAccessSection(user, "players")) return <AdminDenied section="players" />;
+  if (playersErr) return <AdminError err={playersErr} />;
+  if (!referredUsers) return <p>Loading admin panel…</p>;
+
+  const ov = { admin: ctx.admin, referredUsers };
 
   const playerHref = (id: string) => (previewId ? `/admin/players/${id}?preview=${previewId}` : `/admin/players/${id}`);
   const needle = q.trim().toLowerCase();

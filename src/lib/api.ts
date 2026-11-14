@@ -17,6 +17,10 @@ export interface User {
   referredByAdminId: string | null;
   referralCodeUsed: string | null;
   createdAt: string;
+  // P0 Batch 3 (O2/O3): the admin's allowed sections, or null = all.
+  permissions: string[] | null;
+  // P0 Batch 3 (A13): whether TOTP 2FA is enabled.
+  totpEnabled: boolean;
 }
 
 export interface Wallet {

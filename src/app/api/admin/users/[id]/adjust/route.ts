@@ -5,6 +5,7 @@
 // A debit can never take a balance below zero. Blocked players can still
 // be adjusted (an admin may need to correct a blocked account).
 import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
@@ -12,6 +13,7 @@ import { dec, round2 } from "@/lib/money";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireRole("admin");
+    requirePermission(admin, "players");
     const { id } = await params;
     const body = await readJson<{ wallet?: string; direction?: string; amount?: number; reason?: string }>(req);
     if (!body) return fail("Invalid JSON body");

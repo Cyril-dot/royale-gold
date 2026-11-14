@@ -6,6 +6,10 @@
 // active tab can sit off-screen to the right in the scrollable nav —
 // scroll it into view on mount so the user always sees which tab
 // they are on.
+// P0 Batch 3 (O3): the nav hides tabs the admin has no permission for
+// (permissions come from the signed-in user; in owner preview every tab
+// shows — the owner bypasses permissions). Two new tabs joined: Activity
+// (A12) and Tickets (A11).
 
 "use client";
 
@@ -13,11 +17,23 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useStore } from "../lib/store";
+import { ADMIN_SECTION_LABELS, canAccessSection, type AdminSection } from "../lib/rbac";
+
+const TABS: { path: string; section: AdminSection; label: string }[] = [
+  { path: "/admin", section: "overview", label: "Overview" },
+  { path: "/admin/referrals", section: "referrals", label: "Referrals" },
+  { path: "/admin/commission", section: "commission", label: "Commission" },
+  { path: "/admin/players", section: "players", label: "Players" },
+  { path: "/admin/money", section: "money", label: "Money" },
+  { path: "/admin/activity", section: "activity", label: "Activity" },
+  { path: "/admin/tickets", section: "tickets", label: "Tickets" },
+];
 
 export function AdminNav() {
   const pathname = usePathname();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
+  const { user } = useStore();
   const navRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     navRef.current?.querySelector(".an-active")?.scrollIntoView({ behavior: "auto", inline: "nearest", block: "nearest" });
@@ -26,14 +42,28 @@ export function AdminNav() {
   const item = (p: string, label: string, active: boolean) => (
     <Link key={p} href={href(p)} className={active ? "an-active" : ""} aria-current={active ? "page" : undefined}>{label}</Link>
   );
+  // In preview the owner sees every tab; otherwise hide the sections
+  // this admin has no permission for.
+  const visible = previewId ? TABS : TABS.filter((t) => canAccessSection(user, t.section));
   return (
     <nav ref={navRef} className="admin-nav" aria-label="Admin dashboard">
-      {item("/admin", "Overview", pathname === "/admin")}
-      {item("/admin/referrals", "Referrals", pathname.startsWith("/admin/referrals"))}
-      {item("/admin/commission", "Commission", pathname.startsWith("/admin/commission"))}
-      {item("/admin/players", "Players", pathname.startsWith("/admin/players"))}
-      {item("/admin/money", "Money", pathname.startsWith("/admin/money"))}
+      {visible.map((t) => item(t.path, t.label, t.path === "/admin" ? pathname === "/admin" : pathname.startsWith(t.path)))}
     </nav>
+  );
+}
+
+/** Shown when an admin opens a section they have no permission for
+ *  (P0 Batch 3 O3). The page's API route 403s the same way — this is
+ *  the friendly face of that denial. */
+export function AdminDenied({ section }: { section: AdminSection }) {
+  return (
+    <>
+      <div className="rg48-hbar-in">
+        <h2>Admin <em>panel</em></h2>
+      </div>
+      <p className="rg48-err">You do not have access to the {ADMIN_SECTION_LABELS[section]} section.</p>
+      <p>Ask the owner to grant you access to this section from the Owner panel.</p>
+    </>
   );
 }
 

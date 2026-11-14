@@ -10,11 +10,72 @@ import Link from "next/link";
 import { api, fmtCash } from "../../lib/api";
 import { useStore } from "../../lib/store";
 import { copyText, todayStr } from "../../lib/admin-client";
+import { ADMIN_SECTIONS, ADMIN_SECTION_LABELS, type AdminSection } from "../../lib/rbac";
 
 interface AdminRow {
   id: string; name: string; email: string; role: string; commissionPct: number | null; active: boolean;
+  permissions: string[] | null; totpEnabled: boolean;
   codes: { id: string; code: string; active: boolean }[];
   referralCount: number; coinsGiven: number; commissionAllTime: number; createdAt: string;
+}
+
+// P0 Batch 3 (O2/O15) — per-admin permissions editor + "Kill all
+// sessions". Checkboxes for the 7 sections; "All sections" (null) is
+// the default. Saving PATCHes the admin; killing sessions bumps their
+// session version so every JWT they hold stops working at once.
+function OwnerAdminPerms({ a, onSaved }: {
+  a: AdminRow;
+  onSaved: () => Promise<void>;
+}) {
+  const { toast } = useStore();
+  const [perms, setPerms] = useState<string[] | null>(a.permissions);
+  const [busy, setBusy] = useState(false);
+  const [killBusy, setKillBusy] = useState(false);
+  const toggle = (s: AdminSection) => {
+    setPerms((cur) => {
+      const all = cur ?? [...ADMIN_SECTIONS];
+      return all.includes(s) ? all.filter((x) => x !== s) : [...all, s];
+    });
+  };
+  const save = async () => {
+    setBusy(true);
+    try {
+      // All 7 checked = "all sections" (null) — the stored form.
+      const list = perms === null ? null : perms.length >= ADMIN_SECTIONS.length ? null : perms;
+      await api(`/api/owner/admins/${a.id}`, { method: "PATCH", body: JSON.stringify({ permissions: list }) });
+      toast(`Permissions saved for ${a.name}`, "win");
+      await onSaved();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not save permissions", "lose");
+    } finally { setBusy(false); }
+  };
+  const kill = async () => {
+    setKillBusy(true);
+    try {
+      await api(`/api/owner/admins/${a.id}/kill-sessions`, { method: "POST" });
+      toast(`All sessions killed for ${a.name} — they must sign in again`, "win");
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not kill sessions", "lose");
+    } finally { setKillBusy(false); }
+  };
+  const checked = (s: AdminSection) => (perms === null ? true : perms.includes(s));
+  return (
+    <div className="ow-perms">
+      <span className="ow-perms-label">Sections this admin can open:</span>
+      <div className="ow-perms-checks">
+        {ADMIN_SECTIONS.map((s) => (
+          <label key={s} className="ow-perm-check">
+            <input type="checkbox" checked={checked(s)} onChange={() => toggle(s)} /> {ADMIN_SECTION_LABELS[s]}
+          </label>
+        ))}
+      </div>
+      <div className="ow-perms-actions">
+        <button className="btn btn-ghost btn-sm" type="button" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save permissions"}</button>
+        <button className="btn btn-ghost btn-sm" type="button" disabled={killBusy} onClick={() => void kill()}>{killBusy ? "Killing…" : "Kill all sessions"}</button>
+        {a.totpEnabled ? <span className="ow-2fa-on">2FA on</span> : null}
+      </div>
+    </div>
+  );
 }
 interface RollupDay { date: string; adminId: string; adminName: string; deposits: number; totalAmount: number; totalCommission: number }
 interface OwnerDayAdmin { admin: { id: string; name: string }; deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; pctInForce: number; commission: number; time: string }[]; totalAmount: number; totalCommission: number }
@@ -286,6 +347,120 @@ export default function OwnerPage() {
   }, [pnlPreset, pnlFrom, pnlTo]);
   useEffect(() => { void loadPnl(); }, [loadPnl]);
 
+  // P0 Batch 3 (O4): commission rules — the rules engine. A rule is a
+  // model (RevShare = % of net loss, Turnover = % of stakes) + a rate,
+  // for one admin or as the global default, from an effective date.
+  interface CommissionRuleRow { id: string; adminId: string | null; adminName: string | null; model: string; rate: number; effectiveFrom: string; createdAt: string }
+  const [rules, setRules] = useState<CommissionRuleRow[] | null>(null);
+  const [ruleAdmin, setRuleAdmin] = useState("");
+  const [ruleModel, setRuleModel] = useState<"revshare" | "turnover">("revshare");
+  const [ruleRate, setRuleRate] = useState(10);
+  // Dates start empty and are set on mount (calling new Date() during
+  // render breaks the prerender — the same rule as the commission date
+  // picker above).
+  const [ruleFrom, setRuleFrom] = useState("");
+  useEffect(() => { setRuleFrom(todayStr()); }, []);
+  const [ruleBusy, setRuleBusy] = useState(false);
+  const loadRules = useCallback(async () => {
+    try {
+      const r = await api<{ rules: CommissionRuleRow[] }>("/api/owner/commission/rules");
+      setRules(r.rules);
+    } catch { setRules([]); }
+  }, []);
+  useEffect(() => { void loadRules(); }, [loadRules]);
+  const saveRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRuleBusy(true);
+    try {
+      await api("/api/owner/commission/rules", {
+        method: "POST",
+        body: JSON.stringify({ adminId: ruleAdmin || null, model: ruleModel, rate: ruleRate, effectiveFrom: ruleFrom }),
+      });
+      toast("Commission rule saved — it applies from its effective date", "win");
+      await loadRules();
+      await load();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not save rule", "lose");
+    } finally { setRuleBusy(false); }
+  };
+
+  // P0 Batch 3 (O5): commission settlement — owed / paid / balance per
+  // admin for a period, and recording a payout (which writes to the
+  // ledger + audit log and drops the balance).
+  interface SettlementRow { adminId: string; adminName: string; adminEmail: string | null; active: boolean; owed: number; paid: number; balance: number }
+  const [settleFrom, setSettleFrom] = useState("");
+  const [settleTo, setSettleTo] = useState("");
+  useEffect(() => {
+    const today = todayStr();
+    setSettleFrom(`${today.slice(0, 8)}01`);
+    setSettleTo(today);
+  }, []);
+  const [settlement, setSettlement] = useState<{ from: string; to: string; rows: SettlementRow[]; totals: { owed: number; paid: number; balance: number } } | null>(null);
+  const loadSettlement = useCallback(async () => {
+    if (!settleFrom || !settleTo) return;
+    try {
+      const r = await api<{ from: string; to: string; rows: SettlementRow[]; totals: { owed: number; paid: number; balance: number } }>(`/api/owner/commission/settlement?from=${settleFrom}&to=${settleTo}`);
+      setSettlement(r);
+    } catch { setSettlement(null); }
+  }, [settleFrom, settleTo]);
+  useEffect(() => { void loadSettlement(); }, [loadSettlement]);
+  const [payAdmin, setPayAdmin] = useState("");
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("MTN");
+  const [payRef, setPayRef] = useState("");
+  const [payBusy, setPayBusy] = useState(false);
+  const recordPayout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payAdmin || !payAmount) return;
+    setPayBusy(true);
+    try {
+      await api("/api/owner/commission/settlement", {
+        method: "POST",
+        body: JSON.stringify({
+          adminId: payAdmin,
+          amount: Number(payAmount),
+          method: payMethod,
+          reference: payRef.trim() || undefined,
+          periodFrom: settleFrom,
+          periodTo: settleTo,
+        }),
+      });
+      toast("Payout recorded — ledger and audit log updated", "win");
+      setPayAmount("");
+      setPayRef("");
+      await loadSettlement();
+      await loadOwnerLedger();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not record payout", "lose");
+    } finally { setPayBusy(false); }
+  };
+
+  // P0 Batch 3 (O14): the global audit log — every admin/owner action,
+  // append-only. Filter by actor, action, or date.
+  interface AuditRow { id: string; actorId: string; actorName: string; actorRole: string; action: string; targetId: string | null; detail: string | null; createdAt: string }
+  const [audit, setAudit] = useState<AuditRow[] | null>(null);
+  const [auditActions, setAuditActions] = useState<{ action: string; count: number }[]>([]);
+  const [auditActors, setAuditActors] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [auditActor, setAuditActor] = useState("");
+  const [auditAction, setAuditAction] = useState("");
+  const [auditFrom, setAuditFrom] = useState("");
+  const [auditTo, setAuditTo] = useState("");
+  const loadAudit = useCallback(async () => {
+    try {
+      const p = new URLSearchParams();
+      if (auditActor) p.set("actor", auditActor);
+      if (auditAction) p.set("action", auditAction);
+      if (auditFrom) p.set("from", auditFrom);
+      if (auditTo) p.set("to", auditTo);
+      const qs = p.toString();
+      const r = await api<{ rows: AuditRow[]; actions: { action: string; count: number }[]; actors: { id: string; name: string; role: string }[] }>(`/api/owner/audit-log${qs ? `?${qs}` : ""}`);
+      setAudit(r.rows);
+      setAuditActions(r.actions);
+      setAuditActors(r.actors);
+    } catch { setAudit([]); }
+  }, [auditActor, auditAction, auditFrom, auditTo]);
+  useEffect(() => { void loadAudit(); }, [loadAudit]);
+
   // P0 Batch 2 (O9/O10/O11): game catalogue — visibility, kill switch,
   // and per-game economics for all 46 games.
   interface OwnerGameCfg { slug: string; name: string; currency: string; visible: boolean; killed: boolean; minBet: number | null; maxBet: number | null; maxPayout: number | null; maxMultiplier: number; note: string }
@@ -509,6 +684,7 @@ export default function OwnerPage() {
                 )}
                 <Link className="btn btn-gold btn-sm" href={`/admin?preview=${a.id}`}>Preview panel</Link>
               </div>
+              <OwnerAdminPerms a={a} onSaved={load} />
             </div>
           ))}
         </section>
@@ -610,6 +786,142 @@ export default function OwnerPage() {
         </section>
 
         <section className="admin-sec">
+          <h3>Commission rules</h3>
+          <p className="rg48-sub">Commission is no longer a flat % of deposits. A rule pays an admin on their players’ ACTIVITY: RevShare = % of net loss (stakes − payouts), Turnover = % of total stakes. The rule in force on a day is what that day pays — past days stay frozen. A day with no rule uses the old flat % of deposits.</p>
+          <form className="owner-add" onSubmit={saveRule}>
+            <select value={ruleAdmin} onChange={(e) => setRuleAdmin(e.target.value)} aria-label="Admin (blank = global default)">
+              <option value="">Global default (every admin)</option>
+              {admins.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <select value={ruleModel} onChange={(e) => setRuleModel(e.target.value as "revshare" | "turnover")} aria-label="Model">
+              <option value="revshare">RevShare — % of net loss</option>
+              <option value="turnover">Turnover — % of stakes</option>
+            </select>
+            <label>Rate % <input type="number" min={0} max={100} step={0.5} value={ruleRate} onChange={(e) => setRuleRate(Number(e.target.value))} /></label>
+            <label>From <input type="date" value={ruleFrom} max={todayStr()} onChange={(e) => setRuleFrom(e.target.value)} /></label>
+            <button className="btn btn-gold" type="submit" disabled={ruleBusy}>{ruleBusy ? "Saving…" : "Save rule"}</button>
+          </form>
+          {rules === null ? <p>Loading rules…</p> : rules.length === 0 ? (
+            <p>No rules yet — every admin is on the legacy flat % of deposits.</p>
+          ) : (
+            <div className="rg48-twrap">
+              <table className="dep-table">
+                <thead><tr><th>Applies to</th><th>Model</th><th>Rate</th><th>From</th></tr></thead>
+                <tbody>
+                  {rules.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.adminName ?? "Global default"}</td>
+                      <td>{r.model === "revshare" ? "RevShare" : "Turnover"}</td>
+                      <td>{r.rate}%</td>
+                      <td>{r.effectiveFrom}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Settlement</h3>
+          <p className="rg48-sub">Commission owed, paid and still owing per admin — recomputed from the same ledger as the revenue, so the numbers cannot disagree. Recording a payout writes it to the ledger and the audit log and drops the balance.</p>
+          <div className="money-dates">
+            <label>From <input type="date" value={settleFrom} max={todayStr()} onChange={(e) => setSettleFrom(e.target.value)} /></label>
+            <label>To <input type="date" value={settleTo} max={todayStr()} onChange={(e) => setSettleTo(e.target.value)} /></label>
+          </div>
+          {settlement === null ? <p>Loading settlement…</p> : (
+            <>
+              <div className="sum-cards">
+                <div className="sum-card"><span>Owed</span><b>{fmtCash(settlement.totals.owed)}</b></div>
+                <div className="sum-card"><span>Paid</span><b>{fmtCash(settlement.totals.paid)}</b></div>
+                <div className="sum-card"><span>Balance</span><b>{fmtCash(settlement.totals.balance)}</b></div>
+              </div>
+              {settlement.rows.length === 0 ? <p>No admins yet.</p> : (
+                <div className="rg48-twrap">
+                  <table className="dep-table">
+                    <thead><tr><th>Admin</th><th>Owed</th><th>Paid</th><th>Balance</th></tr></thead>
+                    <tbody>
+                      {settlement.rows.map((r) => (
+                        <tr key={r.adminId}>
+                          <td>{r.adminName}{r.active ? "" : " (deactivated)"}</td>
+                          <td>{fmtCash(r.owed)}</td>
+                          <td>{fmtCash(r.paid)}</td>
+                          <td>{fmtCash(r.balance)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+          <form className="owner-add" onSubmit={recordPayout}>
+            <select value={payAdmin} onChange={(e) => setPayAdmin(e.target.value)} aria-label="Admin to pay" required>
+              <option value="">Pay admin…</option>
+              {admins.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <label>Amount GH₵ <input type="number" min={0.01} step={0.01} value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" required /></label>
+            <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} aria-label="Method">
+              {["MTN", "Telecel", "AirtelTigo", "bank", "cash"].map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            <input type="text" placeholder="Reference (optional)" value={payRef} onChange={(e) => setPayRef(e.target.value)} />
+            <button className="btn btn-gold" type="submit" disabled={payBusy || !payAdmin || !payAmount}>{payBusy ? "Recording…" : "Record payout"}</button>
+          </form>
+        </section>
+
+        <section className="admin-sec">
+          <h3>Audit log</h3>
+          <p className="rg48-sub">Every admin and owner action, platform-wide. Append-only — nothing edits or deletes these rows.</p>
+          <div className="money-filters">
+            <div className="money-dates">
+              <label>Actor
+                <select value={auditActor} onChange={(e) => setAuditActor(e.target.value)} aria-label="Filter by actor">
+                  <option value="">Everyone</option>
+                  {auditActors.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
+                  ))}
+                </select>
+              </label>
+              <label>Action
+                <select value={auditAction} onChange={(e) => setAuditAction(e.target.value)} aria-label="Filter by action">
+                  <option value="">All actions</option>
+                  {auditActions.map((a) => (
+                    <option key={a.action} value={a.action}>{a.action} ({a.count})</option>
+                  ))}
+                </select>
+              </label>
+              <label>From <input type="date" value={auditFrom} max={todayStr()} onChange={(e) => setAuditFrom(e.target.value)} /></label>
+              <label>To <input type="date" value={auditTo} max={todayStr()} onChange={(e) => setAuditTo(e.target.value)} /></label>
+            </div>
+          </div>
+          {audit === null ? <p>Loading audit log…</p> : audit.length === 0 ? (
+            <p>No actions match.</p>
+          ) : (
+            <div className="rg48-twrap">
+              <table className="dep-table">
+                <thead><tr><th>Actor</th><th>Action</th><th>Detail</th><th>Time</th></tr></thead>
+                <tbody>
+                  {audit.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.actorName} ({r.actorRole})</td>
+                      <td>{r.action}</td>
+                      <td>{r.detail || "—"}</td>
+                      <td>{new Date(r.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="admin-sec">
           <h3>Ledger</h3>
           <p className="rg48-sub">Every money movement, platform-wide — deposits, bets, withdrawals, adjustments, conversions. Built only from rows the tables actually hold.</p>
           <div className="money-filters">
@@ -618,7 +930,7 @@ export default function OwnerPage() {
             </label>
             <div className="money-chips" role="group" aria-label="Filter by type">
               <button type="button" className={!ownerLedType ? "on" : ""} onClick={() => setOwnerLedType("")}>All types</button>
-              {["deposit", "bet", "withdrawal", "adjustment", "conversion"].map((t) => (
+              {["deposit", "bet", "withdrawal", "adjustment", "conversion", "payout"].map((t) => (
                 <button key={t} type="button" className={ownerLedType === t ? "on" : ""} onClick={() => setOwnerLedType(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
               ))}
             </div>

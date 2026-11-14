@@ -30,7 +30,9 @@ interface Store {
   refresh: () => Promise<void>;
   setWallet: (w: Wallet) => void;
   setUser: (u: User | null) => void;
-  login: (emailOrPhone: string, password: string) => Promise<User>;
+  login: (emailOrPhone: string, password: string) => Promise<{ user: User } | { totpRequired: true; userId: string }>;
+  /** P0 Batch 3 (A13): the second login step for accounts with 2FA on. */
+  loginTotp: (userId: string, code: string) => Promise<User>;
   register: (name: string, emailOrPhone: string, password: string, refCode?: string) => Promise<{ user: User; referredBonusCoins?: number }>;
   logout: () => Promise<void>;
   authOpen: boolean;
@@ -144,7 +146,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [wallet, toast]);
 
   const login = useCallback(async (emailOrPhone: string, password: string) => {
-    const r = await api<{ user: User }>("/api/auth/login", { method: "POST", body: JSON.stringify({ emailOrPhone, password }) });
+    const r = await api<{ user?: User; totpRequired?: boolean; userId?: string }>("/api/auth/login", { method: "POST", body: JSON.stringify({ emailOrPhone, password }) });
+    // P0 Batch 3 (A13): 2FA is on — the password step does NOT create a
+    // session. The modal must ask for the code (loginTotp) next.
+    if (r.totpRequired && r.userId) return { totpRequired: true as const, userId: r.userId };
+    if (!r.user) throw new Error("Login failed");
+    try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
+    setUser(r.user);
+    setWalletState({ cash: r.user.cash, coins: r.user.coins, sim: r.user.sim });
+    return { user: r.user };
+  }, []);
+
+  const loginTotp = useCallback(async (userId: string, code: string) => {
+    const r = await api<{ user: User }>("/api/auth/login/totp", { method: "POST", body: JSON.stringify({ userId, code }) });
     try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
     setUser(r.user);
     setWalletState({ cash: r.user.cash, coins: r.user.coins, sim: r.user.sim });
@@ -198,11 +212,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Store>(
     () => ({
       user, wallet, loading, mode, setMode, muted, toggleMute, toasts, toast,
-      refresh, setWallet, setUser, login, register, logout,
+      refresh, setWallet, setUser, login, loginTotp, register, logout,
       authOpen, authMode, openAuth, closeAuth, depositOpen, setDepositOpen,
       refPrefill, setRefPrefill, simSession, setSimSession, topUpSim,
     }),
-    [user, wallet, loading, mode, setMode, muted, toggleMute, toasts, toast, refresh, login, register, logout, authOpen, authMode, openAuth, closeAuth, depositOpen, refPrefill, simSession, topUpSim]
+    [user, wallet, loading, mode, setMode, muted, toggleMute, toasts, toast, refresh, login, loginTotp, register, logout, authOpen, authMode, openAuth, closeAuth, depositOpen, refPrefill, simSession, topUpSim]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

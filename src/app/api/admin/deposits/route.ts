@@ -3,13 +3,20 @@
 // player name, contact, or deposit id). Scoped to deposits whose
 // adminId is this admin — the referring admin stamped at deposit time.
 import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
+// P0 Batch 3 (O4): the deposits tab's commission total is the rules-engine
+// figure for the filtered date range — not the sum of the stamped row
+// commissions (which are 0 when a rule is in force).
+import { commissionOwed } from "@/lib/commission";
+import { todayStr } from "@/lib/money";
 
 export async function GET(req: Request) {
   try {
     const admin = await requireRole("admin");
+    requirePermission(admin, "money");
     const sp = new URL(req.url).searchParams;
     const method = sp.get("method") || undefined;
     const q = (sp.get("q") || "").trim().toLowerCase();
@@ -35,7 +42,7 @@ export async function GET(req: Request) {
     });
     const page = filtered.slice(0, limit);
     const totalAmount = filtered.reduce((s, d) => s + dec(d.amount), 0);
-    const totalCommission = filtered.reduce((s, d) => s + dec(d.commission), 0);
+    const totalCommission = await commissionOwed(admin.id, from ?? "2020-01-01", to ?? todayStr());
     return ok({
       deposits: page.map((d) => ({
         id: d.id,

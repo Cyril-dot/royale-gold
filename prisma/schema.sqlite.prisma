@@ -30,6 +30,20 @@ model User {
   // is set by an admin (own downline only) with a mandatory reason.
   blockedAt        DateTime?
   blockedReason    String?
+  // P0 Batch 3 (O2/O3): per-section permissions as a JSON array of section
+  // keys (see src/lib/rbac.ts ADMIN_SECTIONS). Null = all sections allowed
+  // (backwards compatible: existing admins keep full access).
+  permissions      String?
+  // P0 Batch 3 (O15): session version — bumped to kill ALL of this user's
+  // sessions at once (deactivate, "Kill all sessions"). A JWT carrying an
+  // older version is rejected by getSessionUser (src/lib/auth.ts).
+  sessionVersion   Int      @default(0)
+  // P0 Batch 3 (A13): TOTP two-factor auth (opt-in per admin/owner).
+  // totpSecret is the base32 secret; totpEnabled only flips after a code
+  // is verified against it. The secret is never returned by any endpoint
+  // after setup.
+  totpSecret       String?
+  totpEnabled      Boolean  @default(false)
   referredByAdminId String?
   referredByAdmin  User?    @relation("ReferredUsers", fields: [referredByAdminId], references: [id])
   referredUsers    User[]   @relation("ReferredUsers")
@@ -53,6 +67,15 @@ model User {
   adjustments      BalanceAdjustment[]
   adminAdjustments BalanceAdjustment[] @relation("AdjustmentAdmin")
   auditEntries     AuditLog[]          @relation("AuditActor")
+  // P0 Batch 3 (O4): commission rules for this admin (a rule with adminId
+  // null is the global default, not tied to a user). (O5) payouts received.
+  commissionRules  CommissionRule[]    @relation("RuleAdmin")
+  payouts          CommissionPayout[]  @relation("PayoutAdmin")
+  // P0 Batch 3 (A11): tickets this player opened, and tickets assigned to
+  // this admin (their own players' tickets only).
+  ticketsOpened    Ticket[]            @relation("TicketPlayer")
+  ticketsAssigned  Ticket[]            @relation("TicketAdmin")
+  ticketMessages   TicketMessage[]
 }
 
 model ReferralCode {
@@ -205,17 +228,97 @@ model BalanceAdjustment {
 
 // P0 Batch 1: the audit trail for money/admin actions (adjustments,
 // blocks, withdrawal decisions). Append-only — nothing edits these rows.
+// P0 Batch 3 extends the action set: commission.rule.* (rules engine),
+// commission.payout (settlement), admin.permission / admin.kill_sessions /
+// admin.deactivate, auth.2fa.enable / auth.2fa.disable, ticket.create /
+// ticket.reply / ticket.close.
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String
   actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request"
+  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close"
   targetId  String?
   detail    String?
   createdAt DateTime @default(now())
 
   @@index([actorId, createdAt])
   @@index([action, createdAt])
+}
+
+// P0 Batch 3 (O4): the commission rules engine. Replaces the flat % per
+// admin (User.commissionPct, kept as the legacy fallback). One rule per
+// admin per model, versioned by effectiveFrom — the rule in force on a
+// day (latest effectiveFrom <= that day) is what that day pays. A rule
+// with adminId null is the GLOBAL default: it applies to every admin
+// without their own rule. model: "revshare" (% of the player's net loss
+// = stakes - payouts) or "turnover" (% of total stakes). Rate is a %
+// (e.g. 10 = 10%). Rules are never deleted — a new rule supersedes the
+// old one from its effectiveFrom date, so past days stay frozen.
+model CommissionRule {
+  id            String   @id @default(cuid())
+  adminId       String?
+  admin         User?    @relation("RuleAdmin", fields: [adminId], references: [id])
+  model         String   // "revshare" | "turnover"
+  rate          Float 
+  effectiveFrom DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([adminId, effectiveFrom])
+}
+
+// P0 Batch 3 (O5): commission settlement & payouts. A payout is the owner
+// recording that commission was actually paid to an admin (amount +
+// method + reference). Owed per admin per period is RECOMPUTED from the
+// ledger (src/lib/commission.ts); paid is the sum of these rows; balance
+// = owed - paid. A payout writes to the ledger (type "payout") and the
+// AuditLog, so the numbers cannot disagree.
+model CommissionPayout {
+  id         String   @id @default(cuid())
+  adminId    String
+  admin      User     @relation("PayoutAdmin", fields: [adminId], references: [id])
+  amount     Float 
+  method     String   // e.g. "MTN", "Telecel", "AirtelTigo", "bank", "cash"
+  reference  String?
+  periodFrom String?  // "YYYY-MM-DD" — the period this payout covers
+  periodTo   String?
+  createdBy  String   // owner id who recorded it
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, createdAt])
+}
+
+// P0 Batch 3 (A11): support tickets — tickets + replies only, no live
+// chat. A player opens a ticket from the account page; it is assigned to
+// their referring admin (adminId null when the player was not referred —
+// the owner sees those). Status: "open" -> "answered" -> "closed".
+model Ticket {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("TicketPlayer", fields: [userId], references: [id], onDelete: Cascade)
+  adminId   String?
+  admin     User?    @relation("TicketAdmin", fields: [adminId], references: [id])
+  subject   String
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages TicketMessage[]
+
+  @@index([adminId, status, createdAt])
+  @@index([userId, createdAt])
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  senderRole String  // "user" | "admin"
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 // P0 Batch 2 (O9/O10/O11): per-game owner control. One row per game the

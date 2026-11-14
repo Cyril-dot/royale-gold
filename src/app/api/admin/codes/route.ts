@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { normalizeCode, randomCode } from "@/lib/serialize";
@@ -6,6 +7,7 @@ import { normalizeCode, randomCode } from "@/lib/serialize";
 export async function GET() {
   try {
     const admin = await requireRole("admin");
+    requirePermission(admin, "referrals");
     const codes = await prisma.referralCode.findMany({
       where: { adminId: admin.id },
       orderBy: { createdAt: "desc" },
@@ -27,6 +29,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const admin = await requireRole("admin");
+    requirePermission(admin, "referrals");
     const body = await readJson<{ code?: string }>(req);
     let code = body?.code ? normalizeCode(body.code) : randomCode();
     if (!/^RG-[A-Z0-9]{4,12}$/.test(code)) {
