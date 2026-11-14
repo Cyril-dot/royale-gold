@@ -36,6 +36,21 @@ const outfit = Outfit({ subsets: ["latin"], variable: "--font-body" });
 export const metadata: Metadata = {
   title: "Royale Gold",
   description: "Royale Gold — 31 games. Cash in GH₵, coins for play.",
+  // PWA: the manifest route comes from app/manifest.ts; the icon routes
+  // come from app/icon.png and app/apple-icon.png (Next 16 serves image
+  // icons at /icon.png and /apple-icon.png — the extensionless paths
+  // 404). The favicon link comes from the app/favicon.ico convention
+  // itself, so it is not repeated here.
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icon.png", sizes: "512x512", type: "image/png" }],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Royale Gold",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 // Mobile-native baseline (mobile-native skill §§7,10): viewport-fit=cover

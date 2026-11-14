@@ -8,6 +8,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, User, Wallet } from "./api";
 import { mutedStored, setMutedStored, sfx } from "./sound";
+import SwRegister from "../components/SwRegister";
 
 export type Mode = "REAL" | "SIM";
 export type ToastKind = "win" | "lose" | "info";
@@ -219,7 +220,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [user, wallet, loading, mode, setMode, muted, toggleMute, toasts, toast, refresh, login, loginTotp, register, logout, authOpen, authMode, openAuth, closeAuth, depositOpen, refPrefill, simSession, topUpSim]
   );
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      <SwRegister />
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function useStore(): Store {
