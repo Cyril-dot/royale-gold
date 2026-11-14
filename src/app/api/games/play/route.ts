@@ -13,6 +13,9 @@ import {
   isGameBlocked,
   platformMinStake,
 } from "@/lib/game-config";
+// P1 Batch 1 (A20): per-player limits — checked before the draw so a
+// limited player never draws (settleGame re-checks on the REAL path).
+import { checkPlayLimits } from "@/lib/limits";
 
 /**
  * Server-decided play (round 6, SIM-vs-LIVE economy).
@@ -79,6 +82,9 @@ export async function POST(req: Request) {
     const mode = body.mode === "SIM" ? "SIM" : "REAL";
     const betKind = body.choice?.betKind;
     if (!betKind || !BET_KINDS.has(betKind)) return fail("A valid bet type is required");
+    // P1 Batch 1 (A20): per-player limits before the draw.
+    const limitErr = await checkPlayLimits(user.id, stake, game.currency);
+    if (limitErr) return fail(limitErr, 403);
     const pick = Number(body.choice?.pick ?? 7);
     if (betKind === "straight" && (!Number.isInteger(pick) || pick < 0 || pick > 36)) {
       return fail("Pick a number from 0 to 36");

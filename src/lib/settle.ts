@@ -12,6 +12,8 @@ import {
   isGameBlocked,
   platformMinStake,
 } from "./game-config";
+// P1 Batch 1 (A20): per-player limits (max stake, daily loss, cool-off).
+import { checkPlayLimits } from "./limits";
 
 /** Slugs that settle against a server-issued crash round. Balloon Burst
  * is a crash game too (shared engine, roundId passed at settle) — it
@@ -79,6 +81,13 @@ export async function settleGame(
   if (payout > round2(stake * (cfg?.maxMultiplier ?? game.maxMultiplier)) + 1e-9) {
     throw new Error(`Payout exceeds ${game.name} max multiplier ×${cfg?.maxMultiplier ?? game.maxMultiplier}`);
   }
+  // P1 Batch 1 (A20): per-player limits — cool-off blocks all play, a
+  // cash stake above the player's max is rejected, and a day's loss at
+  // the max blocks further play. Every game settles through here, so
+  // this is the single enforcement point; the play route re-checks
+  // before the draw so a limited player never draws.
+  const limitErr = await checkPlayLimits(userId, stake, currency);
+  if (limitErr) throw new Error(limitErr);
   let effPayout = payout;
   if (cfg?.maxPayout != null && effPayout > cfg.maxPayout) {
     effPayout = currency === "coins" ? Math.floor(cfg.maxPayout) : round2(cfg.maxPayout);

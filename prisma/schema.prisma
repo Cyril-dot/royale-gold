@@ -83,6 +83,16 @@ model User {
   ticketsOpened    Ticket[]            @relation("TicketPlayer")
   ticketsAssigned  Ticket[]            @relation("TicketAdmin")
   ticketMessages   TicketMessage[]
+  // P1 Batch 1 (A18): promo codes this admin created + codes redeemed.
+  promoCodesCreated PromoCode[]      @relation("PromoCreator")
+  promoRedemptions  PromoRedemption[]
+  // P1 Batch 1 (A19): notes/tags on this player + notes/tags this admin wrote.
+  notesReceived     PlayerNote[]      @relation("NotePlayer")
+  notesAuthored     PlayerNote[]      @relation("NoteAuthor")
+  tagsReceived      PlayerTag[]       @relation("TagPlayer")
+  tagsAuthored      PlayerTag[]       @relation("TagAuthor")
+  // P1 Batch 1 (A20): per-player limits (one row per player, or none).
+  limits            PlayerLimit?
 }
 
 model ReferralCode {
@@ -217,6 +227,10 @@ model Withdrawal {
 // P0 Batch 1 (A7): a manual balance adjustment by an admin (own downline
 // only). Written atomically with the balance change and an AuditLog row;
 // the ledger (A6/O7) reads these back. Reason is mandatory.
+// P1 Batch 1: kind distinguishes the flavour — "adjustment" (manual,
+// A7), "bonus" (a bonus grant, A17) or "promo" (a promo-code redemption,
+// A18). The ledger renders each kind differently so a bonus is never
+// mistaken for a manual adjustment.
 model BalanceAdjustment {
   id        String   @id @default(cuid())
   userId    String
@@ -227,6 +241,7 @@ model BalanceAdjustment {
   direction String   // "credit" | "debit"
   amount    Decimal  @db.Decimal(12, 2)
   reason    String
+  kind      String   @default("adjustment") // "adjustment" | "bonus" | "promo"
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
@@ -243,7 +258,7 @@ model AuditLog {
   id        String   @id @default(cuid())
   actorId   String
   actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close"
+  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set"
   targetId  String?
   detail    String?
   createdAt DateTime @default(now())
@@ -370,4 +385,102 @@ model PlatformSettings {
   conversionRate    Decimal  @default(5) @db.Decimal(12, 2)
   coinsWithdrawable Boolean  @default(false)
   updatedAt         DateTime @updatedAt
+}
+
+// P1 Batch 1 (A18): promo codes — an admin's bonus offer any player can
+// redeem (unlike referral codes, which are one per user and tie the
+// player to the admin). A redemption credits the wallet and writes a
+// BalanceAdjustment (kind "promo") + AuditLog "promo.redeem", so the
+// ledger shows it. Expired or fully-used codes are rejected.
+model PromoCode {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  bonusAmount      Decimal  @db.Decimal(12, 2)
+  bonusCurrency    String   // "cash" | "coins"
+  maxUses          Int
+  uses             Int      @default(0)
+  expiresAt        DateTime?
+  createdByAdminId String
+  createdBy        User     @relation("PromoCreator", fields: [createdByAdminId], references: [id])
+  createdAt        DateTime @default(now())
+
+  redemptions PromoRedemption[]
+
+  @@index([createdByAdminId, createdAt])
+}
+
+model PromoRedemption {
+  id          String    @id @default(cuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redeemedAt  DateTime  @default(now())
+
+  // One redemption per user per code.
+  @@unique([promoCodeId, userId])
+  @@index([userId, redeemedAt])
+}
+
+// P1 Batch 1 (A19): admin-only notes and tags on a player. The player
+// never sees them — they live on the admin player detail (and tags also
+// on the Players list rows) only.
+model PlayerNote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("NotePlayer", fields: [userId], references: [id], onDelete: Cascade)
+  adminId   String
+  admin     User     @relation("NoteAuthor", fields: [adminId], references: [id])
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model PlayerTag {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("TagPlayer", fields: [userId], references: [id], onDelete: Cascade)
+  adminId   String
+  admin     User     @relation("TagAuthor", fields: [adminId], references: [id])
+  tag       String
+  createdAt DateTime @default(now())
+
+  // A tag once per player.
+  @@unique([userId, tag])
+  @@index([userId, createdAt])
+}
+
+// P1 Batch 1 (A20): per-player limits, set by an admin (own downline
+// only). Enforced server-side in settleGame (max stake, daily loss,
+// cool-off), the play route (same, before the draw) and the deposit
+// route (daily deposit max). Null = no limit on that field. Limits are
+// per-player; the per-game economics (Batch 2 O10) still apply on top.
+model PlayerLimit {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  maxStake         Decimal?  @db.Decimal(12, 2)
+  maxDepositPerDay Decimal?  @db.Decimal(12, 2)
+  maxLossPerDay    Decimal?  @db.Decimal(12, 2)
+  coolOffUntil     DateTime?
+  updatedBy        String?
+  updatedAt        DateTime  @updatedAt
+}
+
+// P1 Batch 1 (A16): issued crash rounds, persisted so ANY past round can
+// be verified (the in-memory map only keeps 15 minutes). The round route
+// writes a row at issue time; the admin verify tool reads it back and
+// recomputes the crash point + the SHA-256 commitment. The seed is only
+// ever returned for a FINISHED round — a live round's seed stays secret.
+model CrashRound {
+  roundId    String   @id
+  serverSeed String
+  clientSeed String
+  nonce      Int
+  crashPoint Decimal  @db.Decimal(10, 2)
+  hash       String
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
 }

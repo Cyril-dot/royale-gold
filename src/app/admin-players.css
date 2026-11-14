@@ -210,3 +210,41 @@ main.rg48-page-main.rg23.admin-fb .code-chip.sm{
 /* Global player search (O6): 16px input so iOS never zooms on focus. */
 .b4-search{display:flex;gap:10px;align-items:center;margin:0 0 14px}
 .b4-search input{flex:1;min-width:0;font-size:16px}
+
+/* ---- P1 Batch 1 (admin player tools) ---- */
+/* A14: tags on a Players list row — a full-width row of the 2x2 phone
+   grid (globals.css <=640px), so the pills never stretch the row. */
+.pd-tags-inline{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px}
+/* A15: withdrawal risk flags — small red outline pills on the queue row. */
+.wd-flags{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px}
+.risk-flag{display:inline-block;font-size:11px;font-weight:700;color:#FF8A80;border:1px solid rgba(229,50,45,.55);background:rgba(229,50,45,.12);border-radius:999px;padding:2px 8px;white-space:nowrap}
+/* A16: bet lookup — forms wrap on phone; the result JSON scrolls
+   inside its own box, never the page. */
+.lookup-form{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px}
+.lookup-form input,.lookup-form select{flex:1;min-width:180px;font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
+.lookup-form label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+.lookup-form label input{flex:0 1 auto;min-width:0;color-scheme:dark}
+.lookup-pre{background:#070812;border:1px solid rgba(255,246,216,.12);border-radius:10px;padding:12px;font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:auto}
+.verify-box{background:#070812;border:1px solid rgba(242,194,48,.3);border-radius:12px;padding:12px}
+.verify-box p{overflow-wrap:anywhere}
+.verify-box code{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere}
+.lk-win{color:#3ED97E;font-weight:700}
+.lk-lose{color:#FF8A80;font-weight:700}
+/* A19: notes + tags on the player detail. Notes are plain stacked
+   cards; tags are small gold pills with a remove button. */
+.pd-notes{display:flex;flex-direction:column;gap:10px;margin:0 0 14px}
+.pd-note{background:#070812;border:1px solid rgba(255,246,216,.12);border-radius:10px;padding:10px 12px}
+.pd-note p{margin:0 0 6px;overflow-wrap:anywhere}
+.pd-note span{font-size:12px;color:var(--muted,rgba(255,246,216,.7))}
+.pd-note-form{display:flex;flex-direction:column;gap:10px}
+.pd-note-form textarea{background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit;font-size:16px;resize:vertical}
+.pd-tags{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.tag-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1);border-radius:999px;padding:3px 8px;white-space:nowrap}
+.tag-x{background:none;border:0;color:#FF8A80;font-size:14px;line-height:1;cursor:pointer;padding:0 2px}
+.pd-tag-form{display:flex;gap:10px;flex-wrap:wrap}
+.pd-tag-form input{flex:1;min-width:180px;font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
+/* A18: promo codes — one stacked row per code, redeemers on their own line. */
+.promo-list{display:flex;flex-direction:column;gap:10px;margin:0 0 14px}
+.promo-row{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border-top:1px solid rgba(255,246,216,.08);padding:11px 4px 0}
+.promo-row span{font-size:13.5px;overflow-wrap:anywhere}
+.promo-redeemers{flex-basis:100%;font-size:12.5px;color:var(--muted,rgba(255,246,216,.7))}

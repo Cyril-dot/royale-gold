@@ -97,6 +97,10 @@ export default function AccountPage() {
   const [simStats, setSimStats] = useState<GameStat[]>([]);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  // P1 Batch 1 (A18): promo code redeem — a bonus from any admin, in
+  // cash or coins (unlike the referral redeem, which is +5 coins once).
+  const [promoCode, setPromoCode] = useState("");
+  const [promoBusy, setPromoBusy] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
   // P0 Batch 3 (A11): support tickets — open one from here; it goes to
   // the admin who referred you. Your tickets are listed below the form.
@@ -208,6 +212,23 @@ export default function AccountPage() {
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Redeem failed", "lose");
     } finally { setBusy(false); }
+  };
+
+  // P1 Batch 1 (A18): redeem a promo code for its bonus.
+  const redeemPromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPromoBusy(true);
+    try {
+      const r = await api<{ code: string; bonusAmount: number; bonusCurrency: string }>("/api/promo-codes/redeem", {
+        method: "POST",
+        body: JSON.stringify({ code: promoCode.trim().toUpperCase() }),
+      });
+      toast(`Redeemed ${r.code} — +${r.bonusCurrency === "cash" ? `GH₵ ${r.bonusAmount.toFixed(2)}` : `${r.bonusAmount} coins`}`, "win");
+      setPromoCode("");
+      await refresh();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Redeem failed", "lose");
+    } finally { setPromoBusy(false); }
   };
 
   const claimCoins = async () => {
@@ -369,6 +390,16 @@ export default function AccountPage() {
           {(user.role === "admin" || user.role === "owner") && (
             <p><Link className="linklike" href="/admin/referrals">Your referral codes — share and earn →</Link></p>
           )}
+        </section>
+        {/* P1 Batch 1 (A18): promo code redeem — a bonus from any admin,
+            in cash or coins. One redemption per code per player. */}
+        <section className="ac-sec">
+          <h3>Redeem a promo code</h3>
+          <p className="rg48-mini">A bonus from an admin — cash or coins. Each code can be redeemed once per player.</p>
+          <form className="code-form" onSubmit={redeemPromo}>
+            <input type="text" placeholder="Promo code" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} required />
+            <button className="btn btn-gold" type="submit" disabled={promoBusy}>{promoBusy ? "Redeeming…" : "Redeem promo"}</button>
+          </form>
         </section>
         <section className="ac-sec">
           <h3>Daily bonus</h3>

@@ -52,6 +52,10 @@ export interface UserDetail {
   kycStatus: "not_submitted";
   commission: { total: number; model: string; rate: number };
   tickets: { id: string; subject: string; status: string; createdAt: string }[];
+  // P1 Batch 1 (A19/A20): admin-only notes + tags, and per-player limits.
+  notes: { id: string; text: string; authorId: string; authorName: string; createdAt: string }[];
+  tags: string[];
+  limits: { maxStake: number | null; maxDepositPerDay: number | null; maxLossPerDay: number | null; coolOffUntil: string | null } | null;
 }
 
 export interface AdminDashboardData {
@@ -246,4 +250,67 @@ export function useAdminDownline(previewId: string | null) {
   }, [previewId]);
   useEffect(() => { void load(); }, [load]);
   return { tree, err, load };
+}
+
+export type PlayerSegmentKey = "new" | "active" | "dormant" | "high-roller" | "at-risk";
+
+export interface PlayerSegmentRow {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  referralCodeUsed: string | null;
+  createdAt: string;
+  totalDeposited: number;
+  lastPlayedAt: string | null;
+  segments: PlayerSegmentKey[];
+  tags: string[];
+}
+
+/** P1 Batch 1 (A14): the Players list with segment flags + counts. */
+export function useAdminSegments(previewId: string | null) {
+  const [data, setData] = useState<{ players: PlayerSegmentRow[]; counts: Record<PlayerSegmentKey, number>; total: number } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/admin/players/segments?adminId=${previewId}` : "/api/admin/players/segments";
+      setData(await api<{ players: PlayerSegmentRow[]; counts: Record<PlayerSegmentKey, number>; total: number }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load players.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+export interface PromoCodeRow {
+  id: string;
+  code: string;
+  bonusAmount: number;
+  bonusCurrency: string;
+  maxUses: number;
+  uses: number;
+  usesLeft: number;
+  expired: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  redemptions: { userId: string; userName: string; userContact: string | null; redeemedAt: string }[];
+}
+
+/** P1 Batch 1 (A18): the admin's promo codes with uses left + redeemers. */
+export function useAdminPromoCodes(previewId: string | null) {
+  const [data, setData] = useState<{ codes: PromoCodeRow[] } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/admin/promo-codes?adminId=${previewId}` : "/api/admin/promo-codes";
+      setData(await api<{ codes: PromoCodeRow[] }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load promo codes.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
 }

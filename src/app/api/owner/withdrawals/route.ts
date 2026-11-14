@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
+import { annotateWithdrawalFlags } from "@/lib/withdrawals";
 
 export async function GET(req: Request) {
   try {
@@ -15,33 +16,39 @@ export async function GET(req: Request) {
     // Owner preview of one admin's panel (?preview=<adminId>): narrow to
     // that admin's queue.
     const adminId = sp.get("adminId") || undefined;
+    const flaggedOnly = sp.get("flagged") === "1";
     const limit = Math.min(Math.max(Number(sp.get("limit") ?? 50) || 50, 1), 100);
     const rows = await prisma.withdrawal.findMany({
       where: { ...(status ? { status } : {}), ...(adminId ? { adminId } : {}) },
       include: {
-        user: { select: { id: true, name: true, email: true, phone: true } },
+        user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } },
         admin: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
       take: limit,
     });
     const pending = await prisma.withdrawal.count({ where: { status: { in: ["pending", "admin_approved"] } } });
+    // P1 Batch 1 (A15): risk flags on every row (same computation as the admin queue).
+    const flags = await annotateWithdrawalFlags(rows.map((w) => ({ id: w.id, userId: w.userId, amount: dec(w.amount), user: w.user })));
     return ok({
-      withdrawals: rows.map((w) => ({
-        id: w.id,
-        userId: w.userId,
-        userName: w.user.name,
-        userContact: w.user.email ?? w.user.phone ?? null,
-        adminId: w.adminId,
-        adminName: w.admin?.name ?? null,
-        amount: dec(w.amount),
-        method: w.method,
-        status: w.status,
-        reason: w.reason,
-        decidedBy: w.decidedBy,
-        createdAt: w.createdAt.toISOString(),
-        decidedAt: w.decidedAt?.toISOString() ?? null,
-      })),
+      withdrawals: rows
+        .map((w) => ({
+          id: w.id,
+          userId: w.userId,
+          userName: w.user.name,
+          userContact: w.user.email ?? w.user.phone ?? null,
+          adminId: w.adminId,
+          adminName: w.admin?.name ?? null,
+          amount: dec(w.amount),
+          method: w.method,
+          status: w.status,
+          reason: w.reason,
+          decidedBy: w.decidedBy,
+          createdAt: w.createdAt.toISOString(),
+          decidedAt: w.decidedAt?.toISOString() ?? null,
+          flags: flags.get(w.id) ?? [],
+        }))
+        .filter((w) => !flaggedOnly || w.flags.length > 0),
       pending,
     });
   } catch (err) {

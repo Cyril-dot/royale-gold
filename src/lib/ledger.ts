@@ -212,7 +212,10 @@ export async function buildLedger(opts: {
         adminName: adminById.get(a.adminId) ?? null,
         amount: a.direction === "credit" ? amount : -amount,
         wallet: a.wallet === "coins" ? "coins" : "cash",
-        detail: `Manual ${a.direction} (${a.wallet})`,
+        // P1 Batch 1 (A17/A18): a bonus grant or a promo redemption is a
+        // BalanceAdjustment too, but the ledger names it so it is never
+        // mistaken for a manual adjustment.
+        detail: a.kind === "bonus" ? `Bonus ${a.direction} (${a.wallet})` : a.kind === "promo" ? `Promo credit (${a.wallet})` : `Manual ${a.direction} (${a.wallet})`,
         reason: a.reason, createdAt: a.createdAt.toISOString(),
       });
     }

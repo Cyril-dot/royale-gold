@@ -37,6 +37,35 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   const [blockReason, setBlockReason] = useState("");
   const [blockBusy, setBlockBusy] = useState(false);
 
+  // P1 Batch 1 (A17): bonus grant — a plain credit, no wagering rules.
+  const [bonusWallet, setBonusWallet] = useState<"cash" | "coins">("cash");
+  const [bonusAmount, setBonusAmount] = useState("");
+  const [bonusReason, setBonusReason] = useState("");
+  const [bonusExpires, setBonusExpires] = useState("");
+  const [bonusBusy, setBonusBusy] = useState(false);
+  // P1 Batch 1 (A19): admin-only notes + tags (the player never sees them).
+  const [noteText, setNoteText] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+  const [tagBusy, setTagBusy] = useState(false);
+  // P1 Batch 1 (A20): per-player limits (max stake, daily deposit/loss,
+  // cool-off). Prefilled from the limits in force when the detail loads.
+  const [limitMaxStake, setLimitMaxStake] = useState("");
+  const [limitMaxDeposit, setLimitMaxDeposit] = useState("");
+  const [limitMaxLoss, setLimitMaxLoss] = useState("");
+  const [limitCoolOff, setLimitCoolOff] = useState("");
+  const [limitBusy, setLimitBusy] = useState(false);
+  const [limitsSeeded, setLimitsSeeded] = useState(false);
+  useEffect(() => {
+    if (detail && !limitsSeeded) {
+      setLimitMaxStake(detail.limits?.maxStake != null ? String(detail.limits.maxStake) : "");
+      setLimitMaxDeposit(detail.limits?.maxDepositPerDay != null ? String(detail.limits.maxDepositPerDay) : "");
+      setLimitMaxLoss(detail.limits?.maxLossPerDay != null ? String(detail.limits.maxLossPerDay) : "");
+      setLimitCoolOff(detail.limits?.coolOffUntil ? detail.limits.coolOffUntil.slice(0, 10) : "");
+      setLimitsSeeded(true);
+    }
+  }, [detail, limitsSeeded]);
+
   const loadDetail = useCallback(async () => {
     try {
       const d = await api<UserDetail>(`/api/admin/users/${id}`);
@@ -85,6 +114,88 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Block failed", "lose");
     } finally { setBlockBusy(false); }
+  };
+
+  // P1 Batch 1 (A17): grant a bonus — a plain credit, no wagering rules.
+  const submitBonus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(bonusAmount);
+    if (!Number.isFinite(amount) || amount <= 0) { toast("Enter an amount above 0", "lose"); return; }
+    if (bonusReason.trim().length < 3) { toast("A reason is required", "lose"); return; }
+    setBonusBusy(true);
+    try {
+      await api(`/api/admin/users/${id}/bonus`, {
+        method: "POST",
+        body: JSON.stringify({ wallet: bonusWallet, amount, reason: bonusReason.trim(), ...(bonusExpires ? { expiresAt: bonusExpires } : {}) }),
+      });
+      toast(`Bonus granted — ${bonusWallet === "cash" ? fmtCash(amount) : `${amount} coins`} credited`, "win");
+      setBonusAmount("");
+      setBonusReason("");
+      setBonusExpires("");
+      await loadDetail();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Bonus failed", "lose");
+    } finally { setBonusBusy(false); }
+  };
+
+  // P1 Batch 1 (A19): add a note (admin-only).
+  const submitNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (noteText.trim().length < 2) { toast("Write the note first", "lose"); return; }
+    setNoteBusy(true);
+    try {
+      await api(`/api/admin/users/${id}/notes`, { method: "POST", body: JSON.stringify({ text: noteText.trim() }) });
+      toast("Note added", "win");
+      setNoteText("");
+      await loadDetail();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Note failed", "lose");
+    } finally { setNoteBusy(false); }
+  };
+
+  // P1 Batch 1 (A19): add / remove a tag (admin-only).
+  const submitTag = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (tagInput.trim().length < 2) { toast("Type a tag first", "lose"); return; }
+    setTagBusy(true);
+    try {
+      await api(`/api/admin/users/${id}/tags`, { method: "POST", body: JSON.stringify({ tag: tagInput.trim() }) });
+      setTagInput("");
+      await loadDetail();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Tag failed", "lose");
+    } finally { setTagBusy(false); }
+  };
+
+  const removeTag = async (tag: string) => {
+    setTagBusy(true);
+    try {
+      await api(`/api/admin/users/${id}/tags?tag=${encodeURIComponent(tag)}`, { method: "DELETE" });
+      await loadDetail();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Tag failed", "lose");
+    } finally { setTagBusy(false); }
+  };
+
+  // P1 Batch 1 (A20): save the per-player limits (empty = no limit).
+  const submitLimits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLimitBusy(true);
+    try {
+      await api(`/api/admin/users/${id}/limits`, {
+        method: "POST",
+        body: JSON.stringify({
+          maxStake: limitMaxStake.trim() === "" ? null : Number(limitMaxStake),
+          maxDepositPerDay: limitMaxDeposit.trim() === "" ? null : Number(limitMaxDeposit),
+          maxLossPerDay: limitMaxLoss.trim() === "" ? null : Number(limitMaxLoss),
+          coolOffUntil: limitCoolOff || null,
+        }),
+      });
+      toast("Limits saved — enforced from the next bet or deposit", "win");
+      await loadDetail();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Limits failed", "lose");
+    } finally { setLimitBusy(false); }
   };
 
   if (!user) return <AdminLoginPrompt />;
@@ -243,8 +354,113 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
               {blockBusy ? "Saving…" : u.blockedAt ? "Unblock player" : "Block player"}
             </button>
           </section>
+          {/* P1 Batch 1 (A17): bonus grant — a plain credit, written to the
+              ledger and audit log as "bonus.grant" so it never reads as a
+              manual adjustment. No wagering requirements (that is the
+              P1 bonus engine, O19, a later batch). An expiry is recorded
+              only — it is not auto-enforced. */}
+          <section className="admin-sec">
+            <h3>Bonus grant</h3>
+            <p className="rg48-sub">Grant a bonus — cash or coins, credited at once. A reason is required; an expiry date is recorded only and is not auto-enforced.</p>
+            <form className="pd-adjust" onSubmit={submitBonus}>
+              <div className="pd-adjust-row">
+                <label>Wallet
+                  <select value={bonusWallet} onChange={(e) => setBonusWallet(e.target.value as "cash" | "coins")} aria-label="Bonus wallet">
+                    <option value="cash">Cash (GH₵)</option>
+                    <option value="coins">Coins</option>
+                  </select>
+                </label>
+                <label>Amount
+                  <input type="number" min={0} step={bonusWallet === "cash" ? "0.01" : "1"} inputMode="decimal" placeholder={bonusWallet === "cash" ? "0.00" : "0"} value={bonusAmount} onChange={(e) => setBonusAmount(e.target.value)} aria-label="Bonus amount" required />
+                </label>
+                <label>Expiry (optional)
+                  <input type="date" value={bonusExpires} onChange={(e) => setBonusExpires(e.target.value)} aria-label="Bonus expiry" />
+                </label>
+              </div>
+              <label className="pd-adjust-reason">Reason (required)
+                <input type="text" placeholder="Why is this bonus being granted?" value={bonusReason} onChange={(e) => setBonusReason(e.target.value)} aria-label="Bonus reason" required minLength={3} />
+              </label>
+              <button className="btn btn-gold" type="submit" disabled={bonusBusy}>{bonusBusy ? "Granting…" : "Grant bonus"}</button>
+            </form>
+          </section>
         </>
       )}
+      {/* P1 Batch 1 (A19): admin-only notes + tags — the player never sees
+          these. The lists show for the owner too; the add/remove forms
+          are admin-only (hidden in preview). */}
+      <section className="admin-sec">
+        <h3>Notes ({detail.notes.length})</h3>
+        {detail.notes.length === 0 ? (
+          <p>No notes on this player yet.</p>
+        ) : (
+          <div className="pd-notes">
+            {detail.notes.map((n) => (
+              <div key={n.id} className="pd-note">
+                <p>{n.text}</p>
+                <span>{n.authorName} · {new Date(n.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {!previewId && user.role === "admin" ? (
+          <form className="pd-note-form" onSubmit={submitNote}>
+            <textarea placeholder="Add a note — only admins see this" value={noteText} onChange={(e) => setNoteText(e.target.value)} aria-label="Note" rows={2} maxLength={1000} />
+            <button className="btn btn-gold" type="submit" disabled={noteBusy}>{noteBusy ? "Adding…" : "Add note"}</button>
+          </form>
+        ) : null}
+      </section>
+      <section className="admin-sec">
+        <h3>Tags</h3>
+        {detail.tags.length === 0 ? (
+          <p>No tags on this player yet.</p>
+        ) : (
+          <div className="pd-tags">
+            {detail.tags.map((t) => (
+              <span key={t} className="tag-pill">{t}
+                {!previewId && user.role === "admin" ? <button type="button" className="tag-x" onClick={() => void removeTag(t)} aria-label={`Remove tag ${t}`}>×</button> : null}
+              </span>
+            ))}
+          </div>
+        )}
+        {!previewId && user.role === "admin" ? (
+          <form className="pd-tag-form" onSubmit={submitTag}>
+            <input type="text" placeholder="Add a tag — e.g. VIP, fraud watch" value={tagInput} onChange={(e) => setTagInput(e.target.value)} aria-label="Tag" maxLength={30} />
+            <button className="btn btn-gold" type="submit" disabled={tagBusy}>{tagBusy ? "Adding…" : "Add tag"}</button>
+          </form>
+        ) : null}
+      </section>
+      {/* P1 Batch 1 (A20): per-player limits. The form is admin-only; the
+          limits in force show for the owner too. Empty = no limit. */}
+      <section className="admin-sec">
+        <h3>Limits</h3>
+        <p className="rg48-sub">Per-player limits, enforced server-side on top of the per-game economics. A cool-off blocks play entirely until the date.</p>
+        {!previewId && user.role === "admin" ? (
+          <form className="pd-adjust" onSubmit={submitLimits}>
+            <div className="pd-adjust-row">
+              <label>Max stake per bet (GH₵)
+                <input type="number" min={0} step="0.01" inputMode="decimal" placeholder="No limit" value={limitMaxStake} onChange={(e) => setLimitMaxStake(e.target.value)} aria-label="Max stake per bet" />
+              </label>
+              <label>Max deposit per day (GH₵)
+                <input type="number" min={0} step="0.01" inputMode="decimal" placeholder="No limit" value={limitMaxDeposit} onChange={(e) => setLimitMaxDeposit(e.target.value)} aria-label="Max deposit per day" />
+              </label>
+              <label>Max loss per day (GH₵)
+                <input type="number" min={0} step="0.01" inputMode="decimal" placeholder="No limit" value={limitMaxLoss} onChange={(e) => setLimitMaxLoss(e.target.value)} aria-label="Max loss per day" />
+              </label>
+              <label>Cool-off until
+                <input type="date" value={limitCoolOff} onChange={(e) => setLimitCoolOff(e.target.value)} aria-label="Cool-off until" />
+              </label>
+            </div>
+            <button className="btn btn-gold" type="submit" disabled={limitBusy}>{limitBusy ? "Saving…" : "Save limits"}</button>
+          </form>
+        ) : (
+          <div className="sum-cards">
+            {card("Max stake", detail.limits?.maxStake != null ? fmtCash(detail.limits.maxStake) : "No limit")}
+            {card("Max deposit / day", detail.limits?.maxDepositPerDay != null ? fmtCash(detail.limits.maxDepositPerDay) : "No limit")}
+            {card("Max loss / day", detail.limits?.maxLossPerDay != null ? fmtCash(detail.limits.maxLossPerDay) : "No limit")}
+            {card("Cool-off", detail.limits?.coolOffUntil ? `Until ${new Date(detail.limits.coolOffUntil).toLocaleDateString("en-GB")}` : "None")}
+          </div>
+        )}
+      </section>
       <section className="admin-sec">
         <h3>Full deposit history</h3>
         {detail.deposits.length === 0 ? <p>No deposits yet.</p> : (

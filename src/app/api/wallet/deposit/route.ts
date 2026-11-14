@@ -6,6 +6,8 @@ import { dec, round2, toDecimal } from "@/lib/money";
 import { getPaymentMethodConfig, getPlatformSettings } from "@/lib/game-config";
 // P0 Batch 3 (O4): the commission rule in force decides what a deposit stamps.
 import { getEffectiveRuleNow } from "@/lib/commission";
+// P1 Batch 1 (A20): per-player daily deposit max.
+import { checkDepositLimit } from "@/lib/limits";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -51,6 +53,10 @@ export async function POST(req: Request) {
     if (pm.maxDeposit != null && amount > pm.maxDeposit) {
       return fail(`Maximum deposit via ${method} is GH₵ ${round2(pm.maxDeposit).toFixed(2)}`);
     }
+
+    // P1 Batch 1 (A20): per-player daily deposit max.
+    const limitErr = await checkDepositLimit(user.id, amount);
+    if (limitErr) return fail(limitErr, 403);
 
     const result = await prisma.$transaction(async (tx) => {
       const fresh = await tx.user.findUnique({ where: { id: user.id } });

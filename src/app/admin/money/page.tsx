@@ -16,10 +16,10 @@ import { useStore } from "../../../lib/store";
 import { useAdminContext, todayStr } from "../../../lib/admin-client";
 import { canAccessSection } from "../../../lib/rbac";
 import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
-import { WITHDRAWAL_OWNER_THRESHOLD } from "../../../lib/withdrawals";
+import { WITHDRAWAL_RISK_LABELS, WITHDRAWAL_OWNER_THRESHOLD, type WithdrawalRiskFlag } from "../../../lib/withdrawal-flags";
 
 interface DepositRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; pctInForce: number; commission: number; createdAt: string }
-interface WithdrawalRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; status: string; reason: string | null; decidedBy: string | null; createdAt: string; decidedAt: string | null }
+interface WithdrawalRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; status: string; reason: string | null; decidedBy: string | null; createdAt: string; decidedAt: string | null; flags: string[] }
 interface LedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; detail: string; stake?: number; payout?: number; method?: string; status?: string; reason?: string; createdAt: string }
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"];
@@ -53,6 +53,8 @@ function AdminMoneyInner() {
 
   // --- Withdrawals state ---
   const [wdStatus, setWdStatus] = useState("");
+  // P1 Batch 1 (A15): show flagged withdrawal requests only.
+  const [wdFlaggedOnly, setWdFlaggedOnly] = useState(false);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRow[] | null>(null);
   const [wdPending, setWdPending] = useState(0);
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -77,8 +79,13 @@ function AdminMoneyInner() {
   }, [previewId, depMethod, depQ]);
   const wdUrl = useCallback(() => {
     const base = previewId ? `/api/owner/withdrawals?adminId=${previewId}` : "/api/admin/withdrawals";
-    return wdStatus ? `${base}${base.includes("?") ? "&" : "?"}status=${wdStatus}` : base;
-  }, [previewId, wdStatus]);
+    const p = new URLSearchParams();
+    if (wdStatus) p.set("status", wdStatus);
+    // P1 Batch 1 (A15): flagged-only filter.
+    if (wdFlaggedOnly) p.set("flagged", "1");
+    const qs = p.toString();
+    return qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base;
+  }, [previewId, wdStatus, wdFlaggedOnly]);
   const ledUrl = useCallback(() => {
     const base = previewId ? `/api/owner/ledger?adminId=${previewId}` : "/api/admin/ledger";
     const p = new URLSearchParams();
@@ -224,6 +231,7 @@ function AdminMoneyInner() {
               {["pending", "admin_approved", "approved", "rejected"].map((s) => (
                 <button key={s} type="button" className={wdStatus === s ? "on" : ""} onClick={() => setWdStatus(s)}>{s === "admin_approved" ? "Awaiting owner" : s[0].toUpperCase() + s.slice(1)}</button>
               ))}
+              <button type="button" className={wdFlaggedOnly ? "on" : ""} onClick={() => setWdFlaggedOnly(!wdFlaggedOnly)}>Flagged only</button>
             </div>
             {withdrawals === null ? <p>Loading withdrawals…</p> : withdrawals.length === 0 ? (
               <p>No withdrawal requests.</p>
@@ -237,6 +245,9 @@ function AdminMoneyInner() {
                       <span className="wd-date">{new Date(w.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                     <span className={`wd-status wd-${w.status}`}>{w.status === "admin_approved" ? "Awaiting owner" : w.status}</span>
+                    {w.flags && w.flags.length > 0 ? (
+                      <span className="wd-flags">{w.flags.map((f) => <span key={f} className="risk-flag">{WITHDRAWAL_RISK_LABELS[f as WithdrawalRiskFlag] ?? f}</span>)}</span>
+                    ) : null}
                     {w.reason ? <p className="wd-reason">Reason: {w.reason}</p> : null}
                     {!previewId && (w.status === "pending" || w.status === "admin_approved") && (
                       <div className="wd-actions">

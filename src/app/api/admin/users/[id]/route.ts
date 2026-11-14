@@ -17,6 +17,9 @@ import { playerCommission } from "@/lib/commission";
  * review queue is P1 A21), the commission earned for the viewing admin
  * (recomputed by the rules engine; the commission page is the source of
  * truth), and their support tickets.
+ *
+ * P1 Batch 1 (A19/A20): the same response also carries the admin-only
+ * notes and tags on this player, and the per-player limits in force.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -31,7 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (me.role === "admin" && user.referredByAdminId !== me.id) {
       return fail("This user was not referred by you", 404);
     }
-    const [deposits, redemptions, rounds, tickets] = await Promise.all([
+    const [deposits, redemptions, rounds, tickets, notes, tags, limit] = await Promise.all([
       prisma.depositEvent.findMany({
         where: { userId: id },
         orderBy: { createdAt: "desc" },
@@ -48,6 +51,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         take: 10,
         select: { id: true, subject: true, status: true, createdAt: true },
       }),
+      // P1 Batch 1 (A19): admin-only notes + tags (the player never sees them).
+      prisma.playerNote.findMany({
+        where: { userId: id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: { admin: { select: { id: true, name: true } } },
+      }),
+      prisma.playerTag.findMany({
+        where: { userId: id },
+        orderBy: { createdAt: "asc" },
+        select: { tag: true },
+      }),
+      // P1 Batch 1 (A20): per-player limits in force.
+      prisma.playerLimit.findUnique({ where: { userId: id } }),
     ]);
     const totalDeposited = deposits.reduce((s, d) => s + dec(d.amount), 0);
     const totalCommission = deposits.reduce((s, d) => s + dec(d.commission), 0);
@@ -109,6 +126,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         status: t.status,
         createdAt: t.createdAt.toISOString(),
       })),
+      // P1 Batch 1 (A19/A20): admin-only notes + tags, and the
+      // per-player limits in force (null = no limits set).
+      notes: notes.map((n) => ({
+        id: n.id,
+        text: n.text,
+        authorId: n.adminId,
+        authorName: n.admin.name,
+        createdAt: n.createdAt.toISOString(),
+      })),
+      tags: tags.map((t) => t.tag),
+      limits: limit
+        ? {
+            maxStake: limit.maxStake == null ? null : dec(limit.maxStake),
+            maxDepositPerDay: limit.maxDepositPerDay == null ? null : dec(limit.maxDepositPerDay),
+            maxLossPerDay: limit.maxLossPerDay == null ? null : dec(limit.maxLossPerDay),
+            coolOffUntil: limit.coolOffUntil?.toISOString() ?? null,
+          }
+        : null,
     });
   } catch (err) {
     return toErrorResponse(err);

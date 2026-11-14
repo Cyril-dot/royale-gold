@@ -27,6 +27,8 @@ const TABS: { path: string; section: AdminSection; label: string }[] = [
   { path: "/admin/money", section: "money", label: "Money" },
   { path: "/admin/activity", section: "activity", label: "Activity" },
   { path: "/admin/tickets", section: "tickets", label: "Tickets" },
+  // P1 Batch 1 (A16): bet lookup + provably-fair verify.
+  { path: "/admin/lookup", section: "lookup", label: "Lookup" },
 ];
 
 export function AdminNav() {
