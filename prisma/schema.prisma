@@ -99,6 +99,11 @@ model User {
   // P1 Batch 2 (A23): in-app notifications received + sent by this admin.
   notificationsReceived Notification[] @relation("NotificationPlayer")
   notificationsSent     Notification[] @relation("NotificationAdmin")
+  // P1 Batch 3 (O19): promotions this owner created, promotions
+  // targeting this admin's downline, and promotion grants received.
+  promotionsCreated Promotion[]     @relation("PromotionCreator")
+  promotionsTargeted Promotion[]    @relation("PromotionTarget")
+  promotionGrants   PromotionGrant[]
 }
 
 model ReferralCode {
@@ -264,7 +269,7 @@ model AuditLog {
   id        String   @id @default(cuid())
   actorId   String
   actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send"
+  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send" | "promotion.create" | "promotion.grant" | "promotion.cashback" | "promotion.toggle"
   targetId  String?
   detail    String?
   createdAt DateTime @default(now())
@@ -531,4 +536,57 @@ model Notification {
 
   @@index([userId, createdAt])
   @@index([adminId, createdAt])
+}
+
+// P1 Batch 3 (O19): the owner's promotion engine — named campaigns on
+// top of the admin bonus grant (A17) and promo codes (A18), which it
+// does NOT change. Three types, no wagering requirements anywhere
+// (there is no wagering system in this codebase):
+//   deposit_match — match a % of a deposit up to `cap` GH₵, once per
+//     player per promotion, credited automatically in the deposit route.
+//   free_coins    — grant `coinAmount` coins on signup or on first
+//     deposit (`trigger`), once per player per promotion, credited in
+//     the register / deposit routes.
+//   cashback      — return `percent`% of a day's net cash loss, capped
+//     at `cap` GH₵. There is no cron infra, so cashback is paid by a
+//     MANUAL owner action ("Pay cashback for {date}"), never automatic.
+// `targetAdminId` null = every player; set = that admin's downline
+// only. A promotion only grants while live: active AND now inside
+// [startAt, endAt]. Grants are one row per credit, so the ledger and
+// the audit log can prove every one.
+model Promotion {
+  id            String   @id @default(cuid())
+  name          String
+  type          String   // "deposit_match" | "free_coins" | "cashback"
+  percent       Decimal  @db.Decimal(5, 2) // match % / cashback % (0 for free_coins)
+  cap           Decimal? @db.Decimal(12, 2) // max grant per player, GH₵; null = no cap
+  coinAmount    Int?     // free_coins only: coins granted
+  trigger       String?  // free_coins only: "signup" | "first_deposit"
+  startAt       DateTime
+  endAt         DateTime?
+  targetAdminId String?
+  targetAdmin   User?    @relation("PromotionTarget", fields: [targetAdminId], references: [id])
+  active        Boolean  @default(true)
+  createdBy     String
+  creator       User     @relation("PromotionCreator", fields: [createdBy], references: [id])
+  createdAt     DateTime @default(now())
+
+  grants PromotionGrant[]
+
+  @@index([active, startAt])
+}
+
+model PromotionGrant {
+  id          String   @id @default(cuid())
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Decimal  @db.Decimal(12, 2) // GH₵ for cash grants, whole coins for free_coins
+  wallet      String   // "cash" | "coins"
+  day         String   @default("") // cashback only: the YYYY-MM-DD loss day; "" otherwise
+  createdAt   DateTime @default(now())
+
+  @@index([promotionId, userId])
+  @@index([userId, createdAt])
 }

@@ -8,6 +8,9 @@ import { getPaymentMethodConfig, getPlatformSettings } from "@/lib/game-config";
 import { getEffectiveRuleNow } from "@/lib/commission";
 // P1 Batch 1 (A20): per-player daily deposit max.
 import { checkDepositLimit } from "@/lib/limits";
+// P1 Batch 3 (O19): promotion engine — deposit-match + first-deposit
+// free coins, applied in the same transaction as the deposit.
+import { applyDepositPromotions } from "@/lib/promotions";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -97,13 +100,25 @@ export async function POST(req: Request) {
           commission: round2(commission),
         },
       });
-      return { updated, event, commission };
+      // P1 Batch 3 (O19): promotion engine — a live deposit_match
+      // credits a % of this deposit (capped, once per player per
+      // promotion), and a live free_coins promotion with trigger
+      // "first_deposit" grants its coins on this first deposit. Both
+      // land in the same transaction as the deposit itself. The balance
+      // returned below is re-read so it includes any match.
+      const promoGrants = await applyDepositPromotions(tx, user.id, fresh.name, amount, fresh.referredByAdminId);
+      const updatedAfterPromo =
+        promoGrants.length > 0
+          ? await tx.user.findUnique({ where: { id: user.id } })
+          : updated;
+      return { updated: updatedAfterPromo ?? updated, event, commission, promoGrants };
     });
 
     return ok({
       cash: dec(result.updated.cashBalance),
       coins: result.updated.coins,
       sim: dec(result.updated.simBalance),
+      promotions: result.promoGrants,
       deposit: {
         id: result.event.id,
         amount: dec(result.event.amount),

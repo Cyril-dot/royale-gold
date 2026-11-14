@@ -52,3 +52,21 @@
 @media (hover:hover) and (pointer:fine){
   .btn-danger:hover{background:#c62a26}
 }
+
+/* --- P1 Batch 3: owner analytics (revenue, RTP, fraud, promotions) ---
+   Same visual language as the rest of the owner panel. The daily-GGR
+   bar chart is plain divs (no library); the RTP flag pills follow the
+   .sev-pill pattern from the admin fraud page. Amounts stay Outfit
+   bold, never Anton. Inputs are 16px (no iOS zoom); buttons 44px. */
+.p1b3-bars{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.p1b3-bar-row{display:flex;align-items:center;gap:8px;font-size:13px}
+.p1b3-bar-label{flex:none;width:44px;color:var(--muted,rgba(255,246,216,.7))}
+.p1b3-bar-track{flex:1;height:14px;border-radius:99px;background:rgba(255,246,216,.08);overflow:hidden}
+.p1b3-bar-fill{display:block;height:100%;border-radius:99px;background:var(--gold,#F2C230)}
+.p1b3-bar-val{flex:none;min-width:86px;text-align:right;font-weight:800;white-space:nowrap}
+.p1b3-flag{font-size:11px;font-weight:800;letter-spacing:.05em;padding:3px 8px;border-radius:999px;white-space:nowrap;border:1px solid rgba(255,246,216,.35);color:var(--muted,rgba(255,246,216,.7))}
+.p1b3-flag-ok{color:#3ED97E;border-color:rgba(62,217,126,.5);background:rgba(62,217,126,.1)}
+.p1b3-flag-over{color:#FF8A80;border:1px solid rgba(229,50,45,.55);background:rgba(229,50,45,.12)}
+.p1b3-flag-under{color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1)}
+.p1b3-cb{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
+.p1b3-cb input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font-family:var(--font);font-size:16px}

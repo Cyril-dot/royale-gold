@@ -591,6 +591,86 @@ export default function OwnerPage() {
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchedQ, setSearchedQ] = useState("");
 
+  // P1 Batch 3 (O16/O17): revenue breakdowns + RTP monitor — one shared
+  // period, so the two sections always agree on the dates they show.
+  interface RevenueGameRow { game: string; name: string; currency: string; rounds: number; stakes: number; payouts: number; ggr: number }
+  interface RevenueAdminRow { adminId: string | null; adminName: string; deposits: number; totalDeposited: number; commission: number; ggr: number }
+  interface RevenueDayRow { date: string; ggr: number; deposits: number; totalDeposited: number; commission: number }
+  interface RevenueMethodRow { method: string; deposits: number; total: number }
+  interface RevenueData { from: string; to: string; byGameCash: RevenueGameRow[]; byGameCoins: RevenueGameRow[]; byAdmin: RevenueAdminRow[]; byDay: RevenueDayRow[]; byMethod: RevenueMethodRow[]; totals: { ggrCash: number; ggrCoins: number; deposits: number; totalDeposited: number; commission: number } }
+  interface RtpRow { slug: string; name: string; currency: string; rounds: number; stakes: number; payouts: number; actualRtp: number | null; baseRtp: number | null; status: string }
+  const [anPreset, setAnPreset] = useState<"today" | "week" | "month" | "custom">("month");
+  const [anFrom, setAnFrom] = useState("");
+  const [anTo, setAnTo] = useState("");
+  const [revenue, setRevenue] = useState<RevenueData | null>(null);
+  const [rtp, setRtp] = useState<{ from: string; to: string; rows: RtpRow[] } | null>(null);
+  const loadAnalytics = useCallback(async () => {
+    const today = todayStr();
+    let from = today;
+    let to = today;
+    if (anPreset === "week") {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - 6);
+      from = d.toISOString().slice(0, 10);
+    } else if (anPreset === "month") {
+      from = `${today.slice(0, 8)}01`;
+    } else if (anPreset === "custom") {
+      from = anFrom || today;
+      to = anTo || today;
+    }
+    try {
+      const [rev, r] = await Promise.all([
+        api<RevenueData>(`/api/owner/revenue?from=${from}&to=${to}`),
+        api<{ from: string; to: string; rows: RtpRow[] }>(`/api/owner/rtp?from=${from}&to=${to}`),
+      ]);
+      setRevenue(rev);
+      setRtp(r);
+    } catch { setRevenue(null); setRtp(null); }
+  }, [anPreset, anFrom, anTo]);
+  useEffect(() => { void loadAnalytics(); }, [loadAnalytics]);
+
+  // P1 Batch 3 (O18): the global fraud console — same signals as the
+  // admin fraud pages, over every player, with per-admin rollups.
+  interface OwnerFraudAlert { id: string; severity: string; signal: string; userId: string; userName: string; userContact: string | null; reason: string; createdAt: string }
+  interface OwnerFraudRollup { adminId: string | null; adminName: string; high: number; medium: number; total: number }
+  const [ownerFraud, setOwnerFraud] = useState<{ alerts: OwnerFraudAlert[]; counts: { high: number; medium: number }; byAdmin: OwnerFraudRollup[] } | null>(null);
+  const loadOwnerFraud = useCallback(async () => {
+    try {
+      setOwnerFraud(await api<{ alerts: OwnerFraudAlert[]; counts: { high: number; medium: number }; byAdmin: OwnerFraudRollup[] }>("/api/owner/fraud"));
+    } catch { setOwnerFraud(null); }
+  }, []);
+  useEffect(() => { void loadOwnerFraud(); }, [loadOwnerFraud]);
+
+  // P1 Batch 3 (O19): the promotion engine — the owner's campaigns.
+  interface PromoRow { id: string; name: string; type: string; percent: number; cap: number | null; coinAmount: number | null; trigger: string | null; startAt: string; endAt: string | null; targetAdminId: string | null; targetAdminName: string | null; active: boolean; grants: number; createdAt: string }
+  interface PromoGrantRow { id: string; promotionId: string; promotionName: string; userId: string; userName: string; amount: number; wallet: string; day: string; createdAt: string }
+  const [promos, setPromos] = useState<PromoRow[] | null>(null);
+  const [promoGrants, setPromoGrants] = useState<PromoGrantRow[] | null>(null);
+  const loadPromos = useCallback(async () => {
+    try {
+      const r = await api<{ promotions: PromoRow[]; recentGrants: PromoGrantRow[] }>("/api/owner/promotions");
+      setPromos(r.promotions);
+      setPromoGrants(r.recentGrants);
+    } catch { setPromos([]); setPromoGrants([]); }
+  }, []);
+  useEffect(() => { void loadPromos(); }, [loadPromos]);
+  const [promoName, setPromoName] = useState("");
+  const [promoType, setPromoType] = useState<"deposit_match" | "free_coins" | "cashback">("deposit_match");
+  const [promoPercent, setPromoPercent] = useState(50);
+  const [promoCap, setPromoCap] = useState("");
+  const [promoCoins, setPromoCoins] = useState(25);
+  const [promoTrigger, setPromoTrigger] = useState<"signup" | "first_deposit">("signup");
+  const [promoStart, setPromoStart] = useState("");
+  const [promoEnd, setPromoEnd] = useState("");
+  const [promoTarget, setPromoTarget] = useState("");
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [cbDate, setCbDate] = useState("");
+  const [cbBusy, setCbBusy] = useState<string | null>(null);
+  const [cbResult, setCbResult] = useState<{ promotionId: string; date: string; paid: number; total: number } | null>(null);
+  // Dates start empty and are set on mount (calling new Date() during
+  // render breaks the prerender — the same rule as the other pickers).
+  useEffect(() => { setPromoStart(todayStr()); setCbDate(todayStr()); }, []);
+
   if (!user) {
     return (
       <main className="rg48-page-main"><div className="wrap">
@@ -609,6 +689,60 @@ export default function OwnerPage() {
       </div></main>
     );
   }
+
+  // P1 Batch 3 (O19): create / pause-resume / manual cashback.
+  const createPromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPromoBusy(true);
+    try {
+      await api("/api/owner/promotions", {
+        method: "POST",
+        body: JSON.stringify({
+          name: promoName.trim(),
+          type: promoType,
+          percent: promoType === "free_coins" ? undefined : promoPercent,
+          cap: promoCap.trim() === "" ? null : Number(promoCap),
+          coinAmount: promoType === "free_coins" ? promoCoins : undefined,
+          trigger: promoType === "free_coins" ? promoTrigger : undefined,
+          startAt: promoStart,
+          endAt: promoEnd || undefined,
+          targetAdminId: promoTarget || undefined,
+        }),
+      });
+      toast("Promotion created", "win");
+      setPromoName("");
+      setPromoCap("");
+      setPromoEnd("");
+      setPromoTarget("");
+      await loadPromos();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not create promotion", "lose");
+    } finally { setPromoBusy(false); }
+  };
+  const togglePromo = async (p: PromoRow) => {
+    try {
+      await api(`/api/owner/promotions/${p.id}/toggle`, { method: "POST", body: JSON.stringify({ active: !p.active }) });
+      toast(p.active ? "Promotion paused — it grants nothing new" : "Promotion resumed", "win");
+      await loadPromos();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not toggle promotion", "lose");
+    }
+  };
+  const payCashbackFor = async (p: PromoRow) => {
+    if (!cbDate) { toast("Pick a date to pay cashback for", "lose"); return; }
+    setCbBusy(p.id);
+    try {
+      const r = await api<{ promotionId: string; date: string; paid: number; total: number }>(`/api/owner/promotions/${p.id}/pay-cashback`, {
+        method: "POST",
+        body: JSON.stringify({ date: cbDate }),
+      });
+      setCbResult(r);
+      toast(`Cashback paid — ${r.paid} ${r.paid === 1 ? "player" : "players"}, ${fmtCash(r.total)}`, "win");
+      await loadPromos();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Cashback payment failed", "lose");
+    } finally { setCbBusy(null); }
+  };
 
   const addAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -666,6 +800,16 @@ export default function OwnerPage() {
   // detail tolerates an owner with no preview).
   const playerDetailHref = (p: OwnerSearchPlayer) =>
     p.referringAdmin ? `/admin/players/${p.id}?preview=${p.referringAdmin.id}` : `/admin/players/${p.id}`;
+
+  // P1 Batch 3 (O18): the same signal labels as the admin fraud page.
+  const FRAUD_SIGNAL_LABELS: Record<string, string> = {
+    "withdrawal-flags": "Flagged withdrawal",
+    "rapid-withdrawals": "Rapid withdrawals",
+    "deposit-no-play": "Deposit, no play",
+    "deposit-then-withdraw": "Deposit then withdraw",
+  };
+  const rtpStatusLabel = (s: string) =>
+    s === "flagged-over" ? "OVER-PAYING" : s === "flagged-under" ? "UNDER-PAYING" : s === "ok" ? "OK" : s === "small-sample" ? "Too few rounds" : "Skill — no base";
 
   return (
     <main className="rg48-page-main">
@@ -1124,6 +1268,280 @@ export default function OwnerPage() {
           <p className="rg48-sub">The platform rules for both wallets. The conversion rate is enforced server-side; the wallet card still reads GH₵5 = 1 coin until its text is updated.</p>
           {ownerWallet === null ? <p>Loading wallet config…</p> : (
             <OwnerWalletForm key={JSON.stringify(ownerWallet)} w={ownerWallet} onSave={saveOwnerWallet} />
+          )}
+        </section>
+
+        {/* P1 Batch 3 (O16): revenue breakdowns — by game, by admin, by
+            day, by payment method. All from the real tables; commission
+            is recomputed by the rules engine, the same figure the
+            Commission page shows. */}
+        <section className="admin-sec">
+          <h3>Revenue breakdowns</h3>
+          <p className="rg48-sub">Where the money comes from, for the period below — by game, by admin, by day, and by payment method. GGR is stakes minus payouts; coin games are shown apart because their GGR is in coins, not GH₵.</p>
+          <div className="money-chips" role="group" aria-label="Analytics period">
+            {(["today", "week", "month", "custom"] as const).map((p) => (
+              <button key={p} type="button" className={anPreset === p ? "on" : ""} onClick={() => setAnPreset(p)}>
+                {p === "today" ? "Today" : p === "week" ? "Last 7 days" : p === "month" ? "This month" : "Custom"}
+              </button>
+            ))}
+          </div>
+          {anPreset === "custom" && (
+            <div className="money-dates">
+              <label>From <input type="date" value={anFrom} max={todayStr()} onChange={(e) => setAnFrom(e.target.value)} /></label>
+              <label>To <input type="date" value={anTo} max={todayStr()} onChange={(e) => setAnTo(e.target.value)} /></label>
+            </div>
+          )}
+          {revenue === null ? <p>Loading revenue…</p> : (
+            <>
+              <div className="sum-cards">
+                <div className="sum-card"><span>GGR (cash)</span><b>{fmtCash(revenue.totals.ggrCash)}</b></div>
+                <div className="sum-card"><span>GGR (coins)</span><b>{revenue.totals.ggrCoins} coins</b></div>
+                <div className="sum-card"><span>Deposits</span><b>{fmtCash(revenue.totals.totalDeposited)}</b></div>
+                <div className="sum-card"><span>Commission</span><b>{fmtCash(revenue.totals.commission)}</b></div>
+              </div>
+              <h4>By game — cash (top 5 by GGR are the first five rows)</h4>
+              {revenue.byGameCash.length === 0 ? <p>No cash rounds in this period.</p> : (
+                <div className="rg48-twrap">
+                  <table className="dep-table">
+                    <thead><tr><th>Game</th><th>Rounds</th><th>Stakes</th><th>Payouts</th><th>GGR</th></tr></thead>
+                    <tbody>
+                      {revenue.byGameCash.map((g) => (
+                        <tr key={g.game}><td>{g.name}</td><td>{g.rounds}</td><td>{fmtCash(g.stakes)}</td><td>{fmtCash(g.payouts)}</td><td>{fmtCash(g.ggr)}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <h4>By game — coins</h4>
+              {revenue.byGameCoins.length === 0 ? <p>No coin rounds in this period.</p> : (
+                <div className="rg48-twrap">
+                  <table className="dep-table">
+                    <thead><tr><th>Game</th><th>Rounds</th><th>Stakes</th><th>Payouts</th><th>GGR</th></tr></thead>
+                    <tbody>
+                      {revenue.byGameCoins.map((g) => (
+                        <tr key={g.game}><td>{g.name}</td><td>{g.rounds}</td><td>{g.stakes} coins</td><td>{g.payouts} coins</td><td>{g.ggr} coins</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <h4>By admin</h4>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Admin</th><th>Deposits</th><th>Deposited</th><th>Commission</th><th>GGR</th></tr></thead>
+                  <tbody>
+                    {revenue.byAdmin.map((a) => (
+                      <tr key={a.adminId ?? "none"}><td>{a.adminName}</td><td>{a.deposits}</td><td>{fmtCash(a.totalDeposited)}</td><td>{fmtCash(a.commission)}</td><td>{fmtCash(a.ggr)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <h4>By day</h4>
+              {revenue.byDay.length === 0 ? <p>No days in this period.</p> : (
+                <>
+                  <div className="p1b3-bars" aria-label="Daily GGR bar chart">
+                    {revenue.byDay.map((d) => {
+                      const max = Math.max(0, ...revenue.byDay.map((x) => x.ggr));
+                      const w = max > 0 && d.ggr > 0 ? Math.round((d.ggr / max) * 100) : 0;
+                      return (
+                        <div key={d.date} className="p1b3-bar-row">
+                          <span className="p1b3-bar-label">{d.date.slice(5)}</span>
+                          <span className="p1b3-bar-track"><span className="p1b3-bar-fill" style={{ width: `${w}%` }} /></span>
+                          <b className="p1b3-bar-val">{fmtCash(d.ggr)}</b>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="rg48-twrap">
+                    <table className="dep-table">
+                      <thead><tr><th>Date</th><th>GGR</th><th>Deposits</th><th>Deposited</th><th>Commission</th></tr></thead>
+                      <tbody>
+                        {revenue.byDay.map((d) => (
+                          <tr key={d.date}><td>{d.date}</td><td>{fmtCash(d.ggr)}</td><td>{d.deposits}</td><td>{fmtCash(d.totalDeposited)}</td><td>{fmtCash(d.commission)}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+              <h4>By payment method</h4>
+              {revenue.byMethod.length === 0 ? <p>No deposits in this period.</p> : (
+                <div className="rg48-twrap">
+                  <table className="dep-table">
+                    <thead><tr><th>Method</th><th>Deposits</th><th>Total</th></tr></thead>
+                    <tbody>
+                      {revenue.byMethod.map((m) => (
+                        <tr key={m.method}><td>{m.method}</td><td>{m.deposits}</td><td>{fmtCash(m.total)}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* P1 Batch 3 (O17): RTP monitor — actual RTP per game against
+            the base RTP the tiles print. READ-ONLY: it changes no
+            game's maths or limits. */}
+        <section className="admin-sec">
+          <h3>RTP monitor</h3>
+          <p className="rg48-sub">Actual RTP per game for the same period above (payouts ÷ stakes), against the base RTP the game tiles print. A game is flagged when its actual RTP is 10+ points off its base with 50+ rounds; below 50 rounds the sample is too small to flag.</p>
+          {rtp === null ? <p>Loading RTP…</p> : (
+            <div className="rg48-twrap">
+              <table className="dep-table">
+                <thead><tr><th>Game</th><th>Rounds</th><th>Stakes</th><th>Payouts</th><th>Actual RTP</th><th>Base RTP</th><th>Status</th></tr></thead>
+                <tbody>
+                  {rtp.rows.map((r) => (
+                    <tr key={r.slug}>
+                      <td>{r.name} <span className="ow-game-cur">{r.currency === "coins" ? "Coins" : "Cash"}</span></td>
+                      <td>{r.rounds}</td>
+                      <td>{r.currency === "coins" ? `${Math.round(r.stakes)} coins` : fmtCash(r.stakes)}</td>
+                      <td>{r.currency === "coins" ? `${Math.round(r.payouts)} coins` : fmtCash(r.payouts)}</td>
+                      <td>{r.actualRtp === null ? "—" : `${r.actualRtp.toFixed(1)}%`}</td>
+                      <td>{r.baseRtp === null ? "Skill" : `${r.baseRtp}%`}</td>
+                      <td><span className={`p1b3-flag${r.status === "flagged-over" ? " p1b3-flag-over" : r.status === "flagged-under" ? " p1b3-flag-under" : r.status === "ok" ? " p1b3-flag-ok" : ""}`}>{rtpStatusLabel(r.status)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="ow-day-cap">Skill games (Trivia, Snake, 2048, Brick Breaker, Stack Tower, Bubble Shooter, Bullseye Darts, Connect Four) print “Skill” on their tiles, not a number — they have no base RTP to compare against, so they are never flagged.</p>
+        </section>
+
+        {/* P1 Batch 3 (O18): the global fraud console — the same live
+            signals as the admin fraud pages, over every player, with
+            per-admin rollups. */}
+        <section className="admin-sec">
+          <h3>Fraud console</h3>
+          <p className="rg48-sub">The same live signals as the admin fraud pages, computed over every player. Tap a player to open their detail.</p>
+          {ownerFraud === null ? <p>Loading fraud console…</p> : (
+            <>
+              <div className="sum-cards">
+                <div className="sum-card"><span>High</span><b>{ownerFraud.counts.high}</b></div>
+                <div className="sum-card"><span>Medium</span><b>{ownerFraud.counts.medium}</b></div>
+                <div className="sum-card"><span>Total</span><b>{ownerFraud.alerts.length}</b></div>
+              </div>
+              <button className="btn btn-ghost" type="button" onClick={() => void loadOwnerFraud()}>Refresh alerts</button>
+              <h4>By admin</h4>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Admin</th><th>High</th><th>Medium</th><th>Total</th></tr></thead>
+                  <tbody>
+                    {ownerFraud.byAdmin.map((r) => (
+                      <tr key={r.adminId ?? "none"}><td>{r.adminName}</td><td>{r.high}</td><td>{r.medium}</td><td>{r.total}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {ownerFraud.alerts.length === 0 ? <p>No fraud signals platform-wide right now.</p> : (
+                <div className="fraud-list">
+                  {ownerFraud.alerts.map((a) => (
+                    <article key={a.id} className="fraud-row">
+                      <div className="fraud-head">
+                        <span className={`sev-pill sev-${a.severity}`}>{a.severity === "high" ? "HIGH" : "MEDIUM"}</span>
+                        <b>{FRAUD_SIGNAL_LABELS[a.signal] ?? a.signal}</b>
+                      </div>
+                      <p>{a.reason}</p>
+                      <p className="rg48-sub">
+                        <Link href={`/admin/players/${a.userId}`}>{a.userName}</Link>
+                        {a.userContact ? ` · ${a.userContact}` : ""} · {new Date(a.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+              <p className="ow-day-cap">Failed-login monitoring is not available — logins are not written to the audit log, so there is no real data to count failed attempts from.</p>
+            </>
+          )}
+        </section>
+
+        {/* P1 Batch 3 (O19): the promotion engine — the owner's
+            campaigns. Deposit match + free coins grant automatically;
+            cashback is paid by hand, one day at a time. There are no
+            wagering requirements anywhere. */}
+        <section className="admin-sec">
+          <h3>Promotions</h3>
+          <p className="rg48-sub">Named campaigns that grant bonuses automatically — a deposit match credits a % of a deposit (capped, once per player), free coins land on signup or first deposit. Cashback is different: it is paid by hand, for one day at a time, from the button on each cashback promotion. There are no wagering requirements anywhere — a granted bonus is in the wallet the moment it lands.</p>
+          <form className="owner-add" onSubmit={createPromo}>
+            <input type="text" placeholder="Promotion name" value={promoName} onChange={(e) => setPromoName(e.target.value)} required minLength={3} />
+            <select value={promoType} onChange={(e) => setPromoType(e.target.value as "deposit_match" | "free_coins" | "cashback")} aria-label="Promotion type">
+              <option value="deposit_match">Deposit match — % of a deposit</option>
+              <option value="free_coins">Free coins — on signup / first deposit</option>
+              <option value="cashback">Cashback — % of a day&apos;s net loss</option>
+            </select>
+            {promoType !== "free_coins" ? (
+              <label>% <input type="number" min={0.5} max={100} step={0.5} value={promoPercent} onChange={(e) => setPromoPercent(Number(e.target.value))} /></label>
+            ) : (
+              <>
+                <label>Coins <input type="number" min={1} step={1} value={promoCoins} onChange={(e) => setPromoCoins(Number(e.target.value))} /></label>
+                <select value={promoTrigger} onChange={(e) => setPromoTrigger(e.target.value as "signup" | "first_deposit")} aria-label="When the coins land">
+                  <option value="signup">On signup</option>
+                  <option value="first_deposit">On first deposit</option>
+                </select>
+              </>
+            )}
+            <label>Cap GH₵ <input type="number" min={0} step={0.01} value={promoCap} onChange={(e) => setPromoCap(e.target.value)} placeholder="No cap" /></label>
+            <label>From <input type="date" value={promoStart} max={todayStr()} onChange={(e) => setPromoStart(e.target.value)} /></label>
+            <label>To <input type="date" value={promoEnd} onChange={(e) => setPromoEnd(e.target.value)} /></label>
+            <select value={promoTarget} onChange={(e) => setPromoTarget(e.target.value)} aria-label="Target (blank = every player)">
+              <option value="">Every player</option>
+              {admins.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}&apos;s downline</option>
+              ))}
+            </select>
+            <button className="btn btn-gold" type="submit" disabled={promoBusy}>{promoBusy ? "Creating…" : "Create promotion"}</button>
+          </form>
+          {promos === null ? <p>Loading promotions…</p> : promos.length === 0 ? <p>No promotions yet.</p> : (
+            <div className="ow-games">
+              {promos.map((p) => (
+                <div key={p.id} className="ow-game-row">
+                  <div className="ow-game-head">
+                    <b>{p.name}</b>
+                    <span className="ow-game-cur">{p.type === "deposit_match" ? `Match ${p.percent}%` : p.type === "free_coins" ? `${p.coinAmount} coins` : `Cashback ${p.percent}%`}</span>
+                    {p.cap !== null && <span className="ow-game-mult">cap {fmtCash(p.cap)}</span>}
+                    {!p.active && <span className="ow-game-flag">PAUSED</span>}
+                  </div>
+                  <p className="ow-game-note">
+                    {p.type === "free_coins" ? `On ${p.trigger === "first_deposit" ? "first deposit" : "signup"}` : p.type === "cashback" ? "Paid by hand, one day at a time" : "On every deposit, once per player"} · {p.startAt.slice(0, 10)} to {p.endAt ? p.endAt.slice(0, 10) : "open"} · {p.targetAdminName ? `${p.targetAdminName}'s downline` : "Every player"} · {p.grants} {p.grants === 1 ? "grant" : "grants"}
+                  </p>
+                  <div className="ow-game-toggles">
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void togglePromo(p)}>{p.active ? "Pause" : "Resume"}</button>
+                    {p.type === "cashback" && (
+                      <>
+                        <label className="p1b3-cb">Pay for <input type="date" value={cbDate} max={todayStr()} onChange={(e) => setCbDate(e.target.value)} aria-label="Cashback date" /></label>
+                        <button type="button" className="btn btn-gold btn-sm" disabled={cbBusy === p.id} onClick={() => void payCashbackFor(p)}>{cbBusy === p.id ? "Paying…" : "Pay cashback"}</button>
+                      </>
+                    )}
+                  </div>
+                  {cbResult && cbResult.promotionId === p.id && (
+                    <p className="ow-day-cap">Paid {cbResult.paid} {cbResult.paid === 1 ? "player" : "players"} {fmtCash(cbResult.total)} cashback for {cbResult.date}.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {promoGrants && promoGrants.length > 0 && (
+            <>
+              <h4>Recent grants</h4>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Promotion</th><th>Player</th><th>Amount</th><th>Day</th><th>Granted</th></tr></thead>
+                  <tbody>
+                    {promoGrants.map((g) => (
+                      <tr key={g.id}>
+                        <td>{g.promotionName}</td>
+                        <td>{g.userName}</td>
+                        <td>{g.wallet === "coins" ? `${Math.round(g.amount)} coins` : fmtCash(g.amount)}</td>
+                        <td>{g.day || "—"}</td>
+                        <td>{new Date(g.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       </div>

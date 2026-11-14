@@ -184,3 +184,65 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
   alerts.sort((a, b) => rank(a.severity) - rank(b.severity) || b.createdAt.localeCompare(a.createdAt));
   return alerts;
 }
+
+// P1 Batch 3 (O18): the OWNER's global fraud console — the same 4
+// signals (a/b/c/e), computed over EVERY player, with per-admin
+// rollups (which admin's downline carries the most high-severity
+// alerts). The signal logic is NOT duplicated: it reuses
+// computeFraudAlerts above. Signal (d) is still not built (see the
+// note at the top of this file).
+export interface OwnerFraudRollup {
+  adminId: string | null;
+  adminName: string;
+  high: number;
+  medium: number;
+  total: number;
+}
+
+export async function computeOwnerFraud(): Promise<{
+  alerts: FraudAlert[];
+  counts: { high: number; medium: number };
+  byAdmin: OwnerFraudRollup[];
+}> {
+  const [allUsers, admins] = await Promise.all([
+    prisma.user.findMany({ select: { id: true, referredByAdminId: true } }),
+    prisma.user.findMany({ where: { role: "admin" }, select: { id: true, name: true } }),
+  ]);
+  const alerts = await computeFraudAlerts(allUsers.map((u) => u.id));
+  const adminName = new Map(admins.map((a) => [a.id, a.name]));
+  const refByUser = new Map(allUsers.map((u) => [u.id, u.referredByAdminId]));
+  const rollup = new Map<string | null, OwnerFraudRollup>();
+  const touch = (adminId: string | null) => {
+    let row = rollup.get(adminId);
+    if (!row) {
+      row = {
+        adminId,
+        adminName: adminId === null ? "No referring admin" : (adminName.get(adminId) ?? "Unknown admin"),
+        high: 0,
+        medium: 0,
+        total: 0,
+      };
+      rollup.set(adminId, row);
+    }
+    return row;
+  };
+  for (const a of alerts) {
+    const row = touch(refByUser.get(a.userId) ?? null);
+    row.total += 1;
+    if (a.severity === "high") row.high += 1;
+    else row.medium += 1;
+  }
+  // Every admin appears, even with zero alerts — the owner sees the
+  // whole downline picture, not only the admins with problems.
+  for (const a of admins) touch(a.id);
+  touch(null);
+  const byAdmin = [...rollup.values()].sort((a, b) => b.high - a.high || b.total - a.total);
+  return {
+    alerts,
+    counts: {
+      high: alerts.filter((a) => a.severity === "high").length,
+      medium: alerts.filter((a) => a.severity === "medium").length,
+    },
+    byAdmin,
+  };
+}

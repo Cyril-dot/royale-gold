@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { createSession, setSessionCookie } from "@/lib/auth";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { normalizeCode, publicUser } from "@/lib/serialize";
+// P1 Batch 3 (O19): promotion engine — signup free coins.
+import { applyFreeCoinsSignup } from "@/lib/promotions";
 
 export async function POST(req: Request) {
   try {
@@ -42,7 +44,7 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.$transaction(async (tx) => {
+    const { created: newUser, promoCoins } = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
           name,
@@ -63,11 +65,21 @@ export async function POST(req: Request) {
           data: { userId: created.id, codeId: codeRow.id, coins: 5 },
         });
       }
-      return created;
+      // P1 Batch 3 (O19): a live free_coins promotion with trigger
+      // "signup" grants its coins on top of the 10 (or 15) signup
+      // coins, in the same transaction as the account creation.
+      const promoCoins = await applyFreeCoinsSignup(tx, created.id, created.name, codeRow?.adminId ?? null);
+      return { created, promoCoins };
     });
 
-    await setSessionCookie(await createSession(user.id, "user"));
-    return ok({ user: publicUser(user), referredBonusCoins: codeRow ? 5 : 0 }, 201);
+    // The signup promotion (if one fired) credited coins after the
+    // create above — re-read so the returned user carries the real
+    // balance, never a stale one.
+    const freshUser = promoCoins.length > 0
+      ? await prisma.user.findUnique({ where: { id: newUser.id } })
+      : newUser;
+    await setSessionCookie(await createSession(newUser.id, "user"));
+    return ok({ user: publicUser(freshUser ?? newUser), referredBonusCoins: codeRow ? 5 : 0, promoCoins }, 201);
   } catch (err) {
     return toErrorResponse(err);
   }
