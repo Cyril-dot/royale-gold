@@ -15,6 +15,10 @@ import {
 } from "./game-config";
 // P1 Batch 1 (A20): per-player limits (max stake, daily loss, cool-off).
 import { checkPlayLimits } from "./limits";
+// P2 Batch 2 (O29): jackpot pot growth — a house-funded reporting
+// number, never taken from any payout (runs after the payout is
+// computed, inside the same transaction, and touches only JackpotPot).
+import { contributeToJackpots } from "./jackpots";
 
 /** Slugs that settle against a server-issued crash round. Balloon Burst
  * is a crash game too (shared engine, roundId passed at settle) — it
@@ -156,6 +160,11 @@ export async function settleGame(
         result: (result ?? undefined) as Prisma.InputJsonValue | undefined,
       },
     });
+
+    // P2 Batch 2 (O29): the jackpot pot grows by contributionPct% of
+    // this cash stake (house-funded — the payout above is already
+    // final and is never touched). Coins never feed a jackpot.
+    await contributeToJackpots(tx, gameSlug, currency, stake);
 
     return {
       gameResult,

@@ -10,6 +10,7 @@ import Link from "next/link";
 import { api, fmtCash } from "../../lib/api";
 import { useStore } from "../../lib/store";
 import { copyText, todayStr } from "../../lib/admin-client";
+import { ALL_GAMES } from "../../lib/games";
 import { ADMIN_SECTIONS, ADMIN_SECTION_LABELS, type AdminSection } from "../../lib/rbac";
 
 interface AdminRow {
@@ -246,6 +247,100 @@ function OwnerWalletForm({ w, onSave }: {
       <p className="ow-day-cap">Coins are play-only by default. Turning this on records the policy only — no coin payout path exists yet, so coins still cannot be paid out.</p>
       <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void save()}>Save wallet config</button>
     </div>
+  );
+}
+
+// P2 Batch 2 (O29): the jackpot pay form — the owner searches a
+// player by name/email/phone (the owner's global player search), picks
+// one, gives a reason, and pays the whole pot as a bonus. The pot then
+// resets to the seed amount.
+function JackpotPayForm({ jackpot, busy, onPay }: {
+  jackpot: { id: string; name: string; currentPot: number };
+  busy: boolean;
+  onPay: (jackpotId: string, userId: string, reason: string) => Promise<void>;
+}) {
+  const { toast } = useStore();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<{ id: string; name: string; email: string | null; phone: string | null }[]>([]);
+  const [picked, setPicked] = useState<{ id: string; name: string } | null>(null);
+  const [reason, setReason] = useState("");
+  const search = async () => {
+    if (q.trim().length < 2) { toast("Search needs at least 2 characters", "lose"); return; }
+    try {
+      const r = await api<{ players: { id: string; name: string; email: string | null; phone: string | null; role: string }[] }>(`/api/owner/players/search?q=${encodeURIComponent(q.trim())}`);
+      setResults(r.players.filter((p) => p.role === "user"));
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Search failed", "lose");
+    }
+  };
+  return (
+    <div className="pd-adjust-row">
+      {picked ? (
+        <span>Pay to: <b>{picked.name}</b> <button className="btn btn-ghost btn-sm" type="button" onClick={() => { setPicked(null); setQ(""); setResults([]); }}>Change</button></span>
+      ) : (
+        <>
+          <label>Player (name / email / phone)
+            <input type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void search(); } }} placeholder="Search players" aria-label={`Search a player to pay the ${jackpot.name} jackpot to`} />
+          </label>
+          <button className="btn btn-ghost" type="button" onClick={() => void search()}>Search</button>
+          {results.length > 0 && (
+            <span>{results.map((p) => (
+              <button key={p.id} className="btn btn-ghost btn-sm" type="button" onClick={() => { setPicked({ id: p.id, name: p.name }); setResults([]); }}>{p.name}{p.email ? ` (${p.email})` : p.phone ? ` (${p.phone})` : ""}</button>
+            ))}</span>
+          )}
+        </>
+      )}
+      <label>Reason (optional)
+        <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Why this player" aria-label={`Reason for paying the ${jackpot.name} jackpot`} />
+      </label>
+      <button className="btn btn-gold" type="button" disabled={busy || !picked || jackpot.currentPot <= 0} onClick={() => picked && void onPay(jackpot.id, picked.id, reason.trim())}>{busy ? "Paying…" : `Pay ${fmtCash(jackpot.currentPot)}`}</button>
+    </div>
+  );
+}
+
+// P2 Batch 2 (O30): one CMS page's editor — title + body + active
+// toggle, saved to /api/owner/cms. An inactive page 404s on
+// /pages/[slug].
+function CmsPageEditor({ page, onSaved }: {
+  page: { slug: string; title: string; body: string; active: boolean };
+  onSaved: () => Promise<void>;
+}) {
+  const { toast } = useStore();
+  const [title, setTitle] = useState(page.title);
+  const [body, setBody] = useState(page.body);
+  const [active, setActive] = useState(page.active);
+  const [busy, setBusy] = useState(false);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api("/api/owner/cms", { method: "POST", body: JSON.stringify({ slug: page.slug, title: title.trim(), body: body.trim(), active }) });
+      toast(`Page “${title.trim()}” saved`, "win");
+      await onSaved();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "CMS save failed", "lose");
+    } finally { setBusy(false); }
+  };
+  return (
+    <form className="owner-add" onSubmit={save}>
+      <div className="pd-adjust-row">
+        <label>Title
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} aria-label={`Title for the ${page.slug} page`} />
+        </label>
+        <label>
+          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active — shows on /pages/{page.slug}
+        </label>
+      </div>
+      <div className="pd-adjust-row">
+        <label>Body
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} maxLength={20000} aria-label={`Body for the ${page.slug} page`} />
+        </label>
+      </div>
+      <div className="pd-adjust-row">
+        <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Saving…" : "Save page"}</button>
+        <a className="btn btn-ghost" href={`/pages/${page.slug}`} target="_blank" rel="noreferrer">View public page ↗</a>
+      </div>
+    </form>
   );
 }
 
@@ -807,6 +902,254 @@ export default function OwnerPage() {
     setVipTiers((cur) => cur.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
   };
 
+  // P2 Batch 2 — owner P2 (O26–O33). These hooks MUST live above the
+  // early returns below — hooks after `if (!user) return` change the
+  // hook count between renders and crash the page (React #310).
+  // O26: advanced BI & cohorts — players by joining month, with
+  // activity, deposits, stakes, GGR, average deposit + a month-1/2/3
+  // retention curve. Read from the real tables, no analytics store.
+  interface CohortRow { cohort: string; players: number; activePct: number; totalDeposited: number; totalStaked: number; ggr: number; avgDeposit: number; retention: { m1: number | null; m2: number | null; m3: number | null } }
+  const [bi, setBi] = useState<{ cohorts: CohortRow[]; totalPlayers: number } | null>(null);
+  const loadBi = useCallback(async () => {
+    try { setBi(await api<{ cohorts: CohortRow[]; totalPlayers: number }>("/api/owner/bi")); } catch { setBi(null); }
+  }, []);
+  useEffect(() => { void loadBi(); }, [loadBi]);
+  // O27: game replays — the 50 most recent GameResult rows + a detail
+  // view (the round's outcome + the provably-fair verify for crash
+  // rounds). No per-bet event log exists, so a replay shows the
+  // outcome + the verify result, not a step-by-step animation.
+  interface ReplayRow { id: string; userId: string; userName: string; game: string; gameName: string; currency: string; stake: number; payout: number; net: number; roundId: string | null; createdAt: string }
+  interface ReplayVerify { roundId: string; hash: string; clientSeed: string; nonce: number; finished: boolean; serverSeed?: string; crashPoint?: number; recomputedPoint?: number; pointMatch?: boolean; hashMatch?: boolean }
+  interface ReplayDetail { replay: ReplayRow & { userContact: string | null }; verify: ReplayVerify | null }
+  const [replays, setReplays] = useState<ReplayRow[] | null>(null);
+  const [replayDetail, setReplayDetail] = useState<ReplayDetail | null>(null);
+  const [replayBusy, setReplayBusy] = useState<string | null>(null);
+  const loadReplays = useCallback(async () => {
+    try { setReplays((await api<{ replays: ReplayRow[] }>("/api/owner/replays")).replays); } catch { setReplays([]); }
+  }, []);
+  useEffect(() => { void loadReplays(); }, [loadReplays]);
+  const openReplay = async (id: string) => {
+    setReplayBusy(id);
+    try { setReplayDetail(await api<ReplayDetail>(`/api/owner/replays/${id}`)); }
+    catch (ex) { toast(ex instanceof Error ? ex.message : "Could not open the replay", "lose"); }
+    finally { setReplayBusy(null); }
+  };
+  // O28: loyalty / VIP config — the points rule (a read-only display
+  // rule: points are computed live from total staked, no ledger), the
+  // tier thresholds (read-only, from the VIP tiers above) and the
+  // birthday bonus, paid ONCE per year by a manual button (no cron).
+  interface LoyaltyData {
+    settings: { pointsPerGhs: number; birthdayBonus: number };
+    tiers: { id: string; name: string; minDeposited: number; perks: string[] }[];
+    birthdaysToday: { userId: string; userName: string; userContact: string | null; birthday: string; paidThisYear: boolean }[];
+    players: { id: string; name: string; totalDeposited: number; totalStaked: number; points: number; tier: string | null }[];
+  }
+  const [loyalty, setLoyalty] = useState<LoyaltyData | null>(null);
+  const [loyPoints, setLoyPoints] = useState("1");
+  const [loyBonus, setLoyBonus] = useState("0");
+  const [loyBusy, setLoyBusy] = useState(false);
+  const [bdayPayBusy, setBdayPayBusy] = useState(false);
+  const [payResult, setPayResult] = useState<{ count: number; total: number; alreadyPaid: number } | null>(null);
+  const loadLoyalty = useCallback(async () => {
+    try {
+      const r = await api<LoyaltyData>("/api/owner/loyalty-settings");
+      setLoyalty(r);
+      setLoyPoints(String(r.settings.pointsPerGhs));
+      setLoyBonus(String(r.settings.birthdayBonus));
+    } catch { setLoyalty(null); }
+  }, []);
+  useEffect(() => { void loadLoyalty(); }, [loadLoyalty]);
+  const saveLoyalty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoyBusy(true);
+    try {
+      await api("/api/owner/loyalty-settings", { method: "POST", body: JSON.stringify({ pointsPerGhs: Number(loyPoints), birthdayBonus: Number(loyBonus) }) });
+      toast("Loyalty settings saved", "win");
+      await loadLoyalty();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Loyalty settings failed", "lose");
+    } finally { setLoyBusy(false); }
+  };
+  const payBirthdays = async () => {
+    setBdayPayBusy(true);
+    try {
+      const r = await api<{ paid: { userId: string; userName: string; amount: number }[]; total: number; count: number; alreadyPaid: number }>("/api/owner/loyalty/pay-birthdays", { method: "POST" });
+      setPayResult({ count: r.count, total: r.total, alreadyPaid: r.alreadyPaid });
+      toast(r.count === 0 ? "Nobody to pay today" : `Paid GH₵ ${r.total.toFixed(2)} to ${r.count} ${r.count === 1 ? "player" : "players"}`, "win");
+      await loadLoyalty();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Birthday pay failed", "lose");
+    } finally { setBdayPayBusy(false); }
+  };
+  // O29: tournaments & jackpots config — ALL tournaments platform-wide
+  // (the owner ends any of them) + the jackpot system. The pot is
+  // house-funded: contributionPct% of each cash stake in the jackpot's
+  // game(s) feeds the pot — never taken from any payout.
+  interface OwnerTournamentRow { id: string; name: string; gameSlug: string; gameName: string; startAt: string; endAt: string; prizePool: number; status: string; winnerId: string | null; winnerName: string | null; adminId: string; adminName: string; createdAt: string }
+  interface JackpotRow { id: string; name: string; gameSlug: string; gameName: string; seedAmount: number; contributionPct: number; currentPot: number; active: boolean; createdBy: string; createdAt: string }
+  const [ownerTournaments, setOwnerTournaments] = useState<OwnerTournamentRow[] | null>(null);
+  const [endConfirmId, setEndConfirmId] = useState<string | null>(null);
+  const [endBusy, setEndBusy] = useState<string | null>(null);
+  const [jackpots, setJackpots] = useState<JackpotRow[] | null>(null);
+  const [jkName, setJkName] = useState("");
+  const [jkGame, setJkGame] = useState("all");
+  const [jkSeed, setJkSeed] = useState("100");
+  const [jkPct, setJkPct] = useState("1");
+  const [jkBusy, setJkBusy] = useState(false);
+  const [jkPayBusy, setJkPayBusy] = useState<string | null>(null);
+  const [jkToggleBusy, setJkToggleBusy] = useState<string | null>(null);
+  const loadOwnerTournaments = useCallback(async () => {
+    try { setOwnerTournaments((await api<{ tournaments: OwnerTournamentRow[] }>("/api/owner/tournaments")).tournaments); } catch { setOwnerTournaments([]); }
+  }, []);
+  useEffect(() => { void loadOwnerTournaments(); }, [loadOwnerTournaments]);
+  const loadJackpots = useCallback(async () => {
+    try { setJackpots((await api<{ jackpots: JackpotRow[] }>("/api/owner/jackpots")).jackpots); } catch { setJackpots([]); }
+  }, []);
+  useEffect(() => { void loadJackpots(); }, [loadJackpots]);
+  const endOwnerTournament = async (t: OwnerTournamentRow) => {
+    setEndBusy(t.id);
+    try {
+      const r = await api<{ tournament: { winnerName: string; prizePool: number } }>(`/api/owner/tournaments/${t.id}/end`, { method: "POST", body: JSON.stringify({}) });
+      toast(`Tournament ended — ${r.tournament.winnerName} won GH₵ ${r.tournament.prizePool.toFixed(2)}`, "win");
+      setEndConfirmId(null);
+      await loadOwnerTournaments();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not end the tournament", "lose");
+    } finally { setEndBusy(null); }
+  };
+  const createJackpot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setJkBusy(true);
+    try {
+      await api("/api/owner/jackpots", { method: "POST", body: JSON.stringify({ name: jkName.trim(), gameSlug: jkGame, seedAmount: Number(jkSeed), contributionPct: Number(jkPct) }) });
+      toast(`Jackpot “${jkName.trim()}” created`, "win");
+      setJkName("");
+      await loadJackpots();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Jackpot failed", "lose");
+    } finally { setJkBusy(false); }
+  };
+  const payJackpot = async (jackpotId: string, userId: string, reason: string) => {
+    setJkPayBusy(jackpotId);
+    try {
+      const r = await api<{ winner: { name: string }; paid: number }>(`/api/owner/jackpots/${jackpotId}/pay`, { method: "POST", body: JSON.stringify({ userId, reason }) });
+      toast(`Paid GH₵ ${r.paid.toFixed(2)} to ${r.winner.name} — pot reset to the seed`, "win");
+      await loadJackpots();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Jackpot pay failed", "lose");
+    } finally { setJkPayBusy(null); }
+  };
+  const toggleJackpot = async (j: JackpotRow) => {
+    setJkToggleBusy(j.id);
+    try {
+      await api(`/api/owner/jackpots/${j.id}/toggle`, { method: "POST" });
+      toast(`Jackpot “${j.name}” ${j.active ? "paused" : "resumed"}`, "win");
+      await loadJackpots();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not toggle the jackpot", "lose");
+    } finally { setJkToggleBusy(null); }
+  };
+  // O30: CMS & localisation — the site pages (About, Terms, Privacy),
+  // edited here and shown on /pages/[slug] when active. English only,
+  // GH₵ only — the page says so plainly.
+  interface CmsRow { slug: string; title: string; body: string; active: boolean; updatedAt: string }
+  const [cmsPages, setCmsPages] = useState<CmsRow[] | null>(null);
+  const loadCms = useCallback(async () => {
+    try { setCmsPages((await api<{ pages: CmsRow[] }>("/api/owner/cms")).pages); } catch { setCmsPages([]); }
+  }, []);
+  useEffect(() => { void loadCms(); }, [loadCms]);
+  // O31: automated risk rules — a fraud signal + threshold + action.
+  // "block_player" and "hold_withdrawal" are REAL actions; "flag" only
+  // adds the alert to the fraud console.
+  interface RiskRuleRow { id: string; name: string; signal: string; threshold: number; action: string; active: boolean; createdBy: string; createdAt: string }
+  interface RiskSignalRow { key: string; label: string; thresholdLabel: string; thresholdHint: string; defaultThreshold: number }
+  interface RiskActionRow { key: string; label: string; note: string }
+  const [riskRules, setRiskRules] = useState<RiskRuleRow[] | null>(null);
+  const [riskSignals, setRiskSignals] = useState<RiskSignalRow[]>([]);
+  const [riskActions, setRiskActions] = useState<RiskActionRow[]>([]);
+  const [rrName, setRrName] = useState("");
+  const [rrSignal, setRrSignal] = useState("withdrawal-flags");
+  const [rrThreshold, setRrThreshold] = useState("2");
+  const [rrAction, setRrAction] = useState("flag");
+  const [rrBusy, setRrBusy] = useState(false);
+  const [rrToggleBusy, setRrToggleBusy] = useState<string | null>(null);
+  const loadRiskRules = useCallback(async () => {
+    try {
+      const r = await api<{ rules: RiskRuleRow[]; signals: RiskSignalRow[]; actions: RiskActionRow[] }>("/api/owner/risk-rules");
+      setRiskRules(r.rules);
+      setRiskSignals(r.signals);
+      setRiskActions(r.actions);
+    } catch { setRiskRules([]); }
+  }, []);
+  useEffect(() => { void loadRiskRules(); }, [loadRiskRules]);
+  const createRiskRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRrBusy(true);
+    try {
+      await api("/api/owner/risk-rules", { method: "POST", body: JSON.stringify({ name: rrName.trim(), signal: rrSignal, threshold: Number(rrThreshold), action: rrAction }) });
+      toast(`Risk rule “${rrName.trim()}” created`, "win");
+      setRrName("");
+      await loadRiskRules();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Risk rule failed", "lose");
+    } finally { setRrBusy(false); }
+  };
+  const toggleRiskRule = async (r: RiskRuleRow) => {
+    setRrToggleBusy(r.id);
+    try {
+      await api(`/api/owner/risk-rules/${r.id}/toggle`, { method: "POST" });
+      toast(`Risk rule “${r.name}” ${r.active ? "disabled" : "enabled"}`, "win");
+      await loadRiskRules();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not toggle the rule", "lose");
+    } finally { setRrToggleBusy(null); }
+  };
+  // O32: anomaly alerts — rule-based, computed live from the real
+  // tables. No stored rows, no ML model, no AI — just thresholds.
+  interface AnomalyRow { id: string; type: string; severity: string; userId: string | null; userName: string | null; game: string | null; gameName: string | null; reason: string; createdAt: string }
+  const [anomalies, setAnomalies] = useState<{ anomalies: AnomalyRow[]; counts: { high: number; medium: number } } | null>(null);
+  const loadAnomalies = useCallback(async () => {
+    try { setAnomalies(await api<{ anomalies: AnomalyRow[]; counts: { high: number; medium: number } }>("/api/owner/anomalies")); } catch { setAnomalies(null); }
+  }, []);
+  useEffect(() => { void loadAnomalies(); }, [loadAnomalies]);
+  // O33: multi-brand support — CONFIG records only. A brand does NOT
+  // change any page, game or URL (no per-brand routing or theming).
+  interface BrandRow { id: string; name: string; slug: string; siteName: string; primaryColor: string; secondaryColor: string; active: boolean; createdAt: string }
+  const [brands, setBrands] = useState<BrandRow[] | null>(null);
+  const [brName, setBrName] = useState("");
+  const [brSlug, setBrSlug] = useState("");
+  const [brSite, setBrSite] = useState("");
+  const [brPrimary, setBrPrimary] = useState("#F2C230");
+  const [brSecondary, setBrSecondary] = useState("#0C2B22");
+  const [brBusy, setBrBusy] = useState(false);
+  const [brToggleBusy, setBrToggleBusy] = useState<string | null>(null);
+  const loadBrands = useCallback(async () => {
+    try { setBrands((await api<{ brands: BrandRow[] }>("/api/owner/brands")).brands); } catch { setBrands([]); }
+  }, []);
+  useEffect(() => { void loadBrands(); }, [loadBrands]);
+  const createBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBrBusy(true);
+    try {
+      await api("/api/owner/brands", { method: "POST", body: JSON.stringify({ name: brName.trim(), slug: brSlug.trim(), siteName: brSite.trim() || undefined, primaryColor: brPrimary, secondaryColor: brSecondary }) });
+      toast(`Brand “${brName.trim()}” created`, "win");
+      setBrName(""); setBrSlug(""); setBrSite("");
+      await loadBrands();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Brand failed", "lose");
+    } finally { setBrBusy(false); }
+  };
+  const toggleBrand = async (b: BrandRow) => {
+    setBrToggleBusy(b.id);
+    try {
+      await api(`/api/owner/brands/${b.id}/toggle`, { method: "POST" });
+      toast(`Brand “${b.name}” ${b.active ? "disabled" : "enabled"}`, "win");
+      await loadBrands();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not toggle the brand", "lose");
+    } finally { setBrToggleBusy(null); }
+  };
+
   if (!user) {
     return (
       <main className="rg48-page-main"><div className="wrap">
@@ -1148,7 +1491,7 @@ export default function OwnerPage() {
           <p className="rg48-sub">Every pending withdrawal, platform-wide. Requests only — no real money moves. Large amounts (over GH₵ 500) need your second approval after the admin’s.</p>
           <div className="money-chips" role="group" aria-label="Filter by status">
             <button type="button" className={!ownerWdStatus ? "on" : ""} onClick={() => setOwnerWdStatus("")}>All</button>
-            {["pending", "admin_approved", "approved", "rejected"].map((s) => (
+            {["pending", "held", "admin_approved", "approved", "rejected"].map((s) => (
               <button key={s} type="button" className={ownerWdStatus === s ? "on" : ""} onClick={() => setOwnerWdStatus(s)}>{s === "admin_approved" ? "Awaiting owner" : s[0].toUpperCase() + s.slice(1)}</button>
             ))}
           </div>
@@ -1165,9 +1508,10 @@ export default function OwnerPage() {
                   </div>
                   <span className={`wd-status wd-${w.status}`}>{w.status === "admin_approved" ? "Awaiting owner" : w.status}</span>
                   {w.reason ? <p className="wd-reason">Reason: {w.reason}</p> : null}
-                  {(w.status === "pending" || w.status === "admin_approved") && (
+                  {(w.status === "pending" || w.status === "admin_approved" || w.status === "held") && (
                     <div className="wd-actions">
                       {w.status === "admin_approved" ? <span className="wd-note">Admin approved — your approval makes it final.</span> : null}
+                      {w.status === "held" ? <span className="wd-note">Held by a risk rule — review before deciding.</span> : null}
                       <button className="btn btn-gold btn-sm" type="button" disabled={ownerWdBusy === w.id} onClick={() => void decideOwnerWd(w, "approve")}>Approve</button>
                       <button className="btn btn-ghost btn-sm" type="button" disabled={ownerWdBusy === w.id} onClick={() => void decideOwnerWd(w, "reject")}>Reject</button>
                     </div>
@@ -2024,6 +2368,422 @@ export default function OwnerPage() {
             </div>
           </form>
           <p className="rg48-mini">VIP is a label and perks only — it changes no economy, limits or payouts.</p>
+        </section>
+
+        {/* P2 Batch 2 (O26): advanced BI & cohorts — players grouped by
+            the month they joined, with activity, deposits, stakes, GGR
+            and average deposit, plus a month-1/2/3 retention curve.
+            Read from the real tables — no separate analytics store. */}
+        <section className="admin-sec">
+          <h3>BI &amp; cohorts</h3>
+          <p className="rg48-sub">Players grouped by the month they joined. Active = played in the last 30 days. GGR = cash stakes − cash payouts. Retention = the % of the cohort who played in month 1, 2 and 3 after joining (a dash means that month has not happened yet).</p>
+          {bi === null ? <p>Loading cohorts…</p> : bi.cohorts.length === 0 ? (
+            <p>No players yet.</p>
+          ) : (
+            <>
+              <div className="sum-cards">
+                <div className="sum-card"><span>Players</span><b>{bi.totalPlayers}</b></div>
+                <div className="sum-card"><span>Cohorts</span><b>{bi.cohorts.length}</b></div>
+              </div>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Cohort</th><th>Players</th><th>Active (30d)</th><th>Deposited</th><th>Staked</th><th>GGR</th><th>Avg deposit</th></tr></thead>
+                  <tbody>
+                    {bi.cohorts.map((c) => (
+                      <tr key={c.cohort}>
+                        <td>{c.cohort}</td>
+                        <td>{c.players}</td>
+                        <td>{c.activePct}%</td>
+                        <td>{fmtCash(c.totalDeposited)}</td>
+                        <td>{fmtCash(c.totalStaked)}</td>
+                        <td>{fmtCash(c.ggr)}</td>
+                        <td>{fmtCash(c.avgDeposit)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <h4>Retention curve</h4>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Cohort</th><th>Month 1</th><th>Month 2</th><th>Month 3</th></tr></thead>
+                  <tbody>
+                    {bi.cohorts.map((c) => (
+                      <tr key={c.cohort}>
+                        <td>{c.cohort}</td>
+                        <td>{c.retention.m1 === null ? "—" : `${c.retention.m1}%`}</td>
+                        <td>{c.retention.m2 === null ? "—" : `${c.retention.m2}%`}</td>
+                        <td>{c.retention.m3 === null ? "—" : `${c.retention.m3}%`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => void loadBi()}>Refresh cohorts</button>
+            </>
+          )}
+        </section>
+
+        {/* P2 Batch 2 (O27): game replays — the 50 most recent rounds
+            platform-wide, with a detail view per round (the round's
+            outcome + the provably-fair verify for crash rounds). There
+            is no per-bet event log, so a replay shows the outcome +
+            the verify result — not a step-by-step animation. */}
+        <section className="admin-sec">
+          <h3>Game replays</h3>
+          <p className="rg48-sub">The 50 most recent rounds, platform-wide. Open one to see the round&apos;s full outcome — and, for crash rounds, the provably-fair verify (crash point recomputed from the revealed seed + SHA-256 hash check). Replays show the outcome + the verify result, not a step-by-step animation: there is no per-bet event log to replay from.</p>
+          {replays === null ? <p>Loading replays…</p> : replays.length === 0 ? (
+            <p>No rounds yet.</p>
+          ) : (
+            <>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Time</th><th>Player</th><th>Game</th><th>Stake</th><th>Payout</th><th>Net</th><th></th></tr></thead>
+                  <tbody>
+                    {replays.map((r) => (
+                      <tr key={r.id}>
+                        <td>{new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                        <td>{r.userName}</td>
+                        <td>{r.gameName}</td>
+                        <td>{r.currency === "coins" ? `${r.stake} coins` : fmtCash(r.stake)}</td>
+                        <td>{r.currency === "coins" ? `${r.payout} coins` : fmtCash(r.payout)}</td>
+                        <td>{r.currency === "coins" ? `${r.net > 0 ? "+" : ""}${r.net} coins` : `${r.net > 0 ? "+" : ""}${fmtCash(r.net)}`}</td>
+                        <td><button className="btn btn-ghost btn-sm" type="button" disabled={replayBusy === r.id} onClick={() => void openReplay(r.id)}>{replayBusy === r.id ? "Opening…" : "View"}</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {replayDetail && (
+                <div className="ow-game-row">
+                  <div className="ow-game-head">
+                    <b>{replayDetail.replay.gameName}</b>
+                    <span className="ow-game-cur">{replayDetail.replay.userName}{replayDetail.replay.userContact ? ` · ${replayDetail.replay.userContact}` : ""}</span>
+                    <span className="ow-game-mult">{new Date(replayDetail.replay.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                  <p className="ow-game-note">Stake {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.stake} coins` : fmtCash(replayDetail.replay.stake)} · Payout {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.payout} coins` : fmtCash(replayDetail.replay.payout)} · Net {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.net} coins` : fmtCash(replayDetail.replay.net)}{replayDetail.replay.roundId ? ` · Round ${replayDetail.replay.roundId.slice(0, 8)}…` : ""}</p>
+                  {replayDetail.verify ? (
+                    <p className="ow-game-note">
+                      Provably-fair verify: crash point ×{replayDetail.verify.crashPoint} · recomputed ×{replayDetail.verify.recomputedPoint} · point {replayDetail.verify.pointMatch ? "MATCHES ✓" : "DOES NOT MATCH ✗"} · hash {replayDetail.verify.hashMatch ? "MATCHES ✓" : "DOES NOT MATCH ✗"}
+                      {replayDetail.verify.finished ? "" : " · Round still live — the seed is revealed only once it finishes."}
+                    </p>
+                  ) : (
+                    <p className="ow-game-note">No provably-fair verify for this round — only crash rounds carry a seed + hash.</p>
+                  )}
+                  <button className="btn btn-ghost btn-sm" type="button" onClick={() => setReplayDetail(null)}>Close replay</button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* P2 Batch 2 (O28): loyalty / VIP config — the points rule (a
+            read-only display rule: points are computed live from total
+            staked, there is no points ledger), the tier thresholds
+            (read-only, from the VIP tiers above) and the birthday
+            bonus, paid ONCE per year by the button below — there is
+            NO cron, so it is manual, not automatic. */}
+        <section className="admin-sec">
+          <h3>Loyalty</h3>
+          <p className="rg48-sub">Points are a display rule only: {loyalty ? `${loyalty.settings.pointsPerGhs} point${loyalty.settings.pointsPerGhs === 1 ? "" : "s"} per GH₵ 1 staked` : "1 point per GH₵ 1 staked"} — a player&apos;s points are computed live from their total staked, there is no points ledger. A player moves up a tier when their total deposited reaches the tier&apos;s minimum (the VIP tiers above). The birthday bonus is paid once per year by the button below — there is NO cron, so it is manual, not automatic.</p>
+          {loyalty === null ? <p>Loading loyalty…</p> : (
+            <>
+              <form className="owner-add" onSubmit={saveLoyalty}>
+                <div className="pd-adjust-row">
+                  <label>Points per GH₵ staked
+                    <input type="number" min={0} max={100} step="0.01" inputMode="decimal" value={loyPoints} onChange={(e) => setLoyPoints(e.target.value)} aria-label="Points per GH₵ staked" />
+                  </label>
+                  <label>Birthday bonus (GH₵)
+                    <input type="number" min={0} max={10000} step="0.01" inputMode="decimal" value={loyBonus} onChange={(e) => setLoyBonus(e.target.value)} aria-label="Birthday bonus in GH₵" />
+                  </label>
+                  <button className="btn btn-gold" type="submit" disabled={loyBusy}>{loyBusy ? "Saving…" : "Save loyalty settings"}</button>
+                </div>
+              </form>
+              <h4>Tier thresholds (read-only — edit in VIP tiers above)</h4>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Tier</th><th>Min deposited</th><th>Perks</th></tr></thead>
+                  <tbody>
+                    {loyalty.tiers.map((t) => (
+                      <tr key={t.id}><td>{t.name}</td><td>{fmtCash(t.minDeposited)}</td><td>{t.perks.length === 0 ? "—" : t.perks.join(", ")}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <h4>Birthdays today</h4>
+              {loyalty.birthdaysToday.length === 0 ? (
+                <p>No player has a birthday today.</p>
+              ) : (
+                <div className="rg48-twrap">
+                  <table className="dep-table">
+                    <thead><tr><th>Player</th><th>Contact</th><th>Birthday</th><th>Paid this year</th></tr></thead>
+                    <tbody>
+                      {loyalty.birthdaysToday.map((b) => (
+                        <tr key={b.userId}>
+                          <td>{b.userName}</td>
+                          <td>{b.userContact ?? "—"}</td>
+                          <td>{b.birthday}</td>
+                          <td>{b.paidThisYear ? "Yes" : "No"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="pd-adjust-row">
+                <button className="btn btn-gold" type="button" disabled={bdayPayBusy || loyalty.settings.birthdayBonus <= 0} onClick={() => void payBirthdays()}>{bdayPayBusy ? "Paying…" : `Pay birthday bonuses for today (${fmtCash(loyalty.settings.birthdayBonus)} each)`}</button>
+              </div>
+              {loyalty.settings.birthdayBonus <= 0 && <p className="rg48-mini">The birthday bonus is GH₵ 0 — set an amount above to pay anything.</p>}
+              {payResult && <p className="rg48-mini">Last run: paid {payResult.count} {payResult.count === 1 ? "player" : "players"} ({fmtCash(payResult.total)}){payResult.alreadyPaid > 0 ? ` · ${payResult.alreadyPaid} already paid this year, skipped` : ""}. A second run today pays nobody.</p>}
+              <h4>Players (latest 10) — live points</h4>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Player</th><th>Tier</th><th>Total staked</th><th>Points</th></tr></thead>
+                  <tbody>
+                    {loyalty.players.map((p) => (
+                      <tr key={p.id}><td>{p.name}</td><td>{p.tier ?? "—"}</td><td>{fmtCash(p.totalStaked)}</td><td>{p.points}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* P2 Batch 2 (O29): tournaments & jackpots config — ALL
+            tournaments platform-wide (the owner ends any of them) +
+            the jackpot system. The pot is house-funded: the
+            contribution % of each cash stake feeds the pot — never
+            taken from any payout. */}
+        <section className="admin-sec">
+          <h3>Tournaments &amp; jackpots</h3>
+          <p className="rg48-sub">Every tournament on the platform, whoever created it. Ending one pays its prize once as a bonus credit to the leaderboard winner and freezes the final standings — the same end path the admin uses.</p>
+          {ownerTournaments === null ? <p>Loading tournaments…</p> : ownerTournaments.length === 0 ? (
+            <p>No tournaments yet.</p>
+          ) : (
+            <div className="rg48-twrap">
+              <table className="dep-table">
+                <thead><tr><th>Tournament</th><th>Game</th><th>Admin</th><th>Status</th><th>Prize pool</th><th>Winner</th><th></th></tr></thead>
+                <tbody>
+                  {ownerTournaments.map((t) => (
+                    <tr key={t.id}>
+                      <td>{t.name}</td>
+                      <td>{t.gameName}</td>
+                      <td>{t.adminName}</td>
+                      <td>{t.status}</td>
+                      <td>{fmtCash(t.prizePool)}</td>
+                      <td>{t.winnerName ?? "—"}</td>
+                      <td>
+                        {t.status !== "ended" && (
+                          endConfirmId === t.id ? (
+                            <button className="btn btn-gold btn-sm" type="button" disabled={endBusy === t.id} onClick={() => void endOwnerTournament(t)}>{endBusy === t.id ? "Ending…" : `Confirm end — pay ${fmtCash(t.prizePool)}`}</button>
+                          ) : (
+                            <button className="btn btn-ghost btn-sm" type="button" onClick={() => setEndConfirmId(t.id)}>End</button>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <h4>Jackpots</h4>
+          <p className="rg48-sub">The pot is house-funded: a % of each cash stake in the jackpot&apos;s game(s) feeds the pot — a reporting number, tracked in a pot row, never taken from any payout. Coins never feed a jackpot. Paying the pot credits the picked player as a bonus and resets the pot to the seed amount.</p>
+          <form className="owner-add" onSubmit={createJackpot}>
+            <div className="pd-adjust-row">
+              <label>Name
+                <input type="text" value={jkName} onChange={(e) => setJkName(e.target.value)} maxLength={60} aria-label="Jackpot name" placeholder="e.g. Golden Hour Jackpot" />
+              </label>
+              <label>Game
+                <select value={jkGame} onChange={(e) => setJkGame(e.target.value)} aria-label="Jackpot game">
+                  <option value="all">All games</option>
+                  {ALL_GAMES.map((g) => (<option key={g.slug} value={g.slug}>{g.name}</option>))}
+                </select>
+              </label>
+              <label>Seed amount (GH₵)
+                <input type="number" min={0} max={100000} step="0.01" inputMode="decimal" value={jkSeed} onChange={(e) => setJkSeed(e.target.value)} aria-label="Jackpot seed amount in GH₵" />
+              </label>
+              <label>Contribution (% of each stake)
+                <input type="number" min={0} max={50} step="0.1" inputMode="decimal" value={jkPct} onChange={(e) => setJkPct(e.target.value)} aria-label="Jackpot contribution percent" />
+              </label>
+              <button className="btn btn-gold" type="submit" disabled={jkBusy}>{jkBusy ? "Creating…" : "Create jackpot"}</button>
+            </div>
+          </form>
+          {jackpots === null ? <p>Loading jackpots…</p> : jackpots.length === 0 ? (
+            <p>No jackpots yet.</p>
+          ) : (
+            <div className="ow-games">
+              {jackpots.map((j) => (
+                <div key={j.id} className="ow-game-row">
+                  <div className="ow-game-head">
+                    <b>{j.name}</b>
+                    <span className="ow-game-cur">{j.gameName}</span>
+                    <span className="ow-game-mult">Pot {fmtCash(j.currentPot)}</span>
+                    {j.active ? <span className="ow-game-flag">ACTIVE</span> : <span className="ow-game-flag">PAUSED</span>}
+                  </div>
+                  <p className="ow-game-note">Seed {fmtCash(j.seedAmount)} · {j.contributionPct}% of each cash stake feeds the pot · {j.active ? "growing" : "paused — not growing"}.</p>
+                  <JackpotPayForm jackpot={j} busy={jkPayBusy === j.id} onPay={payJackpot} />
+                  <div className="pd-adjust-row">
+                    <button className="btn btn-ghost btn-sm" type="button" disabled={jkToggleBusy === j.id} onClick={() => void toggleJackpot(j)}>{jkToggleBusy === j.id ? "…" : j.active ? "Pause" : "Resume"}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* P2 Batch 2 (O30): CMS & localisation — the site pages (About,
+            Terms, Privacy), edited here and shown on /pages/[slug]
+            when active. English only, GH₵ only. */}
+        <section className="admin-sec">
+          <h3>CMS &amp; localisation</h3>
+          <p className="rg48-sub">The site pages. Edit the title + body and toggle active — an inactive page 404s on its public URL. English only — more languages need translated copy, which does not exist yet. GH₵ only — the platform is Ghana-only for money.</p>
+          {cmsPages === null ? <p>Loading pages…</p> : cmsPages.map((p) => (
+            <div key={p.slug}>
+              <h4>/{p.slug}{p.active ? "" : " (inactive)"}</h4>
+              <CmsPageEditor page={p} onSaved={loadCms} />
+            </div>
+          ))}
+        </section>
+
+        {/* P2 Batch 2 (O31): automated risk rules — a fraud signal +
+            threshold + action, evaluated when the event happens (a
+            withdrawal request is created, a deposit lands). "flag" only
+            adds the alert to the fraud console; "block_player" blocks
+            the player at once; "hold_withdrawal" holds the withdrawal
+            for admin review. The last two are REAL actions. */}
+        <section className="admin-sec">
+          <h3>Risk rules</h3>
+          <p className="rg48-sub">Automated actions on top of the 4 fraud signals (a/b/c/e — failed-logins does not exist, there is no login-attempt data). A rule fires when its event happens: a withdrawal request is created, or a deposit lands. &ldquo;Flag only&rdquo; adds the alert to the fraud console and nothing more. &ldquo;Block player&rdquo; and &ldquo;Hold withdrawal&rdquo; are REAL actions — the player is blocked at once, or the withdrawal is set to &ldquo;held&rdquo; for admin review.</p>
+          <form className="owner-add" onSubmit={createRiskRule}>
+            <div className="pd-adjust-row">
+              <label>Name
+                <input type="text" value={rrName} onChange={(e) => setRrName(e.target.value)} maxLength={60} aria-label="Risk rule name" placeholder="e.g. Hold fast withdrawals" />
+              </label>
+              <label>Signal
+                <select value={rrSignal} onChange={(e) => { setRrSignal(e.target.value); const s = riskSignals.find((x) => x.key === e.target.value); if (s) setRrThreshold(String(s.defaultThreshold)); }} aria-label="Risk rule signal">
+                  {riskSignals.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
+                </select>
+              </label>
+              <label>{riskSignals.find((s) => s.key === rrSignal)?.thresholdLabel ?? "Threshold"}
+                <input type="number" min={0.01} step="0.01" inputMode="decimal" value={rrThreshold} onChange={(e) => setRrThreshold(e.target.value)} aria-label="Risk rule threshold" />
+              </label>
+              <label>Action
+                <select value={rrAction} onChange={(e) => setRrAction(e.target.value)} aria-label="Risk rule action">
+                  {riskActions.map((a) => (<option key={a.key} value={a.key}>{a.label}</option>))}
+                </select>
+              </label>
+              <button className="btn btn-gold" type="submit" disabled={rrBusy}>{rrBusy ? "Creating…" : "Create rule"}</button>
+            </div>
+            {riskSignals.find((s) => s.key === rrSignal) && <p className="rg48-mini">{riskSignals.find((s) => s.key === rrSignal)!.thresholdHint}</p>}
+            {riskActions.find((a) => a.key === rrAction) && <p className="rg48-mini">{riskActions.find((a) => a.key === rrAction)!.note}</p>}
+          </form>
+          {riskRules === null ? <p>Loading rules…</p> : riskRules.length === 0 ? (
+            <p>No risk rules yet — the fraud console still flags, but nothing is blocked or held automatically.</p>
+          ) : (
+            <div className="rg48-twrap">
+              <table className="dep-table">
+                <thead><tr><th>Rule</th><th>Signal</th><th>Threshold</th><th>Action</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {riskRules.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.name}</td>
+                      <td>{riskSignals.find((s) => s.key === r.signal)?.label ?? r.signal}</td>
+                      <td>{r.threshold}</td>
+                      <td>{riskActions.find((a) => a.key === r.action)?.label ?? r.action}</td>
+                      <td>{r.active ? "Active" : "Disabled"}</td>
+                      <td><button className="btn btn-ghost btn-sm" type="button" disabled={rrToggleBusy === r.id} onClick={() => void toggleRiskRule(r)}>{rrToggleBusy === r.id ? "…" : r.active ? "Disable" : "Enable"}</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* P2 Batch 2 (O32): anomaly alerts — rule-based detection,
+            computed live from the real tables. No stored rows, no ML
+            model, no AI — just thresholds on the real data. */}
+        <section className="admin-sec">
+          <h3>Anomaly alerts</h3>
+          <p className="rg48-sub">Rule-based anomaly detection — no AI model, no machine learning, just thresholds on the real data, computed live every time this section loads. A win-rate flag can be luck, not an exploit — check, don&apos;t assume.</p>
+          {anomalies === null ? <p>Loading anomalies…</p> : (
+            <>
+              <div className="sum-cards">
+                <div className="sum-card"><span>High</span><b>{anomalies.counts.high}</b></div>
+                <div className="sum-card"><span>Medium</span><b>{anomalies.counts.medium}</b></div>
+              </div>
+              {anomalies.anomalies.length === 0 ? <p>No anomalies right now.</p> : (
+                <div className="fraud-list">
+                  {anomalies.anomalies.map((a) => (
+                    <article key={a.id} className="fraud-row">
+                      <div className="fraud-head">
+                        <span className={`sev-pill sev-${a.severity}`}>{a.severity === "high" ? "HIGH" : "MEDIUM"}</span>
+                        <b>{a.type === "win-rate" ? "Win rate" : a.type === "stake-jump" ? "Stake jump" : a.type === "rtp-spike" ? "RTP spike" : "Deposit then withdraw"}</b>
+                      </div>
+                      <p>{a.reason}</p>
+                      <p className="rg48-sub">
+                        {a.userId ? <Link href={`/admin/players/${a.userId}`}>{a.userName}</Link> : a.gameName ?? a.game}
+                        {a.userId ? "" : " · see the RTP monitor above"} · {new Date(a.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => void loadAnomalies()}>Refresh anomalies</button>
+            </>
+          )}
+        </section>
+
+        {/* P2 Batch 2 (O33): multi-brand support — CONFIG records only.
+            A brand does NOT change any page, game or URL: there is no
+            per-brand routing, no per-brand database and no per-brand
+            theme switcher. */}
+        <section className="admin-sec">
+          <h3>Brands</h3>
+          <p className="rg48-sub">Brands are config records for now — switching the live site to a brand needs per-brand routing + theming, which is not built. Creating or toggling a brand changes nothing on any page, game or URL.</p>
+          <form className="owner-add" onSubmit={createBrand}>
+            <div className="pd-adjust-row">
+              <label>Name
+                <input type="text" value={brName} onChange={(e) => setBrName(e.target.value)} maxLength={60} aria-label="Brand name" placeholder="e.g. Royale Gold" />
+              </label>
+              <label>Slug
+                <input type="text" value={brSlug} onChange={(e) => setBrSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} maxLength={40} aria-label="Brand slug" placeholder="e.g. royale-gold" />
+              </label>
+              <label>Site name
+                <input type="text" value={brSite} onChange={(e) => setBrSite(e.target.value)} maxLength={60} aria-label="Brand site name" placeholder="Defaults to the name" />
+              </label>
+              <label>Primary colour
+                <input type="color" value={brPrimary} onChange={(e) => setBrPrimary(e.target.value)} aria-label="Brand primary colour" />
+              </label>
+              <label>Secondary colour
+                <input type="color" value={brSecondary} onChange={(e) => setBrSecondary(e.target.value)} aria-label="Brand secondary colour" />
+              </label>
+              <button className="btn btn-gold" type="submit" disabled={brBusy}>{brBusy ? "Creating…" : "Create brand"}</button>
+            </div>
+          </form>
+          {brands === null ? <p>Loading brands…</p> : brands.length === 0 ? (
+            <p>No brands yet.</p>
+          ) : (
+            <div className="rg48-twrap">
+              <table className="dep-table">
+                <thead><tr><th>Brand</th><th>Slug</th><th>Site name</th><th>Colours</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {brands.map((b) => (
+                    <tr key={b.id}>
+                      <td>{b.name}</td>
+                      <td>{b.slug}</td>
+                      <td>{b.siteName}</td>
+                      <td><span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 3, background: b.primaryColor, verticalAlign: "middle" }} /> <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 3, background: b.secondaryColor, verticalAlign: "middle" }} /></td>
+                      <td>{b.active ? "Active" : "Inactive"}</td>
+                      <td><button className="btn btn-ghost btn-sm" type="button" disabled={brToggleBusy === b.id} onClick={() => void toggleBrand(b)}>{brToggleBusy === b.id ? "…" : b.active ? "Disable" : "Enable"}</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
     </main>

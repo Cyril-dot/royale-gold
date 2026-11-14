@@ -29,7 +29,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
-    const pending = await prisma.withdrawal.count({ where: { status: { in: ["pending", "admin_approved"] } } });
+    const pending = await prisma.withdrawal.count({ where: { status: { in: ["pending", "admin_approved", "held"] } } });
     // P1 Batch 1 (A15): risk flags on every row (same computation as the admin queue).
     const flags = await annotateWithdrawalFlags(rows.map((w) => ({ id: w.id, userId: w.userId, amount: dec(w.amount), user: w.user })));
     // P1 Batch 4 (O22): the KYC-required warning (same rule as the admin queue).

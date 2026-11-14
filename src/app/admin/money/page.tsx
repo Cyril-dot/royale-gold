@@ -228,7 +228,7 @@ function AdminMoneyInner() {
             <p className="rg48-sub">Requests only — no real money moves. Nothing pays out without an admin action. Over {fmtCash(WITHDRAWAL_OWNER_THRESHOLD)} also needs the owner’s approval.</p>
             <div className="money-chips" role="group" aria-label="Filter by status">
               <button type="button" className={!wdStatus ? "on" : ""} onClick={() => setWdStatus("")}>All</button>
-              {["pending", "admin_approved", "approved", "rejected"].map((s) => (
+              {["pending", "held", "admin_approved", "approved", "rejected"].map((s) => (
                 <button key={s} type="button" className={wdStatus === s ? "on" : ""} onClick={() => setWdStatus(s)}>{s === "admin_approved" ? "Awaiting owner" : s[0].toUpperCase() + s.slice(1)}</button>
               ))}
               <button type="button" className={wdFlaggedOnly ? "on" : ""} onClick={() => setWdFlaggedOnly(!wdFlaggedOnly)}>Flagged only</button>
@@ -256,15 +256,19 @@ function AdminMoneyInner() {
                       <span className="wd-flags"><span className="risk-flag kyc-flag">KYC required — player&apos;s KYC is {w.kycStatus === "not_submitted" ? "not submitted" : w.kycStatus}</span></span>
                     ) : null}
                     {w.reason ? <p className="wd-reason">Reason: {w.reason}</p> : null}
-                    {!previewId && (w.status === "pending" || w.status === "admin_approved") && (
+                    {/* P2 Batch 2 (O31): a "held" withdrawal was held by
+                        an automated risk rule — the admin reviews it
+                        and approves or rejects it like a pending one. */}
+                    {!previewId && (w.status === "pending" || w.status === "admin_approved" || w.status === "held") && (
                       <div className="wd-actions">
-                        {w.status === "pending" ? (
+                        {w.status === "admin_approved" ? (
+                          <span className="wd-note">Approved by admin — waiting on the owner.</span>
+                        ) : (
                           <>
+                            {w.status === "held" ? <span className="wd-note">Held by a risk rule — review before deciding.</span> : null}
                             <button className="btn btn-gold btn-sm" type="button" disabled={busyId === w.id} onClick={() => void decide(w, "approve")}>Approve</button>
                             <button className="btn btn-ghost btn-sm" type="button" disabled={busyId === w.id} onClick={() => void decide(w, "reject")}>Reject</button>
                           </>
-                        ) : (
-                          <span className="wd-note">Approved by admin — waiting on the owner.</span>
                         )}
                       </div>
                     )}

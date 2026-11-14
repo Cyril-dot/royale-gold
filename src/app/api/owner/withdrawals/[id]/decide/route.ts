@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const w = await prisma.withdrawal.findUnique({ where: { id } });
     if (!w) return fail("Withdrawal not found", 404);
-    if (w.status !== "pending" && w.status !== "admin_approved") {
+    if (w.status !== "pending" && w.status !== "admin_approved" && w.status !== "held") {
       return fail(`This withdrawal is already ${w.status}`, 400);
     }
 

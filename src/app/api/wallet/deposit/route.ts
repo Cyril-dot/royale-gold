@@ -11,6 +11,9 @@ import { checkDepositLimit } from "@/lib/limits";
 // P1 Batch 3 (O19): promotion engine — deposit-match + first-deposit
 // free coins, applied in the same transaction as the deposit.
 import { applyDepositPromotions } from "@/lib/promotions";
+// P2 Batch 2 (O31): automated risk rules — evaluated AFTER the
+// deposit lands (best-effort; a rule failure never fails the deposit).
+import { evaluateDepositRules } from "@/lib/risk-rules";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -113,6 +116,11 @@ export async function POST(req: Request) {
           : updated;
       return { updated: updatedAfterPromo ?? updated, event, commission, promoGrants };
     });
+
+    // P2 Batch 2 (O31): deposit-time risk rules — signal (c)
+    // "deposit, no play" can block the player. Best-effort: it runs
+    // after the deposit transaction and never fails the deposit.
+    await evaluateDepositRules(user.id);
 
     return ok({
       cash: dec(result.updated.cashBalance),

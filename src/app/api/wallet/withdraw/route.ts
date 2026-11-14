@@ -9,6 +9,10 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
 import { WITHDRAWAL_METHODS } from "@/lib/withdrawals";
+// P2 Batch 2 (O31): automated risk rules — evaluated inside the same
+// transaction as the request, AFTER the request is created, so a hold
+// is atomic with it.
+import { evaluateWithdrawalRules } from "@/lib/risk-rules";
 
 export async function POST(req: Request) {
   try {
@@ -40,18 +44,25 @@ export async function POST(req: Request) {
       await tx.auditLog.create({
         data: { actorId: user.id, action: "withdrawal.request", targetId: w.id, detail: `Requested ${round2(amount)} via ${method}` },
       });
-      return w;
+      // P2 Batch 2 (O31): the risk rules run AFTER the request is
+      // created — a "hold_withdrawal" rule sets this request "held"
+      // for admin review; a "block_player" rule blocks the player.
+      // "flag" needs nothing (the fraud console already shows it).
+      const rules = await evaluateWithdrawalRules(tx, { id: w.id, userId: user.id, amount: round2(amount) }, fresh.createdAt);
+      return { w, status: rules.held ? "held" : "pending" };
     });
 
     return ok({
       withdrawal: {
-        id: created.id,
-        amount: dec(created.amount),
-        method: created.method,
+        id: created.w.id,
+        amount: dec(created.w.amount),
+        method: created.w.method,
         status: created.status,
-        createdAt: created.createdAt.toISOString(),
+        createdAt: created.w.createdAt.toISOString(),
       },
-      note: "Request only — no money moves until an admin approves it.",
+      note: created.status === "held"
+        ? "This request was held for admin review by an automated risk rule."
+        : "Request only — no money moves until an admin approves it.",
     }, 201);
   } catch (err) {
     return toErrorResponse(err);

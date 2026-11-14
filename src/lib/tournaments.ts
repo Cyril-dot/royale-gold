@@ -3,6 +3,7 @@
 // from GameResult while the tournament runs — never stored per bet.
 // TournamentEntry rows are the FROZEN final standings, written only
 // when the tournament ends.
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { getGame } from "./games";
 import { dec, round2 } from "./money";
@@ -86,4 +87,81 @@ export async function tournamentLeaderboard(t: {
 export function gameNameFor(slug: string): string {
   if (slug === "all") return "All games";
   return getGame(slug)?.name ?? slug;
+}
+
+/**
+ * End a tournament — pay the prize pool as a bonus credit to the
+ * winner and freeze the final standings. The winner is picked from
+ * the leaderboard (default rank 1); the prize uses the bonus-grant
+ * path — wallet credit + BalanceAdjustment kind "bonus" + AuditLog
+ * "bonus.grant" — so the ledger shows it as a prize, never as a
+ * manual adjustment. A tournament ends ONCE; the prize is paid once,
+ * in the same transaction as the freeze. Shared by the admin end
+ * route (A27) and the owner end route (O29) — the only difference is
+ * who may call it (the admin who created it, or the owner for any
+ * tournament); the scope check lives in the route, not here.
+ */
+export async function endTournament(
+  t: { id: string; name: string; createdBy: string; gameSlug: string; startAt: Date; endAt: Date; status: string; prizePool: Prisma.Decimal | number },
+  winnerId: string | null,
+  actorId: string,
+): Promise<{
+  ended: { id: string; name: string; status: string; winnerId: string | null };
+  winner: { id: string; name: string };
+  winnerCash: number;
+  prize: number;
+  winnerRank: number;
+}> {
+  if (t.status === "ended") throw new Error("This tournament has already ended — the prize was paid once");
+  const board = await tournamentLeaderboard(t);
+  if (board.length === 0) throw new Error("No one played in this tournament — there is no winner to pay");
+  const wanted = (winnerId ?? "").trim();
+  if (wanted && !board.some((r) => r.userId === wanted)) {
+    throw new Error("The winner must be on the leaderboard");
+  }
+  const winnerRow = board.find((r) => r.userId === wanted) ?? board[0];
+  const prize = round2(dec(t.prizePool));
+  const result = await prisma.$transaction(async (tx) => {
+    const winner = await tx.user.findUnique({ where: { id: winnerRow.userId } });
+    if (!winner) throw new Error("Winner not found");
+    const after = await tx.user.update({
+      where: { id: winnerRow.userId },
+      data: { cashBalance: round2(dec(winner.cashBalance) + prize) },
+    });
+    await tx.balanceAdjustment.create({
+      data: {
+        userId: winnerRow.userId, adminId: actorId, wallet: "cash", direction: "credit",
+        amount: prize, reason: `Tournament prize: ${t.name}`, kind: "bonus",
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId, action: "bonus.grant", targetId: winnerRow.userId,
+        detail: `Tournament prize: paid GH₵ ${prize.toFixed(2)} to ${winner.name} for winning "${t.name}" (rank ${winnerRow.rank}, staked GH₵ ${winnerRow.points.toFixed(2)})`,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId, action: "tournament.end", targetId: t.id,
+        detail: `Tournament: ended "${t.name}" — winner ${winner.name}, prize GH₵ ${prize.toFixed(2)}`,
+      },
+    });
+    // Freeze the final standings — the leaderboard reads these rows
+    // from now on, so the result can never drift.
+    await tx.tournamentEntry.createMany({
+      data: board.map((r) => ({ tournamentId: t.id, userId: r.userId, points: round2(r.points), rank: r.rank })),
+    });
+    const ended = await tx.tournament.update({
+      where: { id: t.id },
+      data: { status: "ended", winnerId: winnerRow.userId },
+    });
+    return { ended, winner, after };
+  });
+  return {
+    ended: { id: result.ended.id, name: result.ended.name, status: displayStatus(result.ended), winnerId: result.ended.winnerId },
+    winner: { id: result.winner.id, name: result.winner.name },
+    winnerCash: dec(result.after.cashBalance),
+    prize,
+    winnerRank: winnerRow.rank,
+  };
 }

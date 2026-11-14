@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const w = await prisma.withdrawal.findUnique({ where: { id } });
     if (!w) return fail("Withdrawal not found", 404);
     if (w.adminId !== admin.id) return fail("This withdrawal is not in your queue", 404);
-    if (w.status !== "pending") return fail(`This withdrawal is already ${w.status}`, 400);
+    if (w.status !== "pending" && w.status !== "held") return fail(`This withdrawal is already ${w.status}`, 400);
 
     const amount = dec(w.amount);
     const nextStatus = decision === "reject" ? "rejected" : needsOwnerApproval(amount) ? "admin_approved" : "approved";

@@ -17,6 +17,9 @@ export interface PublicUser {
   referredByAdminId: string | null;
   referralCodeUsed: string | null;
   createdAt: string;
+  // P2 Batch 2 (O28): the player's birthday (YYYY-MM-DD) or null — the
+  // loyalty birthday bonus pays on it, once per year.
+  birthday: string | null;
   // P0 Batch 3 (O2/O3): the admin's allowed sections, or null = all.
   permissions: string[] | null;
   // P0 Batch 3 (A13): whether TOTP 2FA is enabled (the secret is never exposed).
@@ -41,6 +44,7 @@ export function publicUser(u: {
   createdAt: Date;
   permissions?: string | null;
   totpEnabled?: boolean;
+  birthday?: Date | null;
 }): PublicUser {
   return {
     id: u.id,
@@ -60,6 +64,7 @@ export function publicUser(u: {
     createdAt: u.createdAt.toISOString(),
     permissions: parsePermissions(u.permissions ?? null),
     totpEnabled: u.totpEnabled ?? false,
+    birthday: u.birthday ? u.birthday.toISOString().slice(0, 10) : null,
   };
 }
 

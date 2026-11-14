@@ -66,6 +66,11 @@ model User {
   xp               Int      @default(0)
   level            Int      @default(1)
   createdAt        DateTime @default(now())
+  // P2 Batch 2 (O28): the player's birthday (optional, set on the
+  // account page) — the owner pays a birthday bonus once a year to
+  // players whose birthday is today. Stored as a date (UTC midnight);
+  // only the month + day are used for the bonus.
+  birthday         DateTime?
 
   referralCodes   ReferralCode[]
   redemptions     Redemption[]
@@ -121,6 +126,12 @@ model User {
   tournamentsCreated Tournament[]      @relation("TournamentCreator")
   tournamentsWon     Tournament[]      @relation("TournamentWinner")
   tournamentEntries  TournamentEntry[]
+  // P2 Batch 2 (O28/O29/O31/O33): jackpots, risk rules and brands this
+  // owner created; birthday bonuses paid to this player.
+  jackpotsCreated    Jackpot[]          @relation("JackpotCreator")
+  riskRulesCreated   RiskRule[]         @relation("RiskRuleCreator")
+  brandsCreated      Brand[]            @relation("BrandCreator")
+  birthdayBonusGrants BirthdayBonusGrant[]
 }
 
 model ReferralCode {
@@ -282,6 +293,10 @@ model BalanceAdjustment {
 // commission.payout (settlement), admin.permission / admin.kill_sessions /
 // admin.deactivate, auth.2fa.enable / auth.2fa.disable, ticket.create /
 // ticket.reply / ticket.close.
+// P2 Batch 2 (O28/O29/O30/O31/O33) extends it further: loyalty.birthday
+// (birthday bonus paid), jackpot.create / jackpot.toggle / jackpot.pay,
+// risk.rule.create / risk.rule.toggle / risk.rule.hold / risk.rule.block,
+// cms.save, brand.create / brand.toggle.
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String
@@ -755,4 +770,125 @@ model TournamentEntry {
 
   @@unique([tournamentId, userId])
   @@index([tournamentId, rank])
+}
+
+// P2 Batch 2 (O28): loyalty config — a dedicated model (id always
+// "global"), like KycSettings, because it is a distinct settings
+// domain with its own endpoint. pointsPerGhs is a READ-ONLY display
+// rule (1 point per GH₵ 1 staked by default) — points are computed
+// live from GameResult, there is NO points ledger. birthdayBonus is
+// the GH₵ credited as a bonus on a player's birthday, paid ONCE per
+// year by a MANUAL owner action (no cron exists) via the bonus-grant
+// path; 0 = no birthday bonus.
+model LoyaltySettings {
+  id            String   @id @default("global")
+  pointsPerGhs  Decimal  @default(1) @db.Decimal(5, 2)
+  birthdayBonus Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt     DateTime @updatedAt
+}
+
+// P2 Batch 2 (O28): one row per birthday bonus paid — a player is
+// paid at most once per calendar year.
+model BirthdayBonusGrant {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year      Int
+  amount    Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, year])
+  @@index([year, createdAt])
+}
+
+// P2 Batch 2 (O29): jackpots. The pot is HOUSE-funded: every cash
+// stake in the jackpot's game(s) grows the pot by contributionPct% of
+// the stake — a REPORTING number, never taken from any payout (the
+// settle hook runs after the payout is computed). The pot itself is
+// tracked in JackpotPot (one row per jackpot); currentPot here is a
+// read mirror, kept in sync by the same transaction. Paying the pot
+// credits the picked player as a bonus and resets the pot to the
+// seed amount. Coins never feed a jackpot (play-money only).
+model Jackpot {
+  id             String   @id @default(cuid())
+  name           String
+  gameSlug       String   // one of the 46 game slugs, or "all"
+  seedAmount     Decimal  @db.Decimal(12, 2)
+  contributionPct Decimal @default(1) @db.Decimal(5, 2)
+  currentPot     Decimal  @default(0) @db.Decimal(12, 2)
+  active         Boolean  @default(true)
+  createdBy      String
+  creator        User     @relation("JackpotCreator", fields: [createdBy], references: [id])
+  createdAt      DateTime @default(now())
+
+  pot JackpotPot?
+
+  @@index([active, createdAt])
+}
+
+model JackpotPot {
+  id        String   @id @default(cuid())
+  jackpotId String   @unique
+  jackpot   Jackpot  @relation(fields: [jackpotId], references: [id], onDelete: Cascade)
+  pot       Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt DateTime @updatedAt
+}
+
+// P2 Batch 2 (O30): CMS pages — the owner edits title + body and
+// toggles active/inactive. Seeded lazily with About, Terms, Privacy
+// (src/lib/cms.ts). A page shows on /pages/[slug] only while active;
+// the public endpoint 404s an inactive or missing page.
+model CmsPage {
+  slug      String   @id
+  title     String
+  body      String
+  active    Boolean  @default(true)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// P2 Batch 2 (O31): automated risk rules — actions on top of the 4
+// existing fraud signals (a/b/c/e; signal (d) failed-logins does not
+// exist — there is no login-attempt data). Threshold meaning depends
+// on the signal: (a) withdrawal-flags = minimum risk-flag count on
+// the request (default 2); (b) rapid-withdrawals = requests in 24h
+// (default 3); (c) deposit-no-play = GH₵ deposited in 24h with 0
+// rounds in 24h (default 1000); (e) deposit-then-withdraw = minutes
+// between deposit and withdrawal (default 60). Action: "flag" (the
+// alert already appears in the fraud console — no extra effect),
+// "block_player" (block the player at once), "hold_withdrawal" (set
+// the withdrawal "held" for admin review — withdrawal requests only).
+model RiskRule {
+  id        String   @id @default(cuid())
+  name      String
+  signal    String   // "withdrawal-flags" | "rapid-withdrawals" | "deposit-no-play" | "deposit-then-withdraw"
+  threshold Decimal  @db.Decimal(12, 2)
+  action    String   // "flag" | "block_player" | "hold_withdrawal"
+  active    Boolean  @default(true)
+  createdBy String
+  creator   User     @relation("RiskRuleCreator", fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([active, signal])
+}
+
+// P2 Batch 2 (O33): multi-brand foundation — CONFIG records only.
+// Seeded lazily with the one live brand (Royale Gold). A brand does
+// NOT change any page, game or URL: there is no per-brand routing,
+// no per-brand database and no per-brand theme switcher — the owner
+// page says so plainly. Switching the live site to a brand needs
+// per-brand routing + theming, which is not built.
+model Brand {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  siteName      String
+  primaryColor  String   @default("#F2C230")
+  secondaryColor String  @default("#0C2B22")
+  active        Boolean  @default(true)
+  createdBy     String
+  creator       User     @relation("BrandCreator", fields: [createdBy], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([active, createdAt])
 }

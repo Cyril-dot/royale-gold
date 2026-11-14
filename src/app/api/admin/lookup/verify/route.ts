@@ -6,18 +6,13 @@
 // as the player-facing reveal endpoint). Rounds are read from the DB
 // (persisted at issue time), with the in-memory map as a fallback for
 // rounds issued before this deploy.
-import crypto from "node:crypto";
+// P2 Batch 2 (O27): the computation lives in src/lib/verify.ts now —
+// the owner's game-replay detail reuses it. This route only does auth
+// + the response shape, so the two can never disagree.
 import { requireRole } from "@/lib/auth";
 import { requirePermission } from "@/lib/rbac";
-import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
-import { dec } from "@/lib/money";
-import {
-  CRASH_GROWTH,
-  crashPointFromSeeds,
-  getCrashRound,
-  isCrashRoundFinished,
-} from "@/lib/crash";
+import { verifyCrashRound } from "@/lib/verify";
 
 export async function GET(req: Request) {
   try {
@@ -26,39 +21,9 @@ export async function GET(req: Request) {
     const roundId = new URL(req.url).searchParams.get("roundId");
     if (!roundId) return fail("roundId is required");
 
-    const dbRow = await prisma.crashRound.findUnique({ where: { roundId } });
-    const mem = dbRow ? null : getCrashRound(roundId);
-    if (!dbRow && !mem) return fail("Unknown crash round — rounds are kept for verification once issued", 404);
-
-    const hash = dbRow?.hash ?? mem!.hash;
-    const clientSeed = dbRow?.clientSeed ?? mem!.clientSeed;
-    const nonce = dbRow?.nonce ?? mem!.nonce;
-    const crashPoint = dbRow ? dec(dbRow.crashPoint) : mem!.crashPoint;
-    // A DB row has no startsAt — rounds start 6s after issue
-    // (createdAt), and end at startsAt + ln(point) / growth.
-    const finished = dbRow
-      ? Date.now() >= dbRow.createdAt.getTime() + 6000 + Math.log(Math.max(1, crashPoint)) / CRASH_GROWTH
-      : isCrashRoundFinished(mem!);
-
-    if (!finished) {
-      return ok({ roundId, hash, clientSeed, nonce, finished: false });
-    }
-
-    const serverSeed = dbRow?.serverSeed ?? mem!.serverSeed;
-    const recomputedPoint = crashPointFromSeeds(serverSeed, clientSeed, nonce);
-    const recomputedHash = crypto.createHash("sha256").update(serverSeed).digest("hex");
-    return ok({
-      roundId,
-      hash,
-      clientSeed,
-      nonce,
-      finished: true,
-      serverSeed,
-      crashPoint,
-      recomputedPoint,
-      pointMatch: recomputedPoint === crashPoint,
-      hashMatch: recomputedHash === hash,
-    });
+    const result = await verifyCrashRound(roundId);
+    if (!result) return fail("Unknown crash round — rounds are kept for verification once issued", 404);
+    return ok(result);
   } catch (err) {
     return toErrorResponse(err);
   }

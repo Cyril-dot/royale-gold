@@ -112,6 +112,9 @@ main.rg48-page-main.rg23.admin-fb .code-chip.sm{
 .wd-admin_approved{background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.45)}
 .wd-approved{background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.45)}
 .wd-rejected{background:rgba(229,50,45,.12);color:#FF6B65;border:1px solid rgba(229,50,45,.45)}
+/* P2 Batch 2 (O31): a withdrawal held by an automated risk rule —
+   burnt orange, distinct from pending gold and rejected red. */
+.wd-held{background:rgba(255,140,0,.14);color:#FFA94D;border:1px solid rgba(255,140,0,.5)}
 .wd-reason{flex-basis:100%;margin:0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
 .wd-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .wd-note{font-size:13px;color:var(--muted,rgba(255,246,216,.7))}

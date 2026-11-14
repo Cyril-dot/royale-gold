@@ -132,6 +132,23 @@ export default function AccountPage() {
   // edits; a self-exclusion or a live cool-off shows here.
   const [myLimits, setMyLimits] = useState<{ selfExcludedUntil: string | null; selfExclusionReason: string | null; coolOffUntil: string | null; realityCheckMinutes: number } | null>(null);
   const [breakBusy, setBreakBusy] = useState(false);
+  // P2 Batch 2 (O28): birthday — optional, set here on the account
+  // page. The loyalty birthday bonus pays on it, once per year.
+  const [birthday, setBirthday] = useState("");
+  const [birthdayBusy, setBirthdayBusy] = useState(false);
+  useEffect(() => { setBirthday(user?.birthday ?? ""); }, [user?.birthday]);
+
+  const saveBirthday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBirthdayBusy(true);
+    try {
+      await api("/api/auth/me", { method: "PATCH", body: JSON.stringify({ birthday }) });
+      toast(birthday ? `Birthday saved — ${new Date(`${birthday}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}` : "Birthday cleared", "win");
+      await refresh();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not save birthday", "lose");
+    } finally { setBirthdayBusy(false); }
+  };
 
   const loadMyLimits = async () => {
     try {
@@ -388,6 +405,18 @@ export default function AccountPage() {
           <Link className="ac-wcard" href="/wallet"><span>SIM</span><b>{fmtCoins(sim)}</b><i>Wallet →</i></Link>
         </section>
         <p className="rg48-mini">Coins are play-only — never withdrawable.</p>
+
+        {/* P2 Batch 2 (O28): birthday — optional. The loyalty birthday
+            bonus pays on this day, once per year, when the owner runs
+            "Pay birthday bonuses for today". */}
+        <section className="ac-sec" aria-label="Birthday">
+          <h3>Birthday</h3>
+          <form onSubmit={saveBirthday}>
+            <div className="rg48-f"><label htmlFor="acBirthday">Your birthday (optional)</label><input id="acBirthday" type="date" value={birthday} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setBirthday(e.target.value)} /></div>
+            <p className="rg48-mini">If the owner sets a birthday bonus, it is paid on this day once a year. Leave it blank for no birthday bonus.</p>
+            <button className="btn btn-gold" type="submit" disabled={birthdayBusy}>{birthdayBusy ? "Saving…" : "Save birthday"}</button>
+          </form>
+        </section>
 
         {/* Stats */}
         <section className="ac-sec" aria-label="Stats">

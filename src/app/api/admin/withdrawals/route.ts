@@ -26,7 +26,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
-    const pending = await prisma.withdrawal.count({ where: { adminId: admin.id, status: { in: ["pending", "admin_approved"] } } });
+    const pending = await prisma.withdrawal.count({ where: { adminId: admin.id, status: { in: ["pending", "admin_approved", "held"] } } });
     const flags = await annotateWithdrawalFlags(rows.map((w) => ({ id: w.id, userId: w.userId, amount: dec(w.amount), user: w.user })));
     // P1 Batch 4 (O22): the KYC-required warning — a request above the
     // owner's threshold from a player whose KYC is not Approved gets a

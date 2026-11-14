@@ -21,6 +21,9 @@ export interface User {
   permissions: string[] | null;
   // P0 Batch 3 (A13): whether TOTP 2FA is enabled.
   totpEnabled: boolean;
+  // P2 Batch 2 (O28): the player's birthday (YYYY-MM-DD) or null — the
+  // loyalty birthday bonus pays on it, once per year.
+  birthday: string | null;
 }
 
 export interface Wallet {
