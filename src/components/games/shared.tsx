@@ -24,6 +24,76 @@ export interface SettleResult {
   level: number;
 }
 
+// ---- Shared win confetti (Round 31) ----
+// Gold confetti rain on every win. Fired from settle() — the shared
+// win path, so every game gets it — via a window event, so a room
+// never has to pass a prop: RoomShell renders the layer, settle()
+// fires the event. Pieces are plain divs animated by one CSS
+// keyframe (transform only); a burst removes itself after the
+// longest fall. Reduced motion = no confetti at all (checked here
+// and again in CSS, so a stale event can never show a burst).
+
+const CONFETTI_COLORS = ["#F2C230", "#FFF6D8", "#3ED97E", "#C98F12"];
+
+export function fireConfetti() {
+  if (typeof window === "undefined") return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  window.dispatchEvent(new CustomEvent("rg-confetti"));
+}
+
+interface ConfettiPiece { left: number; delay: number; dur: number; size: number; color: string; rot: number; round: boolean }
+interface ConfettiBurst { id: number; pieces: ConfettiPiece[] }
+
+function makeBurst(id: number): ConfettiBurst {
+  const pieces: ConfettiPiece[] = [];
+  for (let i = 0; i < 36; i++) {
+    pieces.push({
+      left: Math.random() * 100,
+      delay: Math.random() * 0.35,
+      dur: 1.8 + Math.random() * 1.0,
+      size: 6 + Math.random() * 6,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      rot: 360 + Math.random() * 540,
+      round: Math.random() < 0.25,
+    });
+  }
+  return { id, pieces };
+}
+
+export function ConfettiLayer() {
+  const [bursts, setBursts] = useState<ConfettiBurst[]>([]);
+  useEffect(() => {
+    let id = 0;
+    const onBurst = () => {
+      const burst = makeBurst(++id);
+      setBursts((b) => [...b, burst]);
+      // Longest fall is 0.35s delay + 2.8s duration — clear after 3.4s.
+      setTimeout(() => setBursts((b) => b.filter((x) => x.id !== burst.id)), 3400);
+    };
+    window.addEventListener("rg-confetti", onBurst);
+    return () => window.removeEventListener("rg-confetti", onBurst);
+  }, []);
+  if (bursts.length === 0) return null;
+  return (
+    <div className="rg-confetti" aria-hidden="true">
+      {bursts.flatMap((burst) =>
+        burst.pieces.map((p, i) => (
+          <i key={`${burst.id}-${i}`} style={{
+            left: `${p.left}%`,
+            width: p.size,
+            height: p.round ? p.size : p.size * 1.5,
+            background: p.color,
+            borderRadius: p.round ? "50%" : 2,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.dur}s`,
+            "--rot": `${p.rot}deg`,
+          } as React.CSSProperties} />
+        ))
+      )}
+    </div>
+  );
+}
+
 export function useGameRoom(game: GameDef) {
   const { user, wallet, mode, muted, toast, setWallet, simSession, setSimSession, openAuth, refresh } = useStore();
   const [stats, setStats] = useState<GameStat | null>(null);
@@ -77,7 +147,7 @@ export function useGameRoom(game: GameDef) {
         setSimSession((simSession ?? 0) - stake + payout);
         const won = payout > stake;
         toast(won ? `You won ${fmtCash(payout)} (SIM)` : payout > 0 ? `${fmtCash(payout)} back (SIM)` : `You lost ${fmtCash(stake)} (SIM)`, won ? "win" : "lose");
-        if (won) playSfx("cheer", muted); else playSfx("groan", muted);
+        if (won) { playSfx("cheer", muted); fireConfetti(); } else playSfx("groan", muted);
         // SIM stats: same definition as the server (/api/games/stats) —
         // played+1, win iff payout > stake, best = max profit, streak =
         // the current run of consecutive wins. Persisted per game.
@@ -110,7 +180,7 @@ export function useGameRoom(game: GameDef) {
       const won = payout > stake;
       const amt = isCoin ? `${fmtCoins(payout)} coins` : fmtCash(payout);
       toast(won ? `You won ${amt}` : payout > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtCash(stake)}`, won ? "win" : "lose");
-      if (won) playSfx("cheer", muted); else if (payout === 0) playSfx("groan", muted);
+      if (won) { playSfx("cheer", muted); fireConfetti(); } else if (payout === 0) playSfx("groan", muted);
       await loadStats();
       return true;
     } catch (ex) {
@@ -236,11 +306,9 @@ export function RoomShell({ game, subtitle, children, stats, history, bare }: {
   // game, the stats strip and the history.
   return (
     <div className="xgame-room">
-      {/* Round 21: the room header is GameRoomHeader now — back, the
-          cash balance AND the coins balance, the REAL/SIM toggle and
-          the sound toggle. The old .xg-bar (one balance, no coins
-          pill) is gone. The bare variant (homepage Bottle section)
-          still renders no header at all. */}
+      {/* Shared win confetti — the layer lives in every room; settle()
+          fires it on a win. pointer-events:none, so it never blocks a tap. */}
+      <ConfettiLayer />
       {!bare && <GameRoomHeader />}
       <div className="wrap">
         <p className="xg-sub">{subtitle}</p>

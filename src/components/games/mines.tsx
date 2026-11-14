@@ -13,6 +13,7 @@ import { useState } from "react";
 import { fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
+import { playSfx } from "../../lib/store";
 
 function comb(n: number, k: number): number {
   if (k < 0 || k > n) return 0;
@@ -112,6 +113,8 @@ export default function MinesRoom({ game }: { game: GameDef }) {
       revealAll(i, t);
       setPlaying(false);
       setMsg("BOOM — a mine. The stake is gone.");
+      // Impact thud at the hit; the settle below adds the lose groan.
+      playSfx("boom", room.muted);
       await room.settle(stake, 0, { mines: mineCount, revealed });
       return;
     }
@@ -120,6 +123,8 @@ export default function MinesRoom({ game }: { game: GameDef }) {
     setTiles(t);
     const r = revealed + 1;
     setRevealed(r);
+    // Bright pop per gem — each reveal feels like a small win.
+    playSfx("pop", room.muted);
     if (r >= 25 - mineCount) {
       // Every safe tile found — auto-cash at the full multiplier.
       const m = multFor(r, mineCount);

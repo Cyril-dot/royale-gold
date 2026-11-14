@@ -228,6 +228,7 @@ export default function PlinkoRoom({ game }: { game: GameDef }) {
 
   const drop = () => {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
+    playSfx("blip", mutedRef.current);
     const path: number[] = [];
     for (let i = 0; i < ROWS; i++) path.push(Math.random() < 0.5 ? -1 : 1);
     queueRef.current.push({ stake, risk, path, bin: -1 });

@@ -69,4 +69,38 @@ export const sfx = {
     if (muted) return;
     tone(1200, 0.03, "square", 0.05);
   },
+  // Mines gem reveal — short bright pop, a touch higher than blip so
+  // each gem feels like a small win on its own.
+  pop(muted: boolean) {
+    if (muted) return;
+    tone(880, 0.06, "sine", 0.14);
+    tone(1318, 0.08, "sine", 0.08, 0.03);
+  },
+  // Mines mine hit / Car Crash impact — low thud, never loud.
+  boom(muted: boolean) {
+    if (muted) return;
+    tone(90, 0.35, "sine", 0.22);
+    tone(55, 0.4, "sawtooth", 0.08, 0.02);
+  },
 };
+
+// Verification hook (Round 31): a rig cannot hear audio, so every
+// sfx call is logged here. window.__rgSfx holds the last 50 kinds in
+// order ("pop", "boom", "cheer", ...). Harmless in production.
+export const sfxCalls: string[] = [];
+if (typeof window !== "undefined") {
+  (window as unknown as { __rgSfx: string[] }).__rgSfx = sfxCalls;
+}
+function logCall(kind: string) {
+  sfxCalls.push(kind);
+  if (sfxCalls.length > 50) sfxCalls.shift();
+}
+// Wrap each sfx entry so its call is logged (muted calls log too —
+// the mute check itself is the proof that nothing played).
+for (const k of Object.keys(sfx) as (keyof typeof sfx)[]) {
+  const fn = sfx[k];
+  (sfx as Record<string, (muted: boolean) => void>)[k] = (muted: boolean) => {
+    logCall(k);
+    fn(muted);
+  };
+}

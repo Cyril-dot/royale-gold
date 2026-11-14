@@ -86,6 +86,7 @@ export function CoinFlipRoom({ game }: { game: GameDef }) {
     setFlipping(true);
     setResult(null);
     setMsg("Coin is in the air…");
+    playSfx("flip", room.muted);
     const out = Math.random() < 0.5 ? "heads" : "tails";
     const finish = async () => {
       setResult(out);
@@ -155,6 +156,7 @@ export function DiceRoom({ game }: { game: GameDef }) {
   const roll = async () => {
     if (rolling) return;
     setRolling(true);
+    playSfx("blip", room.muted);
     const d1 = 1 + Math.floor(Math.random() * 6), d2 = 1 + Math.floor(Math.random() * 6);
     const finish = async () => {
       setDice([d1, d2]);

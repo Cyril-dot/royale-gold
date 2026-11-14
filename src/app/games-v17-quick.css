@@ -301,3 +301,13 @@
 @media (prefers-reduced-motion: reduce){
   .dice-stage .fb-dice.rolling .fb-die{animation:none}
 }
+
+/* --- Shared win confetti (Round 31) ---
+   Gold rain on every win, fired from the shared settle() path. The
+   layer is position:fixed with pointer-events:none, so it can never
+   block a tap; pieces animate transform only (fall + spin). Brand
+   colours only: gold, cream, green, deep gold. */
+.rg-confetti{position:fixed;inset:0;pointer-events:none;z-index:90;overflow:hidden}
+.rg-confetti i{position:absolute;top:-4vh;display:block;border-radius:2px;animation-name:rg-confetti-fall;animation-timing-function:cubic-bezier(.25,.5,.55,1);animation-fill-mode:forwards;will-change:transform}
+@keyframes rg-confetti-fall{from{transform:translate3d(0,-6vh,0) rotate(0deg)}to{transform:translate3d(0,112vh,0) rotate(var(--rot,540deg))}}
+@media (prefers-reduced-motion: reduce){.rg-confetti{display:none}}

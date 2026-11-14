@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
+import { playSfx } from "../../lib/store";
 
 // ---------------- Car Crash ----------------
 // Top-down driving on a server-issued crash round: the run's odds grow
@@ -275,6 +276,10 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roundIdRef = useRef<string | null>(null);
   roundIdRef.current = roundId;
+  // beginCrashFx has [] deps, so it would capture a stale `muted` —
+  // mirror Plinko's mutedRef pattern.
+  const mutedRef = useRef(room.muted);
+  mutedRef.current = room.muted;
 
   // v48 flash banner (NEAR MISS / COIN pops). Infrequent setState only.
   const showFlash = useCallback((txt: string) => {
@@ -294,6 +299,8 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     st.crashT = Date.now();
     if (rv) st.pendingReveal = rv;
     st.shake = 14;
+    // Impact thud at the crash; the settle below adds the lose groan.
+    playSfx("boom", mutedRef.current);
     for (let i = 0; i < 26; i++) {
       const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 5;
       st.cparts.push({ x: st.x, y: CC_CAR_Y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1, life: 0.5 + Math.random() * 0.4, r: 2 + Math.random() * 3 });
@@ -330,6 +337,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     setPlaying(false);
     const payout = Math.round(stake * odds * 100) / 100;
     setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtCash(payout)}!`);
+    playSfx("blip", mutedRef.current);
     await room.settle(stake, payout, { odds, coins, dist: Math.round(st.dist) }, roundIdRef.current || undefined);
     void revealAfterEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -214,6 +214,6 @@ export function useStore(): Store {
   return s;
 }
 
-export function playSfx(kind: "blip" | "flip" | "cheer" | "groan" | "tick", muted: boolean) {
+export function playSfx(kind: "blip" | "flip" | "cheer" | "groan" | "tick" | "pop" | "boom", muted: boolean) {
   sfx[kind](muted);
 }
