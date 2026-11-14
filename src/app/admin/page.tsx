@@ -6,12 +6,12 @@
 
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../lib/store";
-import { fmtCash } from "../../lib/api";
-import { useAdminOverview, useAdminDashboard } from "../../lib/admin-client";
+import { api, fmtCash } from "../../lib/api";
+import { useAdminOverview, useAdminDashboard, useAdminSentNotifications } from "../../lib/admin-client";
 import { canAccessSection } from "../../lib/rbac";
 import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../components/AdminNav";
 
@@ -28,19 +28,44 @@ export default function AdminOverviewPage() {
 }
 
 function AdminOverviewInner() {
-  const { user } = useStore();
+  const { user, toast } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
   const { ov, err } = useAdminOverview(previewId);
   // P0 Batch 4 (A1): the enhanced dashboard — "today so far", the last
   // 7 days of deposits, and the top 5 players by total deposited.
   const { dash, err: dashErr } = useAdminDashboard(previewId);
+  // P1 Batch 2 (A23): broadcast — one notification to all my players.
+  // The form is admin-only (hidden in preview); the sent list shows
+  // for the owner too.
+  const { data: sentData, load: loadSent } = useAdminSentNotifications(previewId);
+  const [bcTitle, setBcTitle] = useState("");
+  const [bcBody, setBcBody] = useState("");
+  const [bcBusy, setBcBusy] = useState(false);
 
   if (!user) return <AdminLoginPrompt />;
   // P0 Batch 3 (O3): the server 403s this section too.
   if (!previewId && !canAccessSection(user, "overview")) return <AdminDenied section="overview" />;
   if (err) return <AdminError err={err} />;
   if (!ov) return <p>Loading admin panel…</p>;
+
+  const submitBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (bcTitle.trim().length < 2 || bcBody.trim().length < 2) { toast("Write a title and a message first", "lose"); return; }
+    setBcBusy(true);
+    try {
+      const r = await api<{ sent: number }>("/api/admin/notifications", {
+        method: "POST",
+        body: JSON.stringify({ title: bcTitle.trim(), body: bcBody.trim() }),
+      });
+      toast(`Notification sent to ${r.sent} players`, "win");
+      setBcTitle("");
+      setBcBody("");
+      await loadSent();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Broadcast failed", "lose");
+    } finally { setBcBusy(false); }
+  };
 
   const c = ov.commission;
   const latest = ov.history.slice(0, 5);
@@ -160,6 +185,35 @@ function AdminOverviewInner() {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+      {/* P1 Batch 2 (A23): broadcast — one notification to all my
+          players at once. The form is admin-only (hidden in preview);
+          the sent list shows for the owner too. In-app only. */}
+      <section className="admin-sec">
+        <h3>Notify all my players</h3>
+        <p className="rg48-sub">Send one message to every player you referred — it shows on their account page. In-app only, no email or SMS.</p>
+        {!previewId && user.role === "admin" ? (
+          <form className="pd-note-form" onSubmit={submitBroadcast}>
+            <input type="text" placeholder="Title — e.g. Weekend bonus is live" value={bcTitle} onChange={(e) => setBcTitle(e.target.value)} aria-label="Broadcast title" maxLength={120} />
+            <textarea placeholder="Message…" value={bcBody} onChange={(e) => setBcBody(e.target.value)} aria-label="Broadcast message" rows={2} maxLength={2000} />
+            <button className="btn btn-gold" type="submit" disabled={bcBusy}>{bcBusy ? "Sending…" : "Send to all my players"}</button>
+          </form>
+        ) : null}
+        {sentData && sentData.sent.length > 0 ? (
+          <>
+            <h4>Recently sent</h4>
+            <div className="pd-notes">
+              {sentData.sent.slice(0, 5).map((s) => (
+                <div key={s.id} className="pd-note">
+                  <p><b>{s.title}</b> — {s.body}</p>
+                  <span>{s.userName} · {new Date(s.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{s.readAt ? " · read" : " · unread"}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="rg48-mini">No notifications sent yet.</p>
         )}
       </section>
     </>

@@ -56,6 +56,10 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   const [limitCoolOff, setLimitCoolOff] = useState("");
   const [limitBusy, setLimitBusy] = useState(false);
   const [limitsSeeded, setLimitsSeeded] = useState(false);
+  // P1 Batch 2 (A23): send one in-app notification to this player.
+  const [ntfTitle, setNtfTitle] = useState("");
+  const [ntfBody, setNtfBody] = useState("");
+  const [ntfBusy, setNtfBusy] = useState(false);
   useEffect(() => {
     if (detail && !limitsSeeded) {
       setLimitMaxStake(detail.limits?.maxStake != null ? String(detail.limits.maxStake) : "");
@@ -198,6 +202,25 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
     } finally { setLimitBusy(false); }
   };
 
+  // P1 Batch 2 (A23): send one in-app notification to this player
+  // (own downline only — the endpoint enforces it).
+  const submitNotify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (ntfTitle.trim().length < 2 || ntfBody.trim().length < 2) { toast("Write a title and a message first", "lose"); return; }
+    setNtfBusy(true);
+    try {
+      await api(`/api/admin/users/${id}/notify`, {
+        method: "POST",
+        body: JSON.stringify({ title: ntfTitle.trim(), body: ntfBody.trim() }),
+      });
+      toast("Notification sent — it shows on the player's account page", "win");
+      setNtfTitle("");
+      setNtfBody("");
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Notification failed", "lose");
+    } finally { setNtfBusy(false); }
+  };
+
   if (!user) return <AdminLoginPrompt />;
   // P0 Batch 4 (A3): the owner may open a player directly (no preview)
   // from the global player search — there is no admin context to load
@@ -233,8 +256,18 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       <div className="pd-meta">
         <span className="pd-meta-item"><span className="pd-meta-label">Code used</span>{u.referralCodeUsed ? <b className="code-chip sm">{u.referralCodeUsed}</b> : <b>—</b>}</span>
         <span className="pd-meta-item"><span className="pd-meta-label">Referring admin</span><b>{u.referringAdmin?.name || "—"}</b></span>
-        <span className="pd-meta-item"><span className="pd-meta-label">KYC</span><b>{detail.kycStatus === "not_submitted" ? "Not submitted" : detail.kycStatus}</b></span>
+        <span className="pd-meta-item"><span className="pd-meta-label">KYC</span><b>{detail.kycStatus === "not_submitted" ? "Not submitted" : detail.kycStatus === "pending" ? "Pending review" : detail.kycStatus === "approved" ? "Approved" : "Rejected"}</b></span>
       </div>
+      {/* P1 Batch 2 (A21): the real KYC status — document type, submitted
+          date and the rejection reason when one was given. */}
+      {detail.kycDocumentType ? (
+        <p className="rg48-sub">
+          KYC: {detail.kycDocumentType === "national_id" ? "National ID" : detail.kycDocumentType === "passport" ? "Passport" : "Driver's licence"}
+          {detail.kycSubmittedAt ? ` · submitted ${new Date(detail.kycSubmittedAt).toLocaleDateString("en-GB")}` : ""}
+          {detail.kycStatus === "rejected" && detail.kycRejectionReason ? ` · Rejected: ${detail.kycRejectionReason}` : ""}
+          {detail.kycDocumentUrl ? <> · <a href={detail.kycDocumentUrl} target="_blank" rel="noreferrer">View document ↗</a></> : null}
+        </p>
+      ) : null}
       <AdminNav />
       <section className="admin-sec">
         <h3>Balances</h3>
@@ -409,6 +442,20 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
           </form>
         ) : null}
       </section>
+      {/* P1 Batch 2 (A23): send one in-app notification to this player.
+          The form is admin-only; the player sees it on their account
+          page. A broadcast to all players lives on the Overview page. */}
+      {!previewId && user.role === "admin" ? (
+        <section className="admin-sec">
+          <h3>Send notification</h3>
+          <p className="rg48-sub">Send a message to this player — it shows on their account page. In-app only, no email or SMS.</p>
+          <form className="pd-note-form" onSubmit={submitNotify}>
+            <input type="text" placeholder="Title — e.g. Your withdrawal is approved" value={ntfTitle} onChange={(e) => setNtfTitle(e.target.value)} aria-label="Notification title" maxLength={120} />
+            <textarea placeholder="Message…" value={ntfBody} onChange={(e) => setNtfBody(e.target.value)} aria-label="Notification message" rows={2} maxLength={2000} />
+            <button className="btn btn-gold" type="submit" disabled={ntfBusy}>{ntfBusy ? "Sending…" : "Send notification"}</button>
+          </form>
+        </section>
+      ) : null}
       <section className="admin-sec">
         <h3>Tags</h3>
         {detail.tags.length === 0 ? (

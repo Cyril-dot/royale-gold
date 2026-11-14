@@ -93,6 +93,12 @@ model User {
   tagsAuthored      PlayerTag[]       @relation("TagAuthor")
   // P1 Batch 1 (A20): per-player limits (one row per player, or none).
   limits            PlayerLimit?
+  // P1 Batch 2 (A21): KYC submissions this player made + ones this admin reviewed.
+  kycSubmissions KycSubmission[] @relation("KycPlayer")
+  kycReviews     KycSubmission[] @relation("KycReviewer")
+  // P1 Batch 2 (A23): in-app notifications received + sent by this admin.
+  notificationsReceived Notification[] @relation("NotificationPlayer")
+  notificationsSent     Notification[] @relation("NotificationAdmin")
 }
 
 model ReferralCode {
@@ -258,7 +264,7 @@ model AuditLog {
   id        String   @id @default(cuid())
   actorId   String
   actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set"
+  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send"
   targetId  String?
   detail    String?
   createdAt DateTime @default(now())
@@ -483,4 +489,46 @@ model CrashRound {
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// P1 Batch 2 (A21): KYC submissions — a player submits a document type
+// + a link to their ID document; an admin (own downline only) approves
+// or rejects it. KYC is informational ONLY — it never blocks deposits
+// or play (standing order). The document is a URL the player pastes —
+// there is no file-hosting infra in this repo, so no storage backend
+// is invented; the admin verifies from the URL.
+model KycSubmission {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation("KycPlayer", fields: [userId], references: [id], onDelete: Cascade)
+  documentType    String   // "national_id" | "passport" | "drivers_licence"
+  documentUrl     String
+  status          String   @default("pending") // "pending" | "approved" | "rejected"
+  reviewedBy      String?
+  reviewer        User?    @relation("KycReviewer", fields: [reviewedBy], references: [id])
+  reviewedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+// P1 Batch 2 (A23): in-app notifications from an admin to their own
+// players. In-app only — no email, SMS or push (no messaging infra
+// exists). A broadcast is one row per player.
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("NotificationPlayer", fields: [userId], references: [id], onDelete: Cascade)
+  adminId   String
+  admin     User     @relation("NotificationAdmin", fields: [adminId], references: [id])
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([adminId, createdAt])
 }

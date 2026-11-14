@@ -23,6 +23,10 @@ export const ADMIN_SECTIONS = [
   "tickets",
   // P1 Batch 1 (A16): bet lookup + provably-fair verify.
   "lookup",
+  // P1 Batch 2: KYC queue (A21), reports & export (A22), fraud alerts (A24).
+  "kyc",
+  "reports",
+  "fraud",
 ] as const;
 
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -37,6 +41,9 @@ export const ADMIN_SECTION_LABELS: Record<AdminSection, string> = {
   activity: "Activity log",
   tickets: "Tickets",
   lookup: "Bet lookup",
+  kyc: "KYC",
+  reports: "Reports",
+  fraud: "Fraud alerts",
 };
 
 export function isAdminSection(value: string): value is AdminSection {

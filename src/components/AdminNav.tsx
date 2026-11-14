@@ -29,6 +29,10 @@ const TABS: { path: string; section: AdminSection; label: string }[] = [
   { path: "/admin/tickets", section: "tickets", label: "Tickets" },
   // P1 Batch 1 (A16): bet lookup + provably-fair verify.
   { path: "/admin/lookup", section: "lookup", label: "Lookup" },
+  // P1 Batch 2: KYC queue (A21), reports & export (A22), fraud alerts (A24).
+  { path: "/admin/kyc", section: "kyc", label: "KYC" },
+  { path: "/admin/reports", section: "reports", label: "Reports" },
+  { path: "/admin/fraud", section: "fraud", label: "Fraud" },
 ];
 
 export function AdminNav() {

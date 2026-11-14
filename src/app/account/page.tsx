@@ -108,6 +108,36 @@ export default function AccountPage() {
   const [tkBody, setTkBody] = useState("");
   const [tkBusy, setTkBusy] = useState(false);
   const [myTickets, setMyTickets] = useState<{ id: string; subject: string; status: string; messages: number; updatedAt: string }[] | null>(null);
+  // P1 Batch 2 (A21): KYC — submit a document link for verification.
+  // KYC never blocks deposits or play; it is verification only.
+  const [kyc, setKyc] = useState<{ documentType: string; documentTypeLabel: string; documentUrl: string; status: string; submittedAt: string; rejectionReason: string | null } | null>(null);
+  const [kycDocType, setKycDocType] = useState("national_id");
+  const [kycDocUrl, setKycDocUrl] = useState("");
+  const [kycBusy, setKycBusy] = useState(false);
+  // P1 Batch 2 (A23): in-app notifications from your admin.
+  const [myNotifs, setMyNotifs] = useState<{ id: string; title: string; body: string; from: string; readAt: string | null; createdAt: string }[] | null>(null);
+  const [notifUnread, setNotifUnread] = useState(0);
+
+  const loadKyc = async () => {
+    try {
+      const r = await api<{ submission: { documentType: string; documentTypeLabel: string; documentUrl: string; status: string; submittedAt: string; rejectionReason: string | null } | null }>("/api/kyc/mine");
+      setKyc(r.submission);
+    } catch { setKyc(null); }
+  };
+
+  const loadNotifs = async () => {
+    try {
+      const r = await api<{ unread: number; notifications: { id: string; title: string; body: string; from: string; readAt: string | null; createdAt: string }[] }>("/api/notifications");
+      setMyNotifs(r.notifications ?? []);
+      setNotifUnread(r.unread ?? 0);
+    } catch { setMyNotifs([]); }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    void loadKyc();
+    void loadNotifs();
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -229,6 +259,38 @@ export default function AccountPage() {
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Redeem failed", "lose");
     } finally { setPromoBusy(false); }
+  };
+
+  // P1 Batch 2 (A21): submit a KYC document link for verification.
+  const submitKyc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setKycBusy(true);
+    try {
+      await api("/api/kyc/submit", {
+        method: "POST",
+        body: JSON.stringify({ documentType: kycDocType, documentUrl: kycDocUrl.trim() }),
+      });
+      toast("KYC submitted — your admin will review it", "win");
+      setKycDocUrl("");
+      await loadKyc();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "KYC submit failed", "lose");
+    } finally { setKycBusy(false); }
+  };
+
+  // P1 Batch 2 (A23): mark notifications as read.
+  const markNotifRead = async (id: string) => {
+    try {
+      await api(`/api/notifications/${id}/read`, { method: "POST" });
+      await loadNotifs();
+    } catch { /* stays unread */ }
+  };
+
+  const markAllNotifsRead = async () => {
+    try {
+      await api("/api/notifications/read-all", { method: "POST" });
+      await loadNotifs();
+    } catch { /* stays unread */ }
   };
 
   const claimCoins = async () => {
@@ -401,6 +463,34 @@ export default function AccountPage() {
             <button className="btn btn-gold" type="submit" disabled={promoBusy}>{promoBusy ? "Redeeming…" : "Redeem promo"}</button>
           </form>
         </section>
+        {/* P1 Batch 2 (A21): identity check — submit a link to your ID
+            document. KYC never blocks deposits or play; it is
+            verification only. */}
+        <section className="ac-sec">
+          <h3>Identity check (KYC)</h3>
+          {kyc && kyc.status === "approved" ? (
+            <p>Approved — your {kyc.documentTypeLabel} was verified{` · ${new Date(kyc.submittedAt).toLocaleDateString("en-GB")}`}.</p>
+          ) : kyc && kyc.status === "pending" ? (
+            <p>Under review — you submitted a {kyc.documentTypeLabel} on {new Date(kyc.submittedAt).toLocaleDateString("en-GB")}. We will let you know the outcome here.</p>
+          ) : (
+            <>
+              {kyc && kyc.status === "rejected" ? (
+                <p className="rg48-err">Your {kyc.documentTypeLabel} was rejected{kyc.rejectionReason ? ` — ${kyc.rejectionReason}` : ""}. You can submit again below.</p>
+              ) : (
+                <p className="rg48-mini">Verify your identity with a link to your ID document. This never blocks deposits or play — it is verification only.</p>
+              )}
+              <form className="code-form" onSubmit={submitKyc}>
+                <select value={kycDocType} onChange={(e) => setKycDocType(e.target.value)} aria-label="Document type">
+                  <option value="national_id">National ID</option>
+                  <option value="passport">Passport</option>
+                  <option value="drivers_licence">Driver&apos;s licence</option>
+                </select>
+                <input type="url" placeholder="Link to your document (https://…)" value={kycDocUrl} onChange={(e) => setKycDocUrl(e.target.value)} required />
+                <button className="btn btn-gold" type="submit" disabled={kycBusy}>{kycBusy ? "Submitting…" : "Submit for review"}</button>
+              </form>
+            </>
+          )}
+        </section>
         <section className="ac-sec">
           <h3>Daily bonus</h3>
           <button className="btn btn-gold" type="button" onClick={() => void claimCoins()} disabled={claimBusy}>{claimBusy ? "Claiming…" : "Claim daily +5 coins"}</button>
@@ -425,6 +515,37 @@ export default function AccountPage() {
                 </div>
               ))}
             </div>
+          )}
+        </section>
+        {/* P1 Batch 2 (A23): notifications from your admin — in-app
+            only. Unread ones are highlighted; tap to mark as read. */}
+        <section className="ac-sec">
+          <div className="ac-sec-head">
+            <h3>Notifications</h3>
+            {notifUnread > 0 ? <span className="ac-count">{notifUnread} unread</span> : null}
+          </div>
+          {myNotifs === null ? (
+            <p>Loading notifications…</p>
+          ) : myNotifs.length === 0 ? (
+            <p className="rg48-mini">No notifications yet — your admin will message you here.</p>
+          ) : (
+            <>
+              {notifUnread > 0 ? (
+                <p><button className="linklike" type="button" onClick={() => void markAllNotifsRead()}>Mark all as read</button></p>
+              ) : null}
+              <div className="ntf-list">
+                {myNotifs.map((n) => (
+                  <div key={n.id} className={`ntf-row${n.readAt ? "" : " ntf-unread"}`}>
+                    <p><b>{n.title}</b></p>
+                    <p>{n.body}</p>
+                    <span className="rg48-mini">From {n.from} · {new Date(n.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                    {n.readAt ? null : (
+                      <button className="linklike" type="button" onClick={() => void markNotifRead(n.id)}>Mark as read</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </section>
         <section className="ac-sec ac-session">

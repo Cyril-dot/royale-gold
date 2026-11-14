@@ -248,3 +248,44 @@ main.rg48-page-main.rg23.admin-fb .code-chip.sm{
 .promo-row{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border-top:1px solid rgba(255,246,216,.08);padding:11px 4px 0}
 .promo-row span{font-size:13.5px;overflow-wrap:anywhere}
 .promo-redeemers{flex-basis:100%;font-size:12.5px;color:var(--muted,rgba(255,246,216,.7))}
+
+/* ---- P1 Batch 2 (admin ops) ---- */
+/* A21: KYC queue — one stacked card per submission; the status pill
+   reads at a glance, the document link wraps, the reject reason sits
+   inline with its buttons so nothing is hidden under the dock. */
+.kyc-list{display:flex;flex-direction:column;gap:12px}
+.kyc-row{background:rgba(4,6,13,.35);border:1px solid rgba(255,246,216,.12);border-radius:12px;padding:12px}
+.kyc-head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
+.kyc-head b{font-size:15px;overflow-wrap:anywhere}
+.kyc-head b a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.kyc-pill{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.kyc-pending{color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1)}
+.kyc-approved{color:#3ED97E;border:1px solid rgba(62,217,126,.5);background:rgba(62,217,126,.1)}
+.kyc-rejected{color:#FF8A80;border:1px solid rgba(229,50,45,.55);background:rgba(229,50,45,.12)}
+.kyc-doc{overflow-wrap:anywhere}
+.kyc-doc a{color:var(--gold-2,#FFD964);text-decoration:underline;text-underline-offset:2px}
+.kyc-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+.kyc-reject{display:flex;flex-wrap:wrap;gap:10px;align-items:center;flex:1;min-width:0}
+.kyc-reject input{flex:1;min-width:180px;font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
+/* A21 (account page): the KYC form reuses .code-form, which styles
+   inputs only — the document-type select needs the same treatment. */
+.code-form select{flex:1;min-width:180px;font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
+/* A23: the notify/broadcast forms reuse .pd-note-form, which styles
+   textareas only — the title input needs the same treatment. */
+.pd-note-form input{font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
+/* A23 (account page): the player's notification list — unread rows
+   carry a gold left edge so they read at a glance. */
+.ntf-list{display:flex;flex-direction:column;gap:10px}
+.ntf-row{background:rgba(4,6,13,.35);border:1px solid rgba(255,246,216,.12);border-radius:10px;padding:10px 12px}
+.ntf-row p{margin:0 0 4px;overflow-wrap:anywhere}
+.ntf-row.ntf-unread{border-left:3px solid var(--gold,#F2C230)}
+/* A24: fraud alerts — one stacked card per alert; the severity pill
+   carries the urgency, the player link opens their detail. */
+.fraud-list{display:flex;flex-direction:column;gap:12px}
+.fraud-row{background:rgba(4,6,13,.35);border:1px solid rgba(255,246,216,.12);border-radius:12px;padding:12px}
+.fraud-row p{margin:0 0 6px;overflow-wrap:anywhere}
+.fraud-head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:8px}
+.fraud-head b{font-size:14px;overflow-wrap:anywhere}
+.sev-pill{font-size:11px;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.sev-high{color:#FF8A80;border:1px solid rgba(229,50,45,.55);background:rgba(229,50,45,.12)}
+.sev-medium{color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1)}

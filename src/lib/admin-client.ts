@@ -49,7 +49,13 @@ export interface UserDetail {
   // P0 Batch 4 (A3): bet/round history, KYC status, commission earned,
   // and support tickets.
   rounds: { id: string; game: string; gameName: string; currency: string; stake: number; payout: number; net: number; createdAt: string }[];
-  kycStatus: "not_submitted";
+  // P1 Batch 2 (A21): the real KYC status — the latest submission, with
+  // its document type, submitted date and rejection reason.
+  kycStatus: "not_submitted" | "pending" | "approved" | "rejected";
+  kycDocumentType: string | null;
+  kycDocumentUrl: string | null;
+  kycSubmittedAt: string | null;
+  kycRejectionReason: string | null;
   commission: { total: number; model: string; rate: number };
   tickets: { id: string; subject: string; status: string; createdAt: string }[];
   // P1 Batch 1 (A19/A20): admin-only notes + tags, and per-player limits.
@@ -309,6 +315,99 @@ export function useAdminPromoCodes(previewId: string | null) {
       setErr("");
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Could not load promo codes.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+export interface KycRow {
+  id: string;
+  userId: string;
+  userName: string;
+  userContact: string | null;
+  referringAdmin?: string | null;
+  documentType: string;
+  documentTypeLabel: string;
+  documentUrl: string;
+  status: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  submittedAt: string;
+}
+
+/** P1 Batch 2 (A21): the KYC queue — the admin's own downline, or the
+ *  previewed admin's queue when the owner previews. */
+export function useAdminKyc(previewId: string | null, status: string) {
+  const [data, setData] = useState<{ submissions: KycRow[]; counts: Record<string, number> } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const qs = `status=${encodeURIComponent(status)}`;
+      const url = previewId ? `/api/owner/kyc?adminId=${previewId}&${qs}` : `/api/admin/kyc?${qs}`;
+      setData(await api<{ submissions: KycRow[]; counts: Record<string, number> }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load the KYC queue.");
+    }
+  }, [previewId, status]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+export interface FraudAlertRow {
+  id: string;
+  severity: "high" | "medium";
+  signal: string;
+  userId: string;
+  userName: string;
+  userContact: string | null;
+  reason: string;
+  createdAt: string;
+}
+
+/** P1 Batch 2 (A24): the fraud alerts — computed live, own downline
+ *  (or the previewed admin's, for the owner). */
+export function useAdminFraud(previewId: string | null) {
+  const [data, setData] = useState<{ alerts: FraudAlertRow[]; counts: { high: number; medium: number } } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/owner/fraud?adminId=${previewId}` : "/api/admin/fraud";
+      setData(await api<{ alerts: FraudAlertRow[]; counts: { high: number; medium: number } }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load fraud alerts.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { data, err, load };
+}
+
+export interface SentNotificationRow {
+  id: string;
+  userId: string;
+  userName: string;
+  title: string;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/** P1 Batch 2 (A23): notifications this admin sent — the Overview
+ *  broadcast section shows the recent ones (preview: the owner's
+ *  endpoint for that admin). */
+export function useAdminSentNotifications(previewId: string | null) {
+  const [data, setData] = useState<{ sent: SentNotificationRow[] } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/owner/notifications?adminId=${previewId}` : "/api/admin/notifications";
+      setData(await api<{ sent: SentNotificationRow[] }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load sent notifications.");
     }
   }, [previewId]);
   useEffect(() => { void load(); }, [load]);

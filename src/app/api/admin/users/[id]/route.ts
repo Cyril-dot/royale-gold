@@ -5,6 +5,7 @@ import { fail, ok, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
 import { getGame } from "@/lib/games";
 import { playerCommission } from "@/lib/commission";
+import { latestKycStatus } from "@/lib/kyc";
 
 /**
  * User detail for the admin panel: profile, joined date, code used,
@@ -13,10 +14,10 @@ import { playerCommission } from "@/lib/commission";
  *
  * P0 Batch 4 (A3): player 360 — the same response now also carries the
  * player's bet/round history (GameResult, newest first), their KYC
- * status (there is no KYC model yet — always "not_submitted"; the KYC
- * review queue is P1 A21), the commission earned for the viewing admin
- * (recomputed by the rules engine; the commission page is the source of
- * truth), and their support tickets.
+ * status (the latest KycSubmission — P1 Batch 2 A21 replaced the old
+ * "not_submitted" placeholder with the real status), the commission
+ * earned for the viewing admin (recomputed by the rules engine; the
+ * commission page is the source of truth), and their support tickets.
  *
  * P1 Batch 1 (A19/A20): the same response also carries the admin-only
  * notes and tags on this player, and the per-player limits in force.
@@ -34,7 +35,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (me.role === "admin" && user.referredByAdminId !== me.id) {
       return fail("This user was not referred by you", 404);
     }
-    const [deposits, redemptions, rounds, tickets, notes, tags, limit] = await Promise.all([
+    const [deposits, redemptions, rounds, tickets, notes, tags, limit, kyc] = await Promise.all([
       prisma.depositEvent.findMany({
         where: { userId: id },
         orderBy: { createdAt: "desc" },
@@ -65,6 +66,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       }),
       // P1 Batch 1 (A20): per-player limits in force.
       prisma.playerLimit.findUnique({ where: { userId: id } }),
+      // P1 Batch 2 (A21): the real KYC status — the latest submission wins.
+      latestKycStatus(id),
     ]);
     const totalDeposited = deposits.reduce((s, d) => s + dec(d.amount), 0);
     const totalCommission = deposits.reduce((s, d) => s + dec(d.commission), 0);
@@ -107,7 +110,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         coinsGiven: redemptions.reduce((s, r) => s + r.coins, 0),
       },
       // P0 Batch 4 (A3): bet/round history, KYC status, commission
-      // earned, and support tickets.
+      // earned, and support tickets. P1 Batch 2 (A21): the KYC status
+      // is the real one now — the latest submission, with its document
+      // type, submitted date and rejection reason.
       rounds: rounds.map((r) => ({
         id: r.id,
         game: r.game,
@@ -118,7 +123,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         net: dec(r.payout) - dec(r.stake),
         createdAt: r.createdAt.toISOString(),
       })),
-      kycStatus: "not_submitted",
+      kycStatus: kyc.status,
+      kycDocumentType: kyc.documentType,
+      kycDocumentUrl: kyc.documentUrl,
+      kycSubmittedAt: kyc.submittedAt,
+      kycRejectionReason: kyc.rejectionReason,
       commission,
       tickets: tickets.map((t) => ({
         id: t.id,
