@@ -79,6 +79,8 @@ function OwnerAdminPerms({ a, onSaved }: {
 }
 interface RollupDay { date: string; adminId: string; adminName: string; deposits: number; totalAmount: number; totalCommission: number }
 interface OwnerDayAdmin { admin: { id: string; name: string }; deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; pctInForce: number; commission: number; time: string }[]; totalAmount: number; totalCommission: number }
+// P0 Batch 4 (O6): one row of the global player search.
+interface OwnerSearchPlayer { id: string; name: string; email: string | null; phone: string | null; role: string; referringAdmin: { id: string; name: string } | null; totalDeposited: number; deposits: number; cash: number; coins: number; joinedAt: string }
 
 // P0 Batch 2 — one game row: visibility + kill toggles and the four
 // economics fields, saved per row. Number inputs hold text locally so
@@ -580,6 +582,15 @@ export default function OwnerPage() {
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (date) void loadDay(date); }, [date, loadDay]);
 
+  // P0 Batch 4 (O6): global player search state. These hooks MUST live
+  // above the early returns below — hooks after `if (!user) return`
+  // change the hook count between renders and crash the page (React #310).
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<OwnerSearchPlayer[] | null>(null);
+  const [searchCount, setSearchCount] = useState(0);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchedQ, setSearchedQ] = useState("");
+
   if (!user) {
     return (
       <main className="rg48-page-main"><div className="wrap">
@@ -632,6 +643,29 @@ export default function OwnerPage() {
       toast(ex instanceof Error ? ex.message : "Update failed", "lose");
     }
   };
+
+  // P0 Batch 4 (O6): global player search — every player platform-wide
+  // by name, email, or phone. The search runs on submit, not on mount.
+  const runPlayerSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQ.trim();
+    if (q.length < 2) { toast("Type at least 2 characters to search", "lose"); return; }
+    setSearchBusy(true);
+    try {
+      const r = await api<{ q: string; count: number; players: OwnerSearchPlayer[] }>(`/api/owner/players/search?q=${encodeURIComponent(q)}`);
+      setSearchResults(r.players);
+      setSearchCount(r.count);
+      setSearchedQ(r.q);
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Search failed", "lose");
+      setSearchResults([]);
+    } finally { setSearchBusy(false); }
+  };
+  // A referred player opens in the owner's preview of that admin's
+  // panel; a player with no referring admin opens directly (the player
+  // detail tolerates an owner with no preview).
+  const playerDetailHref = (p: OwnerSearchPlayer) =>
+    p.referringAdmin ? `/admin/players/${p.id}?preview=${p.referringAdmin.id}` : `/admin/players/${p.id}`;
 
   return (
     <main className="rg48-page-main">
@@ -687,6 +721,40 @@ export default function OwnerPage() {
               <OwnerAdminPerms a={a} onSaved={load} />
             </div>
           ))}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Player search</h3>
+          <p className="rg48-sub">Every player on the platform — search by name, email, or phone.</p>
+          <form className="b4-search" onSubmit={runPlayerSearch}>
+            <input type="search" placeholder="Search players…" value={searchQ} onChange={(e) => setSearchQ(e.target.value)} aria-label="Search players by name, email or phone" />
+            <button className="btn btn-gold" type="submit" disabled={searchBusy}>{searchBusy ? "Searching…" : "Search"}</button>
+          </form>
+          {searchResults === null ? null : searchResults.length === 0 ? (
+            <p>No players match “{searchedQ}”.</p>
+          ) : (
+            <>
+              <p className="rg48-sub">{searchCount} {searchCount === 1 ? "player" : "players"} found for “{searchedQ}”.</p>
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Player</th><th>Contact</th><th>Role</th><th>Referring admin</th><th>Deposited</th><th>Cash</th><th>Coins</th></tr></thead>
+                  <tbody>
+                    {searchResults.map((p) => (
+                      <tr key={p.id}>
+                        <td><Link href={playerDetailHref(p)}>{p.name}</Link></td>
+                        <td>{p.email || p.phone || "—"}</td>
+                        <td>{p.role}</td>
+                        <td>{p.referringAdmin?.name || "—"}</td>
+                        <td>{fmtCash(p.totalDeposited)}</td>
+                        <td>{fmtCash(p.cash)}</td>
+                        <td>{p.coins}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </section>
 
         <section className="admin-sec">

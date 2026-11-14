@@ -181,3 +181,32 @@ main.rg48-page-main.rg23.admin-fb .code-chip.sm{
 
 /* 2FA QR code (Settings). */
 .tfa-qr{display:block;background:#FFF6D8;padding:10px;border-radius:12px;margin:12px 0}
+
+/* ============ P0 Batch 4 — dashboard chart, downline tree, player search ============ */
+/* 7-day deposits chart (A1): plain divs, no library. Values are bare
+   numbers — the heading carries the GH₵ unit (7 columns at 390px are
+   too narrow for the full "GH₵ 100.00" label). */
+.b4-chart{display:flex;gap:6px;align-items:stretch}
+.b4-bar-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.b4-bar-val{font-size:10.5px;font-weight:800;color:var(--gold,#F2C230);text-align:center;overflow-wrap:anywhere;line-height:1.2;min-height:13px}
+.b4-bar-track{width:100%;height:96px;display:flex;align-items:flex-end;background:rgba(255,246,216,.05);border-radius:6px 6px 0 0;overflow:hidden}
+.b4-bar{width:100%;background:var(--gold,#F2C230);border-radius:6px 6px 0 0}
+.b4-bar-day{font-size:10.5px;color:var(--muted,rgba(255,246,216,.7));text-align:center;white-space:nowrap}
+/* Downline tree (A9): nested lists with a gold left rule; node cards
+   wrap so long names and figures never force horizontal scroll. */
+.b4-tree{list-style:none;margin:0;padding:0 0 0 14px;border-left:1px solid rgba(242,194,48,.35)}
+.b4-tree-node{margin:10px 0}
+.b4-tree-card{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;background:rgba(4,6,13,.35);border:1px solid rgba(255,246,216,.12);border-radius:10px;padding:9px 12px}
+.b4-tree-card b{font-size:14px;overflow-wrap:anywhere}
+.b4-tree-card b a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.b4-tree-card span{font-size:12.5px;color:var(--muted,rgba(255,246,216,.7));overflow-wrap:anywhere}
+.b4-tree-root-card{margin:0 0 4px}
+.b4-tree-more{font-size:12px;color:var(--muted,rgba(255,246,216,.7));margin:6px 0 0 14px}
+/* Player-360 ticket list (A3): plain rows, no pointer (they are not
+   links — the inbox opens tickets inline). */
+.b4-tk-list{display:flex;flex-direction:column}
+.b4-tk-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;border-top:1px solid rgba(255,246,216,.08);padding:11px 4px}
+.b4-tk-row b{font-size:14px;overflow-wrap:anywhere}
+/* Global player search (O6): 16px input so iOS never zooms on focus. */
+.b4-search{display:flex;gap:10px;align-items:center;margin:0 0 14px}
+.b4-search input{flex:1;min-width:0;font-size:16px}

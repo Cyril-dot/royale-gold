@@ -9,6 +9,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, fmtCash } from "../lib/api";
 import { useStore } from "../lib/store";
@@ -87,7 +88,10 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   };
 
   if (!user) return <AdminLoginPrompt />;
-  if (err) return <AdminError err={err} />;
+  // P0 Batch 4 (A3): the owner may open a player directly (no preview)
+  // from the global player search — there is no admin context to load
+  // then, and that is fine (the header is the player's own name).
+  if (err && !(user.role === "owner" && !previewId)) return <AdminError err={err} />;
   // P0 Batch 3 (O3): the server 403s this section too.
   if (!previewId && ctx && !canAccessSection(user, "players")) return <AdminDenied section="players" />;
 
@@ -118,6 +122,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       <div className="pd-meta">
         <span className="pd-meta-item"><span className="pd-meta-label">Code used</span>{u.referralCodeUsed ? <b className="code-chip sm">{u.referralCodeUsed}</b> : <b>—</b>}</span>
         <span className="pd-meta-item"><span className="pd-meta-label">Referring admin</span><b>{u.referringAdmin?.name || "—"}</b></span>
+        <span className="pd-meta-item"><span className="pd-meta-label">KYC</span><b>{detail.kycStatus === "not_submitted" ? "Not submitted" : detail.kycStatus}</b></span>
       </div>
       <AdminNav />
       <section className="admin-sec">
@@ -137,7 +142,67 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
           {card("Coins given", String(detail.totals.coinsGiven))}
         </div>
       </section>
-      {!previewId && (
+      {/* P0 Batch 4 (A3): player 360 — commission earned on this player
+          (recomputed by the rules engine; the Commission page is the
+          source of truth), their bet/round history, and their tickets.
+          The Totals "Commission" tile above stays the stamped sum. */}
+      <section className="admin-sec">
+        <h3>Commission earned</h3>
+        <div className="sum-cards">
+          {card("Earned on this player", fmtCash(detail.commission.total))}
+        </div>
+        <p className="rg48-sub">
+          {detail.commission.model === "revshare"
+            ? `RevShare ${detail.commission.rate}% — % of this player’s net loss (stakes − payouts), recomputed from the ledger.`
+            : detail.commission.model === "turnover"
+              ? `Turnover ${detail.commission.rate}% — % of this player’s stakes, recomputed from the ledger.`
+              : detail.commission.model === "legacy"
+                ? "Legacy — flat % of deposits, as stamped on each deposit."
+                : detail.commission.model === "mixed"
+                  ? "Mixed — the rule changed over time; the total adds each day’s rule."
+                  : "No activity yet — nothing earned on this player."}
+          {" "}The Commission page is the source of truth.
+        </p>
+      </section>
+      <section className="admin-sec">
+        <h3>Bet history ({detail.rounds.length})</h3>
+        {detail.rounds.length === 0 ? <p>No rounds yet.</p> : (
+          <div className="rg48-twrap">
+            <table className="dep-table">
+              <thead><tr><th>Game</th><th>Stake</th><th>Payout</th><th>Net</th><th>Date</th></tr></thead>
+              <tbody>
+                {detail.rounds.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.gameName}</td>
+                    <td>{r.currency === "coins" ? `${r.stake} coins` : fmtCash(r.stake)}</td>
+                    <td>{r.currency === "coins" ? `${r.payout} coins` : fmtCash(r.payout)}</td>
+                    <td className={r.net > 0 ? "ok" : r.net < 0 ? "bad" : ""}>{r.currency === "coins" ? `${r.net > 0 ? "+" : ""}${r.net} coins` : r.net > 0 ? `+${fmtCash(r.net)}` : fmtCash(r.net)}</td>
+                    <td>{new Date(r.createdAt).toLocaleDateString("en-GB")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      <section className="admin-sec">
+        <h3>Support tickets ({detail.tickets.length})</h3>
+        {detail.tickets.length === 0 ? (
+          <p>No tickets from this player.</p>
+        ) : (
+          <div className="b4-tk-list">
+            {detail.tickets.map((t) => (
+              <div key={t.id} className="b4-tk-row">
+                <b>{t.subject}</b>
+                <span className={`tk-status tk-${t.status}`}>{t.status}</span>
+                <span>{new Date(t.createdAt).toLocaleDateString("en-GB")}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="rg48-sub"><Link href={previewId ? `/admin/tickets?preview=${previewId}` : "/admin/tickets"}>Open the ticket inbox →</Link></p>
+      </section>
+      {!previewId && user.role === "admin" && (
         <>
           <section className="admin-sec">
             <h3>Balance adjustment</h3>

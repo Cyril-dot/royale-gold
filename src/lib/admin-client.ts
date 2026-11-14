@@ -46,6 +46,31 @@ export interface UserDetail {
   user: { id: string; name: string; email: string | null; phone: string | null; role: string; cash: number; coins: number; joinedAt: string; referralCodeUsed: string | null; referringAdmin: { id: string; name: string; email: string } | null; blockedAt: string | null; blockedReason: string | null };
   deposits: { id: string; amount: number; method: string; pctInForce: number; commission: number; createdAt: string }[];
   totals: { deposits: number; totalDeposited: number; totalCommission: number; coinsGiven: number };
+  // P0 Batch 4 (A3): bet/round history, KYC status, commission earned,
+  // and support tickets.
+  rounds: { id: string; game: string; gameName: string; currency: string; stake: number; payout: number; net: number; createdAt: string }[];
+  kycStatus: "not_submitted";
+  commission: { total: number; model: string; rate: number };
+  tickets: { id: string; subject: string; status: string; createdAt: string }[];
+}
+
+export interface AdminDashboardData {
+  today: { deposits: number; depositsTotal: number; newPlayers: number; activePlayers: number; commission: number };
+  week: { date: string; deposits: number; total: number }[];
+  topPlayers: { id: string; name: string; contact: string | null; deposits: number; totalDeposited: number }[];
+}
+
+export interface DownlineNode {
+  id: string;
+  name: string;
+  contact: string | null;
+  role: string;
+  totalDeposited: number;
+  commission: number;
+  commissionModel: string;
+  commissionRate: number;
+  children: DownlineNode[];
+  deeper: boolean;
 }
 
 export interface ReferralsData {
@@ -186,4 +211,39 @@ export function useAdminDay(previewId: string | null, date: string) {
   }, [previewId]);
   useEffect(() => { if (date) void loadDay(date); }, [date, loadDay]);
   return { day, loadDay };
+}
+
+/** P0 Batch 4 (A1): the enhanced dashboard — "today so far", the last
+ * 7 days of deposits, and the top 5 players by total deposited. */
+export function useAdminDashboard(previewId: string | null) {
+  const [dash, setDash] = useState<AdminDashboardData | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/owner/dashboard?adminId=${previewId}` : "/api/admin/dashboard";
+      setDash(await api<AdminDashboardData>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load dashboard.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { dash, err, load };
+}
+
+/** P0 Batch 4 (A9): the downline tree for the Referrals page. */
+export function useAdminDownline(previewId: string | null) {
+  const [tree, setTree] = useState<{ root: { id: string; name: string }; children: DownlineNode[] } | null>(null);
+  const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    try {
+      const url = previewId ? `/api/owner/referrals/tree?adminId=${previewId}` : "/api/admin/referrals/tree";
+      setTree(await api<{ root: { id: string; name: string }; children: DownlineNode[] }>(url));
+      setErr("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Could not load downline tree.");
+    }
+  }, [previewId]);
+  useEffect(() => { void load(); }, [load]);
+  return { tree, err, load };
 }

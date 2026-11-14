@@ -7,9 +7,9 @@
 import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { api } from "../../../lib/api";
+import { api, fmtCash } from "../../../lib/api";
 import { useStore } from "../../../lib/store";
-import { useAdminContext, useAdminReferrals, copyText, shareLink } from "../../../lib/admin-client";
+import { useAdminContext, useAdminReferrals, useAdminDownline, copyText, shareLink, type DownlineNode } from "../../../lib/admin-client";
 import { canAccessSection } from "../../../lib/rbac";
 import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
 
@@ -25,12 +25,40 @@ export default function AdminReferralsPage() {
   );
 }
 
+// P0 Batch 4 (A9): one downline tree node — the player, what they
+// deposited, and the commission earned on them. Renders recursively;
+// the endpoint already caps at 3 levels (deeper = more below).
+function DownlineTreeNode({ n, playerHref }: { n: DownlineNode; playerHref: (id: string) => string }) {
+  return (
+    <li className="b4-tree-node">
+      <div className="b4-tree-card">
+        <Link href={playerHref(n.id)}><b>{n.name}</b></Link>
+        <span>{n.contact || "—"}</span>
+        <span>Deposited {fmtCash(n.totalDeposited)}</span>
+        <span>Commission {fmtCash(n.commission)}</span>
+      </div>
+      {n.children.length > 0 && (
+        <ul className="b4-tree">
+          {n.children.map((c) => (
+            <DownlineTreeNode key={c.id} n={c} playerHref={playerHref} />
+          ))}
+        </ul>
+      )}
+      {n.deeper && <p className="b4-tree-more">+ more below (this view stops at 3 levels)</p>}
+    </li>
+  );
+}
+
 function AdminReferralsInner() {
   const { user, toast } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
   const { ctx, err: ctxErr } = useAdminContext(previewId);
   const { data, err: refErr, load } = useAdminReferrals(previewId);
+  // P0 Batch 4 (A9): the downline tree — a second view of the same
+  // referrals (List / Tree tabs, same pattern as the commission tabs).
+  const { tree, err: treeErr } = useAdminDownline(previewId);
+  const [view, setView] = useState<"list" | "tree">("list");
   const [newCode, setNewCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<{ id: string; kind: "code" | "link" } | null>(null);
@@ -106,6 +134,12 @@ function AdminReferralsInner() {
           </form>
         )}
       </section>
+      <div className="ac-tabs" role="tablist" aria-label="Referrals views">
+        <button type="button" role="tab" id="ref-tab-list" aria-selected={view === "list"} aria-controls="ref-panel-list" className={`ac-tab${view === "list" ? " ac-tab-active" : ""}`} onClick={() => setView("list")}>List</button>
+        <button type="button" role="tab" id="ref-tab-tree" aria-selected={view === "tree"} aria-controls="ref-panel-tree" className={`ac-tab${view === "tree" ? " ac-tab-active" : ""}`} onClick={() => setView("tree")}>Tree</button>
+      </div>
+      {view === "list" ? (
+      <div role="tabpanel" id="ref-panel-list" aria-labelledby="ref-tab-list">
       <section className="admin-sec">
         <h3>Referred users ({ov.referredUsers.length}) · {ov.coinsGiven} coins given · {ov.redemptions} redemptions</h3>
         {ov.referredUsers.length === 0 ? <p>No referred users yet.</p> : (
@@ -118,6 +152,27 @@ function AdminReferralsInner() {
           </div>
         )}
       </section>
+      </div>
+      ) : (
+      <div role="tabpanel" id="ref-panel-tree" aria-labelledby="ref-tab-tree">
+      <section className="admin-sec">
+        <h3>Downline tree</h3>
+        <p className="rg48-sub">You at the top, your players below — with what each deposited and the commission earned on them.</p>
+        {treeErr ? <p>Could not load the tree.</p> : !tree ? <p>Loading tree…</p> : tree.children.length === 0 ? (
+          <p>No referred users yet.</p>
+        ) : (
+          <div className="b4-tree-root">
+            <div className="b4-tree-card b4-tree-root-card"><b>{tree.root.name}</b><span>{tree.children.length} direct {tree.children.length === 1 ? "referral" : "referrals"}</span></div>
+            <ul className="b4-tree">
+              {tree.children.map((n) => (
+                <DownlineTreeNode key={n.id} n={n} playerHref={playerHref} />
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+      </div>
+      )}
     </>
   );
 }

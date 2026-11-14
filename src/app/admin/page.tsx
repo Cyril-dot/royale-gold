@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../lib/store";
 import { fmtCash } from "../../lib/api";
-import { useAdminOverview } from "../../lib/admin-client";
+import { useAdminOverview, useAdminDashboard } from "../../lib/admin-client";
 import { canAccessSection } from "../../lib/rbac";
 import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../components/AdminNav";
 
@@ -32,6 +32,9 @@ function AdminOverviewInner() {
   const sp = useSearchParams();
   const previewId = sp.get("preview");
   const { ov, err } = useAdminOverview(previewId);
+  // P0 Batch 4 (A1): the enhanced dashboard — "today so far", the last
+  // 7 days of deposits, and the top 5 players by total deposited.
+  const { dash, err: dashErr } = useAdminDashboard(previewId);
 
   if (!user) return <AdminLoginPrompt />;
   // P0 Batch 3 (O3): the server 403s this section too.
@@ -73,6 +76,63 @@ function AdminOverviewInner() {
           {card("Coins given", String(ov.coinsGiven))}
         </div>
       </section>
+      {/* P0 Batch 4 (A1): "today so far", the 7-day deposits chart, and
+          the top 5 players by total deposited — all from the real
+          tables, nothing invented. */}
+      {dash ? (
+        <>
+          <section className="admin-sec">
+            <h3>Today so far</h3>
+            <div className="sum-cards">
+              {card("Deposits today", String(dash.today.deposits))}
+              {card("Deposited today", fmtCash(dash.today.depositsTotal))}
+              {card("New players", String(dash.today.newPlayers))}
+              {card("Active players", String(dash.today.activePlayers))}
+              {card("Commission today", fmtCash(dash.today.commission))}
+            </div>
+          </section>
+          <section className="admin-sec">
+            <h3>Last 7 days — deposits (GH₵)</h3>
+            <div className="b4-chart" role="img" aria-label={`Deposits by day for the last 7 days, totalling ${fmtCash(dash.week.reduce((s, d) => s + d.total, 0))}`}>
+              {(() => {
+                const max = Math.max(1, ...dash.week.map((d) => d.total));
+                return dash.week.map((d) => (
+                  <div key={d.date} className="b4-bar-col">
+                    <span className="b4-bar-val">{d.total > 0 ? d.total.toFixed(2) : "—"}</span>
+                    <div className="b4-bar-track">
+                      <div className="b4-bar" style={{ height: `${Math.max(3, Math.round((d.total / max) * 100))}%` }} />
+                    </div>
+                    <span className="b4-bar-day">{new Date(d.date + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric" })}</span>
+                  </div>
+                ));
+              })()}
+            </div>
+          </section>
+          <section className="admin-sec">
+            <h3>Top players by deposits</h3>
+            {dash.topPlayers.length === 0 ? (
+              <p>No deposits from your players yet.</p>
+            ) : (
+              <div className="rg48-twrap">
+                <table className="dep-table">
+                  <thead><tr><th>Player</th><th>Deposits</th><th>Total deposited</th></tr></thead>
+                  <tbody>
+                    {dash.topPlayers.map((p, i) => (
+                      <tr key={p.id}>
+                        <td>{i + 1}. <Link href={previewId ? `/admin/players/${p.id}?preview=${previewId}` : `/admin/players/${p.id}`}>{p.name}</Link></td>
+                        <td>{p.deposits}</td>
+                        <td>{fmtCash(p.totalDeposited)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
+      ) : dashErr ? (
+        <p className="rg48-sub">Could not load today’s figures.</p>
+      ) : null}
       <section className="admin-sec">
         <h3>Latest commission days</h3>
         {latest.length === 0 ? (

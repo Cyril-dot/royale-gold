@@ -298,6 +298,87 @@ export async function commissionPaid(adminId: string, from?: string, to?: string
   return round2(rows.reduce((acc, r) => acc + dec(r.amount), 0));
 }
 
+export interface PlayerCommission {
+  total: number;
+  model: CommissionModel | "legacy" | "mixed" | "none";
+  rate: number;
+}
+
+/**
+ * Commission earned on ONE player for one admin — the player-360 figure
+ * (P0 Batch 4 A3). Same rules as dayCommissions, but per player: each
+ * day the rule in force that day applies (revshare = % of that player's
+ * net loss that day; turnover = % of that player's stakes that day); a
+ * day with no rule falls back to that player's stamped deposit
+ * commissions for the day. The model returned is the model of the most
+ * recent active day ("mixed" when days disagree, "none" when the player
+ * has no activity at all) — the UI says which one it is.
+ */
+export async function playerCommission(adminId: string, userId: string): Promise<PlayerCommission> {
+  const timeline = await ruleTimeline(adminId);
+  const [results, deposits] = await Promise.all([
+    prisma.gameResult.findMany({
+      where: { userId, currency: "cash" },
+      select: { stake: true, payout: true, createdAt: true },
+    }),
+    prisma.depositEvent.findMany({
+      where: { userId, adminId },
+      select: { commission: true, createdAt: true },
+    }),
+  ]);
+  const byDay = new Map<string, { stakes: number; payouts: number; legacy: number }>();
+  const touch = (date: string) => {
+    let row = byDay.get(date);
+    if (!row) {
+      row = { stakes: 0, payouts: 0, legacy: 0 };
+      byDay.set(date, row);
+    }
+    return row;
+  };
+  for (const r of results) {
+    const row = touch(dateStr(new Date(r.createdAt)));
+    row.stakes = round2(row.stakes + dec(r.stake));
+    row.payouts = round2(row.payouts + dec(r.payout));
+  }
+  for (const d of deposits) {
+    const row = touch(dateStr(new Date(d.createdAt)));
+    row.legacy = round2(row.legacy + dec(d.commission));
+  }
+  let total = 0;
+  let lastModel: CommissionModel | "legacy" | "none" = "none";
+  let lastRate = 0;
+  let mixed = false;
+  for (const date of [...byDay.keys()].sort()) {
+    const row = byDay.get(date)!;
+    const rule = ruleForDay(timeline, date);
+    let dayCommission: number;
+    let dayModel: CommissionModel | "legacy";
+    let dayRate: number;
+    if (!rule) {
+      dayCommission = row.legacy;
+      dayModel = "legacy";
+      dayRate = 0;
+    } else if (rule.model === "revshare") {
+      dayCommission = round2(Math.max(0, row.stakes - row.payouts) * (rule.rate / 100));
+      dayModel = "revshare";
+      dayRate = rule.rate;
+    } else {
+      dayCommission = round2(row.stakes * (rule.rate / 100));
+      dayModel = "turnover";
+      dayRate = rule.rate;
+    }
+    total = round2(total + dayCommission);
+    if (lastModel !== "none" && lastModel !== dayModel) mixed = true;
+    lastModel = dayModel;
+    lastRate = dayRate;
+  }
+  return {
+    total,
+    model: lastModel === "none" ? "none" : mixed ? "mixed" : lastModel,
+    rate: lastRate,
+  };
+}
+
 /** Settlement for one admin over a period: owed / paid / balance. */
 export async function settlementForAdmin(adminId: string, from: string, to: string) {
   const owed = await commissionOwed(adminId, from, to);

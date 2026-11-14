@@ -1,7 +1,17 @@
 import { prisma } from "./prisma";
-import { commissionHistoryDays, commissionSummary } from "./commission";
-import { dec } from "./money";
+import { commissionHistoryDays, commissionSummary, playerCommission, referredUserIds } from "./commission";
+import { dec, round2, todayStr } from "./money";
 import { parsePermissions } from "./rbac";
+
+function addDays(date: string, n: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function dayStart(date: string): Date {
+  return new Date(date + "T00:00:00Z");
+}
 
 /** The admin's identity for page headers — P0 Batch 3 (O3). Every admin
  * page loads this (no section permission needed: it is the admin's own
@@ -72,4 +82,144 @@ export async function adminOverview(adminId: string) {
     commission: summary,
     history,
   };
+}
+
+export interface AdminDashboardData {
+  today: { deposits: number; depositsTotal: number; newPlayers: number; activePlayers: number; commission: number };
+  week: { date: string; deposits: number; total: number }[];
+  topPlayers: { id: string; name: string; contact: string | null; deposits: number; totalDeposited: number }[];
+}
+
+/** P0 Batch 4 (A1): the enhanced dashboard — "today so far", the last
+ * 7 days of deposits, and the top 5 players by total deposited. Every
+ * figure comes from the real tables (DepositEvent / User / GameResult /
+ * the commission rules engine); nothing is invented. */
+export async function adminDashboard(adminId: string): Promise<AdminDashboardData> {
+  const today = todayStr();
+  const fromDate = dayStart(addDays(today, -6));
+  const toDate = dayStart(addDays(today, 1));
+  const userIds = await referredUserIds(adminId);
+  const [deposits, newPlayers, activeRounds, summary] = await Promise.all([
+    prisma.depositEvent.findMany({
+      where: { adminId, createdAt: { gte: fromDate, lt: toDate } },
+      select: { userId: true, amount: true, createdAt: true },
+    }),
+    prisma.user.count({
+      where: { referredByAdminId: adminId, createdAt: { gte: dayStart(today), lt: toDate } },
+    }),
+    userIds.length === 0
+      ? []
+      : prisma.gameResult.findMany({
+          where: { userId: { in: userIds }, createdAt: { gte: dayStart(today), lt: toDate } },
+          select: { userId: true },
+        }),
+    commissionSummary(adminId),
+  ]);
+  const week: { date: string; deposits: number; total: number }[] = [];
+  for (let i = 6; i >= 0; i--) week.push({ date: addDays(today, -i), deposits: 0, total: 0 });
+  const byDate = new Map(week.map((w) => [w.date, w]));
+  const perUser = new Map<string, { deposits: number; total: number }>();
+  for (const d of deposits) {
+    const w = byDate.get(d.createdAt.toISOString().slice(0, 10));
+    if (w) {
+      w.deposits += 1;
+      w.total = round2(w.total + dec(d.amount));
+    }
+    const p = perUser.get(d.userId) ?? { deposits: 0, total: 0 };
+    p.deposits += 1;
+    p.total = round2(p.total + dec(d.amount));
+    perUser.set(d.userId, p);
+  }
+  const todayRow = byDate.get(today)!;
+  const topIds = [...perUser.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+  const topUsers =
+    topIds.length === 0
+      ? []
+      : await prisma.user.findMany({
+          where: { id: { in: topIds.map(([id]) => id) } },
+          select: { id: true, name: true, email: true, phone: true },
+        });
+  const byId = new Map(topUsers.map((u) => [u.id, u]));
+  return {
+    today: {
+      deposits: todayRow.deposits,
+      depositsTotal: todayRow.total,
+      newPlayers,
+      activePlayers: new Set(activeRounds.map((r) => r.userId)).size,
+      commission: summary.today,
+    },
+    week,
+    topPlayers: topIds.map(([id, v]) => ({
+      id,
+      name: byId.get(id)?.name ?? "—",
+      contact: byId.get(id)?.email ?? byId.get(id)?.phone ?? null,
+      deposits: v.deposits,
+      totalDeposited: v.total,
+    })),
+  };
+}
+
+export interface DownlineNode {
+  id: string;
+  name: string;
+  contact: string | null;
+  role: string;
+  totalDeposited: number;
+  commission: number;
+  commissionModel: string;
+  commissionRate: number;
+  children: DownlineNode[];
+  deeper: boolean;
+}
+
+/** P0 Batch 4 (A9): the downline tree — the admin at the root, their
+ * referred players below, and any players referred by those players
+ * below them, recursively. The data model only links a player to their
+ * referring ADMIN (User.referredByAdminId — only admins hold referral
+ * codes), so in practice the tree is two levels deep; the builder is
+ * recursive anyway, and the render caps at 3 levels with a "more" note
+ * when a level-3 node still has children. Each node carries total
+ * deposited + commission earned for the root admin (the commission page
+ * is the source of truth). */
+export async function downlineTree(adminId: string): Promise<{ root: { id: string; name: string }; children: DownlineNode[] }> {
+  const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { id: true, name: true } });
+  if (!admin) return { root: { id: adminId, name: "—" }, children: [] };
+  const users = await prisma.user.findMany({
+    select: { id: true, name: true, email: true, phone: true, role: true, referredByAdminId: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const deposits = await prisma.depositEvent.groupBy({
+    by: ["userId"],
+    _sum: { amount: true },
+  });
+  const depositedBy = new Map(deposits.map((d) => [d.userId, dec(d._sum.amount)]));
+  const childrenOf = new Map<string, typeof users>();
+  for (const u of users) {
+    if (!u.referredByAdminId) continue;
+    const list = childrenOf.get(u.referredByAdminId) ?? [];
+    list.push(u);
+    childrenOf.set(u.referredByAdminId, list);
+  }
+  const build = async (userId: string, depth: number): Promise<DownlineNode[]> => {
+    const kids = childrenOf.get(userId) ?? [];
+    const nodes: DownlineNode[] = [];
+    for (const k of kids) {
+      const pc = await playerCommission(adminId, k.id);
+      const grandkids = childrenOf.get(k.id) ?? [];
+      nodes.push({
+        id: k.id,
+        name: k.name,
+        contact: k.email ?? k.phone ?? null,
+        role: k.role,
+        totalDeposited: depositedBy.get(k.id) ?? 0,
+        commission: pc.total,
+        commissionModel: pc.model,
+        commissionRate: pc.rate,
+        children: depth >= 3 ? [] : await build(k.id, depth + 1),
+        deeper: depth >= 3 && grandkids.length > 0,
+      });
+    }
+    return nodes;
+  };
+  return { root: { id: admin.id, name: admin.name }, children: await build(adminId, 1) };
 }
