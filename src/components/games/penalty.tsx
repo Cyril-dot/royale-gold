@@ -117,8 +117,13 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
   const resolveShot = useCallback((saved: boolean, aim: Aim) => {
     const { fx, fy } = aim;
     if (!saved) {
-      const g = goals + 1;
+      // Read the live goals from the ref, not the closure: onKick resets
+      // goals to 0 and shoots in the same tick, so the closure still
+      // holds the previous run's count and the first goal of a new run
+      // would land on the old rung (e.g. 2 + 1 = 3 after a ×3.92 cash-out).
+      const g = stateRef.current.goals + 1;
       setGoals(g);
+      stateRef.current.goals = g;
       setBulge({ x: fx * 100, y: fy * 100, key: Date.now() });
       setKeeperPose("beaten");
       setStrikerPose("celebrate");
@@ -138,7 +143,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       setTimeout(() => { resetActors(); setBusy(false); stateRef.current.busy = false; }, 520);
     } else {
       setKeeperPose("hero");
-      setSavedAt(goals);
+      setSavedAt(stateRef.current.goals);
       setResult({ kind: "saved" });
       // The gloves meet it: the ball parries away from the goal mouth.
       const dir = fx < 0.5 ? -1 : 1;
@@ -157,7 +162,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
         void finish(false, 0, "SAVED");
       }, 900);
     }
-  }, [goals, stake, cashOut, finish, resetActors, burst]);
+  }, [stake, cashOut, finish, resetActors, burst]);
 
   const shoot = useCallback((aim: Aim) => {
     if (!stateRef.current.playing || stateRef.current.busy) return;
@@ -267,6 +272,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       setPlaying(true);
       stateRef.current.playing = true;
       setGoals(0);
+      stateRef.current.goals = 0;
       setSavedAt(-1);
       resetActors();
       setMsg(`Shootout live — ${fmtCash(stake)} riding on it. ${zone.label} it is. First goal pays ×${LADDER[0]}.`);
@@ -293,6 +299,11 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
 
   const selectedZone = selected ? ZONES.find((z) => z.id === selected) : undefined;
   const cashOutAmt = goals >= 1 ? Math.round(stake * LADDER[goals - 1] * 100) / 100 : 0;
+  // FanZone-style score board: goals scored + the kick number (1–5).
+  // Kicks taken = goals + the save that ended the run (if any); the
+  // current kick is the next one while the shootout is live.
+  const kicksTaken = goals + (savedAt >= 0 ? 1 : 0);
+  const kickNum = playing ? Math.min(5, kicksTaken + 1) : Math.max(1, Math.min(5, kicksTaken));
 
   return (
     <RoomShell game={game} subtitle="5 shots · ladder to ×31.36 · cash out after any goal" stats={room.stats} history={room.history}>
@@ -303,6 +314,17 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
             <b>×{m}</b>
           </span>
         ))}
+      </div>
+      <div className="pn2-score" aria-label="Shootout score">
+        <div className="pn2-score-cell">
+          <small>GOALS</small>
+          <b>{goals}</b>
+        </div>
+        <div className="pn2-score-mid"><span>KICK {kickNum}/5</span></div>
+        <div className="pn2-score-cell">
+          <small>SAVED</small>
+          <b>{savedAt >= 0 ? 1 : 0}</b>
+        </div>
       </div>
       <div className={`pn-stage${playing ? " armed" : ""}${shaking ? " shake" : ""}`} id="pnStage" ref={stageRef}>
         <div className="pn-lights" aria-hidden="true">

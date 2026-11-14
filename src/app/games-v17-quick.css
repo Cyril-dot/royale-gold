@@ -354,3 +354,20 @@
 .pn2-kick2{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
 .pn2-kick2 small{font-size:11px;font-weight:800;opacity:.85}
 @media (prefers-reduced-motion: reduce){.pn2-result{animation:none}}
+
+/* ============ Penalty Shoot Out — FanZone-style score board + Penalty Shooters mow stripes ============ */
+/* Score board (FanZone model: big goals number + Kick n/5, in our gold/felt palette).
+   Slim single-row bar — the page is tall and the Kick! button must stay
+   discoverable above the fixed dock at scroll-top. */
+.pn2-score{display:flex;justify-content:space-between;align-items:center;width:min(640px,100%);margin:10px auto 0;padding:7px 14px;background:rgba(4,6,13,.5);border:1px solid var(--line-gold);border-radius:10px}
+.pn2-score-cell{display:flex;flex-direction:row;align-items:baseline;gap:6px}
+.pn2-score-cell small{font-size:9.5px;font-weight:800;letter-spacing:.12em;color:var(--faint)}
+.pn2-score-cell b{font-family:var(--font);font-weight:800;font-size:17px;line-height:1;color:var(--gold-2)}
+.pn2-score-mid{display:flex;align-items:center;justify-content:center}
+.pn2-score-mid span{font-family:var(--font);font-weight:800;font-size:12.5px;letter-spacing:.06em;color:#FFF6D8;white-space:nowrap}
+/* Mow-stripe grass (Penalty Shooters field model: vertical light/dark bands over the existing pitch). */
+.pn-grass{background:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 44px,transparent 44px 88px),repeating-linear-gradient(180deg,rgba(255,255,255,.055) 0 15px,transparent 15px 30px),linear-gradient(180deg,#1B5C40,#0C2B22)}
+/* Tighten the stadium frame + kick spacing so the Kick! button stays
+   discoverable above the fixed dock at scroll-top (the score bar adds height). */
+.pn-stage{padding:12px 14px 10px}
+.pn2-kickwrap{margin-top:8px}
