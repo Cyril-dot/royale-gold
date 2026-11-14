@@ -14,7 +14,7 @@ import AdminPlayerDetail from "../../../../components/AdminPlayerDetail";
 export default async function AdminPlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return (
-    <main className="rg48-page-main rg23">
+    <main className="rg48-page-main rg23 admin-fb">
       <div className="wrap">
         <Suspense fallback={null}>
           <AdminPlayerDetail id={id} />

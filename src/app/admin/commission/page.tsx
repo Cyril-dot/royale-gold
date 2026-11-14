@@ -16,7 +16,7 @@ import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../.
 
 export default function AdminCommissionPage() {
   return (
-    <main className="rg48-page-main rg23">
+    <main className="rg48-page-main rg23 admin-fb">
       <div className="wrap">
         <Suspense fallback={null}>
           <AdminCommissionInner />

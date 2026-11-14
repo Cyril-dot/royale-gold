@@ -5,3 +5,72 @@
 .players-search input{width:100%;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit;font-size:16px}
 .players-search input::placeholder{color:rgba(255,246,216,.45)}
 .players-search input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+
+/* --- Admin panel: full-bleed, no section boxes (Round 32) ---
+   Chuks: remove the box borders and containers on the admin pages and
+   let the content cover the full width. Every admin <main> carries the
+   .admin-fb class (Overview, Referrals, Commission, Players, player
+   detail). Selectors are main.rg48-page-main.rg23.admin-fb so they beat
+   the rg23 overrides in globals.css regardless of load order.
+   Kept on purpose: the stat tiles (.sum-card, content not container),
+   the tab pills (.admin-nav a, .ac-tab — interactive controls), the
+   form inputs, the preview banner (a transient notice, not a section),
+   and the h3 gold underline. Amounts stay Outfit bold, never Anton. */
+
+/* The page container stops capping the width — content spans the page,
+   aligned to the edge with consistent padding (20px, 14px on phones). */
+main.rg48-page-main.rg23.admin-fb .wrap{width:100%;max-width:none;margin-inline:0;padding-inline:20px}
+@media (max-width:480px){
+  main.rg48-page-main.rg23.admin-fb .wrap{padding-inline:14px}
+}
+
+/* Sections lose the box entirely — no background, border, radius or
+   shadow — and read as full-width content on the page background. A
+   thin divider separates sections; the first one needs none. The gold
+   top line (::before) was part of the box, so it goes too. */
+main.rg48-page-main.rg23.admin-fb .admin-sec{
+  background:none;border:0;border-radius:0;box-shadow:none;
+  padding:24px 0 0;margin:0 0 30px;
+  border-top:1px solid rgba(255,246,216,.1);
+}
+main.rg48-page-main.rg23.admin-fb .admin-sec:first-of-type{border-top:0;padding-top:0}
+main.rg48-page-main.rg23.admin-fb .admin-sec::before{display:none}
+main.rg48-page-main.rg23.admin-fb .admin-sec.referral-sec{background:none;border:0;box-shadow:none}
+
+/* The tab bar loses its own container too — no dark box behind it. The
+   inactive pills get their border back (the rg23 rule made them
+   borderless for the dark container); :not(.an-active) leaves the gold
+   active tab exactly as it was. */
+main.rg48-page-main.rg23.admin-fb .admin-nav{background:none;border:0;border-radius:0;padding:0}
+main.rg48-page-main.rg23.admin-fb .admin-nav a:not(.an-active){border-color:var(--line,rgba(255,246,216,.14));background:var(--steel,#141828)}
+
+/* Stat tiles are content, not containers — they stay, and now stretch
+   across the full width in a roomier row. */
+main.rg48-page-main.rg23.admin-fb .sum-cards{gap:12px}
+
+/* --- Referral code per user: compact, premium pill (Round 32) ---
+   The per-user code (Referrals + Players rows, player detail) was a big
+   gold block. Now a small tight outline pill: mono, 11px, sized to the
+   code, gold text on a whisper of gold, thin gold border, no shadow.
+   The admin's OWN share codes (.code-chip, no .sm) keep the big gold
+   block — those are the hero codes, not the per-user detail. */
+main.rg48-page-main.rg23.admin-fb .code-chip.sm{
+  font-size:11px;line-height:1.3;font-weight:800;letter-spacing:.02em;
+  padding:3px 8px;border-radius:6px;white-space:nowrap;
+  background:rgba(242,194,48,.12);color:var(--gold-2,#FFD964);
+  border:1px solid rgba(242,194,48,.45);box-shadow:none;
+  /* A grid item stretches to fill its track by default — at phone width
+     the user rows are a 2×2 grid (globals.css ≤640px) and the pill sits
+     in the 1fr column, so without this it draws ~170px wide with the
+     code at the left. justify-self:start sizes it to the code. */
+  justify-self:start;
+}
+
+/* --- Player detail: "Code used" as its own labelled field (Round 32) ---
+   It was crammed into the long subtitle line. Now the subtitle is just
+   contact + joined date, and Code used / Referring admin are small
+   labelled fields on their own row. */
+.pd-meta{display:flex;flex-wrap:wrap;gap:6px 24px;margin:0 0 20px}
+.pd-meta-item{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+.pd-meta-label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted,rgba(255,246,216,.7))}
+.pd-meta-item b{font-weight:800}

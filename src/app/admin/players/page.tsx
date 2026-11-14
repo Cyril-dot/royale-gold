@@ -16,7 +16,7 @@ import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError } from "../.
 
 export default function AdminPlayersPage() {
   return (
-    <main className="rg48-page-main rg23">
+    <main className="rg48-page-main rg23 admin-fb">
       <div className="wrap">
         <Suspense fallback={null}>
           <AdminPlayersInner />
@@ -73,7 +73,7 @@ function AdminPlayersInner() {
           <div className="user-list">
             {users.map((u) => (
               <Link key={u.id} className="user-row" href={playerHref(u.id)}>
-                <b>{u.name}</b><span>{u.email || u.phone || "—"}</span><span className="code-chip sm">{u.referralCodeUsed || ""}</span><span>Joined {new Date(u.createdAt).toLocaleDateString("en-GB")}</span>
+                <b>{u.name}</b><span>{u.email || u.phone || "—"}</span>{u.referralCodeUsed ? <span className="code-chip sm">{u.referralCodeUsed}</span> : <span aria-hidden="true" />}<span>Joined {new Date(u.createdAt).toLocaleDateString("en-GB")}</span>
               </Link>
             ))}
           </div>

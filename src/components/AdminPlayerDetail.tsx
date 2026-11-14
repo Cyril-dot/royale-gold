@@ -57,7 +57,11 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
     <>
       {previewId && ov ? <AdminPreviewBanner name={ov.admin.name} /> : null}
       <div className="rg48-hbar-in">{back}<h2>{u.name}</h2></div>
-      <p className="rg48-sub">{u.email || u.phone || "—"} · Joined {new Date(u.joinedAt).toLocaleDateString("en-GB")} · Code used: {u.referralCodeUsed || "—"} · Referring admin: {u.referringAdmin?.name || "—"}</p>
+      <p className="rg48-sub">{u.email || u.phone || "—"} · Joined {new Date(u.joinedAt).toLocaleDateString("en-GB")}</p>
+      <div className="pd-meta">
+        <span className="pd-meta-item"><span className="pd-meta-label">Code used</span>{u.referralCodeUsed ? <b className="code-chip sm">{u.referralCodeUsed}</b> : <b>—</b>}</span>
+        <span className="pd-meta-item"><span className="pd-meta-label">Referring admin</span><b>{u.referringAdmin?.name || "—"}</b></span>
+      </div>
       <AdminNav />
       <section className="admin-sec">
         <h3>Balances</h3>
