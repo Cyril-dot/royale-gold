@@ -33,6 +33,10 @@ model User {
   coins            Int      @default(10)
   commissionPct    Decimal? @db.Decimal(5, 2)
   active           Boolean  @default(true)
+  // P0 Batch 1 (A8): a blocked player cannot bet or deposit. The block
+  // is set by an admin (own downline only) with a mandatory reason.
+  blockedAt        DateTime?
+  blockedReason    String?
   referredByAdminId String?
   referredByAdmin  User?    @relation("ReferredUsers", fields: [referredByAdminId], references: [id])
   referredUsers    User[]   @relation("ReferredUsers")
@@ -49,6 +53,13 @@ model User {
   gameResults     GameResult[]
   dailyClaims     DailyClaim[]
   achievements    Achievement[]
+  // P0 Batch 1: withdrawals (request only — no real money moves),
+  // manual balance adjustments, and the audit trail.
+  withdrawals      Withdrawal[]       @relation("Withdrawer")
+  adminWithdrawals Withdrawal[]       @relation("WithdrawalAdmin")
+  adjustments      BalanceAdjustment[]
+  adminAdjustments BalanceAdjustment[] @relation("AdjustmentAdmin")
+  auditEntries     AuditLog[]          @relation("AuditActor")
 }
 
 model ReferralCode {
@@ -150,4 +161,66 @@ model TriviaQuestion {
   options     Json
   answerIndex Int
   category    String
+}
+
+// P0 Batch 1 (A5/O8): a withdrawal is a REQUEST only — no real money
+// moves (deposits are demo cashier only). Status flow:
+//   pending -> approved (admin approves; small amounts end here)
+//   pending -> admin_approved (admin approves a LARGE amount) -> approved (owner approves second)
+//   pending | admin_approved -> rejected (admin or owner, reason required)
+// Large = over WITHDRAWAL_OWNER_THRESHOLD (GH₵ 500, src/lib/withdrawals.ts).
+model Withdrawal {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation("Withdrawer", fields: [userId], references: [id], onDelete: Cascade)
+  // Referring admin at request time — scopes the admin queue. Null when
+  // the player was not referred; the owner sees those in the global queue.
+  adminId         String?
+  admin           User?     @relation("WithdrawalAdmin", fields: [adminId], references: [id])
+  amount          Decimal   @db.Decimal(12, 2)
+  method          String
+  status          String    @default("pending")
+  adminApprovedAt DateTime?
+  decidedBy       String?
+  reason          String?
+  createdAt       DateTime  @default(now())
+  decidedAt       DateTime?
+
+  @@index([adminId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+// P0 Batch 1 (A7): a manual balance adjustment by an admin (own downline
+// only). Written atomically with the balance change and an AuditLog row;
+// the ledger (A6/O7) reads these back. Reason is mandatory.
+model BalanceAdjustment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adminId   String
+  admin     User     @relation("AdjustmentAdmin", fields: [adminId], references: [id])
+  wallet    String   // "cash" | "coins"
+  direction String   // "credit" | "debit"
+  amount    Decimal  @db.Decimal(12, 2)
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([adminId, createdAt])
+}
+
+// P0 Batch 1: the audit trail for money/admin actions (adjustments,
+// blocks, withdrawal decisions). Append-only — nothing edits these rows.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actor     User     @relation("AuditActor", fields: [actorId], references: [id])
+  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request"
+  targetId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
 }

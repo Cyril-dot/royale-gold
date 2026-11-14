@@ -26,7 +26,7 @@ export interface DayDetail {
 }
 
 export interface UserDetail {
-  user: { id: string; name: string; email: string | null; phone: string | null; role: string; cash: number; coins: number; joinedAt: string; referralCodeUsed: string | null; referringAdmin: { id: string; name: string; email: string } | null };
+  user: { id: string; name: string; email: string | null; phone: string | null; role: string; cash: number; coins: number; joinedAt: string; referralCodeUsed: string | null; referringAdmin: { id: string; name: string; email: string } | null; blockedAt: string | null; blockedReason: string | null };
   deposits: { id: string; amount: number; method: string; pctInForce: number; commission: number; createdAt: string }[];
   totals: { deposits: number; totalDeposited: number; totalCommission: number; coinsGiven: number };
 }

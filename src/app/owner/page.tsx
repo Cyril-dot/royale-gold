@@ -32,6 +32,68 @@ export default function OwnerPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // P0 Batch 1 (O8): withdrawal oversight — every pending withdrawal
+  // platform-wide. Large ones an admin approved sit as "admin_approved"
+  // until the owner approves them second (maker-checker, GH₵ 500).
+  interface OwnerWdRow { id: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; method: string; status: string; reason: string | null; createdAt: string; decidedAt: string | null }
+  const [ownerWd, setOwnerWd] = useState<OwnerWdRow[] | null>(null);
+  const [ownerWdPending, setOwnerWdPending] = useState(0);
+  const [ownerWdStatus, setOwnerWdStatus] = useState("");
+  const [ownerRejectId, setOwnerRejectId] = useState<string | null>(null);
+  const [ownerRejectReason, setOwnerRejectReason] = useState("");
+  const [ownerWdBusy, setOwnerWdBusy] = useState<string | null>(null);
+  const loadOwnerWd = useCallback(async () => {
+    try {
+      const r = await api<{ withdrawals: OwnerWdRow[]; pending: number }>(`/api/owner/withdrawals${ownerWdStatus ? `?status=${ownerWdStatus}` : ""}`);
+      setOwnerWd(r.withdrawals);
+      setOwnerWdPending(r.pending);
+    } catch { setOwnerWd([]); }
+  }, [ownerWdStatus]);
+  useEffect(() => { void loadOwnerWd(); }, [loadOwnerWd]);
+  const decideOwnerWd = async (w: OwnerWdRow, decision: "approve" | "reject") => {
+    if (decision === "reject" && ownerRejectId !== w.id) { setOwnerRejectId(w.id); setOwnerRejectReason(""); return; }
+    if (decision === "reject" && ownerRejectReason.trim().length < 3) { toast("A reason is required to reject", "lose"); return; }
+    setOwnerWdBusy(w.id);
+    try {
+      await api(`/api/owner/withdrawals/${w.id}/decide`, {
+        method: "POST",
+        body: JSON.stringify({ decision, ...(decision === "reject" ? { reason: ownerRejectReason.trim() } : {}) }),
+      });
+      toast(decision === "approve" ? "Withdrawal approved" : "Withdrawal rejected", decision === "approve" ? "win" : "lose");
+      setOwnerRejectId(null);
+      setOwnerRejectReason("");
+      await loadOwnerWd();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Decision failed", "lose");
+    } finally { setOwnerWdBusy(null); }
+  };
+
+  // P0 Batch 1 (O7): global transaction ledger — every money movement,
+  // platform-wide, searchable by type, period, amount, method and admin.
+  interface OwnerLedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; detail: string; status?: string; reason?: string; createdAt: string }
+  const [ownerLedger, setOwnerLedger] = useState<OwnerLedgerRow[] | null>(null);
+  const [ownerLedTotals, setOwnerLedTotals] = useState<{ rows: number; cashIn: number; cashOut: number } | null>(null);
+  const [ownerLedType, setOwnerLedType] = useState("");
+  const [ownerLedQ, setOwnerLedQ] = useState("");
+  const [ownerLedFrom, setOwnerLedFrom] = useState("");
+  const [ownerLedTo, setOwnerLedTo] = useState("");
+  const [ownerLedAdmin, setOwnerLedAdmin] = useState("");
+  const loadOwnerLedger = useCallback(async () => {
+    try {
+      const p = new URLSearchParams();
+      if (ownerLedType) p.set("type", ownerLedType);
+      if (ownerLedQ.trim()) p.set("q", ownerLedQ.trim());
+      if (ownerLedFrom) p.set("from", ownerLedFrom);
+      if (ownerLedTo) p.set("to", ownerLedTo);
+      if (ownerLedAdmin) p.set("adminId", ownerLedAdmin);
+      const qs = p.toString();
+      const r = await api<{ rows: OwnerLedgerRow[]; totals: { rows: number; cashIn: number; cashOut: number } }>(`/api/owner/ledger${qs ? `?${qs}` : ""}`);
+      setOwnerLedger(r.rows);
+      setOwnerLedTotals(r.totals);
+    } catch { setOwnerLedger([]); }
+  }, [ownerLedType, ownerLedQ, ownerLedFrom, ownerLedTo, ownerLedAdmin]);
+  useEffect(() => { void loadOwnerLedger(); }, [loadOwnerLedger]);
+
   // Per-admin referral link copy (first active code) — the admin's own
   // panel lives on the /admin routes; "Preview panel" links there with
   // ?preview=<adminId>.
@@ -186,6 +248,48 @@ export default function OwnerPage() {
           ))}
         </section>
 
+        <section className="admin-sec">
+          <h3>Withdrawals{ownerWdPending > 0 ? ` (${ownerWdPending} pending)` : ""}</h3>
+          <p className="rg48-sub">Every pending withdrawal, platform-wide. Requests only — no real money moves. Large amounts (over GH₵ 500) need your second approval after the admin’s.</p>
+          <div className="money-chips" role="group" aria-label="Filter by status">
+            <button type="button" className={!ownerWdStatus ? "on" : ""} onClick={() => setOwnerWdStatus("")}>All</button>
+            {["pending", "admin_approved", "approved", "rejected"].map((s) => (
+              <button key={s} type="button" className={ownerWdStatus === s ? "on" : ""} onClick={() => setOwnerWdStatus(s)}>{s === "admin_approved" ? "Awaiting owner" : s[0].toUpperCase() + s.slice(1)}</button>
+            ))}
+          </div>
+          {ownerWd === null ? <p>Loading withdrawals…</p> : ownerWd.length === 0 ? (
+            <p>No withdrawal requests.</p>
+          ) : (
+            <div className="wd-list">
+              {ownerWd.map((w) => (
+                <div key={w.id} className="wd-row">
+                  <div className="wd-main">
+                    <b>{w.userName}</b><span>{w.userContact || ""}</span>
+                    <span className="wd-amt">{fmtCash(w.amount)} · {w.method}</span>
+                    <span className="wd-date">{w.adminName ? `via ${w.adminName} · ` : ""}{new Date(w.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                  <span className={`wd-status wd-${w.status}`}>{w.status === "admin_approved" ? "Awaiting owner" : w.status}</span>
+                  {w.reason ? <p className="wd-reason">Reason: {w.reason}</p> : null}
+                  {(w.status === "pending" || w.status === "admin_approved") && (
+                    <div className="wd-actions">
+                      {w.status === "admin_approved" ? <span className="wd-note">Admin approved — your approval makes it final.</span> : null}
+                      <button className="btn btn-gold btn-sm" type="button" disabled={ownerWdBusy === w.id} onClick={() => void decideOwnerWd(w, "approve")}>Approve</button>
+                      <button className="btn btn-ghost btn-sm" type="button" disabled={ownerWdBusy === w.id} onClick={() => void decideOwnerWd(w, "reject")}>Reject</button>
+                    </div>
+                  )}
+                  {ownerRejectId === w.id && (
+                    <div className="wd-reject">
+                      <input type="text" placeholder="Reason for rejection (required)" value={ownerRejectReason} onChange={(e) => setOwnerRejectReason(e.target.value)} aria-label="Rejection reason" />
+                      <button className="btn btn-gold btn-sm" type="button" disabled={ownerWdBusy === w.id} onClick={() => void decideOwnerWd(w, "reject")}>Confirm reject</button>
+                      <button className="btn btn-ghost btn-sm" type="button" onClick={() => { setOwnerRejectId(null); setOwnerRejectReason(""); }}>Cancel</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="admin-sec ow-commission">
           <h3>Commission</h3>
           <div className="ow-tabs" role="tablist" aria-label="Commission views">
@@ -236,6 +340,62 @@ export default function OwnerPage() {
                   </table>
                 </div>
               )}
+            </div>
+          )}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Ledger</h3>
+          <p className="rg48-sub">Every money movement, platform-wide — deposits, bets, withdrawals, adjustments, conversions. Built only from rows the tables actually hold.</p>
+          <div className="money-filters">
+            <label className="players-search">
+              <input type="search" placeholder="Search by player or contact" value={ownerLedQ} onChange={(e) => setOwnerLedQ(e.target.value)} aria-label="Search ledger" />
+            </label>
+            <div className="money-chips" role="group" aria-label="Filter by type">
+              <button type="button" className={!ownerLedType ? "on" : ""} onClick={() => setOwnerLedType("")}>All types</button>
+              {["deposit", "bet", "withdrawal", "adjustment", "conversion"].map((t) => (
+                <button key={t} type="button" className={ownerLedType === t ? "on" : ""} onClick={() => setOwnerLedType(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
+              ))}
+            </div>
+            <div className="money-dates">
+              <label>From <input type="date" value={ownerLedFrom} max={todayStr()} onChange={(e) => setOwnerLedFrom(e.target.value)} /></label>
+              <label>To <input type="date" value={ownerLedTo} max={todayStr()} onChange={(e) => setOwnerLedTo(e.target.value)} /></label>
+              <label>Admin
+                <select value={ownerLedAdmin} onChange={(e) => setOwnerLedAdmin(e.target.value)} aria-label="Filter by admin">
+                  <option value="">All admins</option>
+                  {admins.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          {ownerLedTotals && (
+            <div className="sum-cards">
+              <div className="sum-card"><span>Rows</span><b>{ownerLedTotals.rows}</b></div>
+              <div className="sum-card"><span>Cash in</span><b>{fmtCash(ownerLedTotals.cashIn)}</b></div>
+              <div className="sum-card"><span>Cash out</span><b>{fmtCash(ownerLedTotals.cashOut)}</b></div>
+            </div>
+          )}
+          {ownerLedger === null ? <p>Loading ledger…</p> : ownerLedger.length === 0 ? (
+            <p>No money movements yet.</p>
+          ) : (
+            <div className="ledger-list">
+              {ownerLedger.map((r) => {
+                const sign = r.amount > 0 ? "+" : r.amount < 0 ? "−" : "";
+                const abs = Math.abs(r.amount);
+                const amt = r.wallet === "coins" ? `${sign}${Math.round(abs)} coins` : `${sign}${fmtCash(abs)}`;
+                return (
+                  <div key={r.id} className="ledger-row">
+                    <span className="ledger-txt">
+                      <b>{r.userName} <span className={`ledger-type ledger-${r.type}`}>{r.type}</span></b>
+                      <span>{r.detail}{r.reason ? ` — ${r.reason}` : ""}{r.status ? ` · ${r.status}` : ""}{r.adminName ? ` · ${r.adminName}` : ""}</span>
+                      <span>{new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                    </span>
+                    <b className={r.amount >= 0 ? "ledger-in" : "ledger-out"}>{amt}</b>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

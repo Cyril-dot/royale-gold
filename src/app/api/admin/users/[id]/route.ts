@@ -41,6 +41,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         joinedAt: user.createdAt.toISOString(),
         referralCodeUsed: user.referralCodeUsed,
         referringAdmin: user.referredByAdmin,
+        // P0 Batch 1 (A8): block state, shown on the player detail page.
+        blockedAt: user.blockedAt?.toISOString() ?? null,
+        blockedReason: user.blockedReason,
       },
       deposits: deposits.map((d) => ({
         id: d.id,

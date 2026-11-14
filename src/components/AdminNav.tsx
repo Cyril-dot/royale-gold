@@ -32,6 +32,7 @@ export function AdminNav() {
       {item("/admin/referrals", "Referrals", pathname.startsWith("/admin/referrals"))}
       {item("/admin/commission", "Commission", pathname.startsWith("/admin/commission"))}
       {item("/admin/players", "Players", pathname.startsWith("/admin/players"))}
+      {item("/admin/money", "Money", pathname.startsWith("/admin/money"))}
     </nav>
   );
 }

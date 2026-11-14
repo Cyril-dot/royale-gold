@@ -24,6 +24,10 @@ export async function POST(req: Request) {
       return fail(`Method must be one of: ${METHODS.join(", ")}`);
     }
 
+    const me = await prisma.user.findUnique({ where: { id: user.id } });
+    // P0 Batch 1 (A8): a blocked player cannot deposit.
+    if (me?.blockedAt) return fail("This account is blocked and cannot deposit", 403);
+
     const result = await prisma.$transaction(async (tx) => {
       const fresh = await tx.user.findUnique({ where: { id: user.id } });
       if (!fresh || !fresh.active) throw new Error("Account not found or inactive");

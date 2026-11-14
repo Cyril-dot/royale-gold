@@ -70,6 +70,10 @@ export async function settleGame(
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user || !user.active) throw new Error("Account not found or inactive");
+    // P0 Batch 1 (A8): a blocked player cannot place a bet. This covers
+    // /api/games/settle and the REAL path of /api/games/play (which calls
+    // settleGame); the play route also checks before the SIM draw.
+    if (user.blockedAt) throw new Error("This account is blocked and cannot place bets");
     if (currency === "cash") {
       if (dec(user.cashBalance) < stake) throw new Error("Insufficient cash balance");
     } else if (user.coins < stake) {

@@ -31,6 +31,10 @@ const BET_KINDS = new Set(["straight", "red", "black", "even", "odd"]);
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
+    // P0 Batch 1 (A8): a blocked player cannot place a bet — checked here
+    // before the draw so SIM draws are blocked too (settleGame covers the
+    // REAL path).
+    if (user.blockedAt) return fail("This account is blocked and cannot place bets", 403);
     const body = await readJson<{
       game?: string;
       currency?: "cash" | "coins";

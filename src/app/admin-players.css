@@ -74,3 +74,71 @@ main.rg48-page-main.rg23.admin-fb .code-chip.sm{
 .pd-meta-item{display:inline-flex;align-items:center;gap:8px;font-size:13px}
 .pd-meta-label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted,rgba(255,246,216,.7))}
 .pd-meta-item b{font-weight:800}
+
+/* --- P0 Batch 1: Money pages (admin /admin/money, owner Withdrawals +
+   Ledger sections) + player-detail adjust/block ---
+   Brand tokens only, 44px min touch targets, 16px inputs (no iOS zoom),
+   hover gated behind (hover:hover) and (pointer:fine), :active scale.
+   Amounts are <b> in the site font (Outfit bold) — never Anton. */
+
+/* Filter chips (method / status / type) — same visual language as the
+   .admin-nav pills: steel bg, gold when on. */
+.money-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.money-chips button{min-height:40px;padding:8px 14px;border-radius:10px;border:1px solid var(--line,rgba(255,246,216,.14));background:var(--steel,#141828);color:var(--ink,#FFF6D8);font:inherit;font-weight:700;font-size:13.5px;touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer}
+.money-chips button.on{background:var(--gold,#F2C230);color:#231a02;border-color:var(--gold,#F2C230)}
+.money-chips button:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){.money-chips button:hover{border-color:var(--gold,#F2C230)}}
+
+/* Money filters: search + chips + date range. */
+.money-filters{margin:0 0 16px}
+.money-dates{display:flex;flex-wrap:wrap;gap:10px 16px;margin:0 0 4px}
+.money-dates label{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
+.money-dates input,.money-dates select{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
+.money-dates input:focus,.money-dates select:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+
+/* Deposit table: player cell carries a muted contact sub-line. */
+.td-sub{display:block;font-size:12px;color:var(--muted,rgba(255,246,216,.7));font-weight:400}
+
+/* Withdrawal queue rows. */
+.wd-list{display:flex;flex-direction:column;gap:12px}
+.wd-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:14px 0;border-top:1px solid rgba(255,246,216,.1)}
+.wd-row:first-child{border-top:0;padding-top:0}
+.wd-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 220px}
+.wd-main b{font-size:15px}
+.wd-main span{font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+.wd-main .wd-amt{font-size:15px;font-weight:800;color:var(--ink,#FFF6D8)}
+.wd-status{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:6px;white-space:nowrap}
+.wd-pending{background:rgba(242,194,48,.14);color:var(--gold-2,#FFD964);border:1px solid rgba(242,194,48,.45)}
+.wd-admin_approved{background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.45)}
+.wd-approved{background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.45)}
+.wd-rejected{background:rgba(229,50,45,.12);color:#FF6B65;border:1px solid rgba(229,50,45,.45)}
+.wd-reason{flex-basis:100%;margin:0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+.wd-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wd-note{font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+.wd-reject{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap}
+.wd-reject input{flex:1 1 200px;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
+.wd-reject input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+
+/* Ledger rows. */
+.ledger-list{display:flex;flex-direction:column}
+.ledger-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid rgba(255,246,216,.1);cursor:pointer}
+.ledger-row:first-child{border-top:0;padding-top:0}
+.ledger-row:focus-visible{outline:2px solid var(--gold,#F2C230);outline-offset:2px}
+.ledger-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ledger-txt b{font-size:14.5px}
+.ledger-txt span{font-size:12.5px;color:var(--muted,rgba(255,246,216,.7))}
+.ledger-type{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:rgba(255,246,216,.08);color:var(--gold-2,#FFD964);border:1px solid rgba(242,194,48,.35)}
+.ledger-in{color:#3ED97E;white-space:nowrap}
+.ledger-out{color:#FF6B65;white-space:nowrap}
+
+/* Player detail: blocked badge + note, adjustment form. */
+.pd-blocked-badge{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:6px;background:rgba(229,50,45,.14);color:#FF6B65;border:1px solid rgba(229,50,45,.5);white-space:nowrap}
+.pd-blocked-note{margin:0 0 16px;padding:11px 14px;border-radius:10px;background:rgba(229,50,45,.1);border:1px solid rgba(229,50,45,.4);font-size:13.5px}
+.pd-adjust{display:flex;flex-direction:column;gap:12px}
+.pd-adjust-row{display:flex;gap:10px;flex-wrap:wrap}
+.pd-adjust-row label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;flex:1 1 120px}
+.pd-adjust-row select,.pd-adjust-row input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
+.pd-adjust-row select:focus,.pd-adjust-row input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+.pd-adjust-reason{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700}
+.pd-adjust-reason input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
+.pd-adjust-reason input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
