@@ -1,17 +1,24 @@
-// Penalty Shoot Out — LALIGA-style rebuild (video spec, not a copy):
-// 5 tap-to-aim target zones over the goal, a doubling multiplier ladder
-// [1.96, 3.92, 7.84, 15.68, 31.36] as a top bar, bet controls (Min/−,
-// amount, +/Max; Min 0.10, Max 4,000.00), a big green Kick! button
-// (tap a zone to aim, or Kick! for a random target), GOAL! / NO GOAL!
-// states, and a gold Cash Out after each goal or Kick!! to climb the
-// ladder. The striker always wears the gold #9 kit (no team picker).
-// Keeper logic follows the classic zone-match pattern
-// (adhkr81/Penalty-Shooter- reference): the keeper dives to a zone; if it is the shot's zone the shot is saved. Save
-// chance is 40% per shot, so a goal is the common outcome; one save
-// ends the run and the stake is gone. One stake rides the whole
-// shootout (unchanged settle flow — settle() still computes the payout
-// from the multiplier; server cap is stake × 31.36 via games.ts).
-// PAYOUT CHANGE: top rung was ×12.5, now ×31.36.
+// Penalty Shoot Out — FanZone-style rebuild (Chuks picked FanZone, 14 Nov):
+// FanZone's arena is the SKIN — its dark-green arena card, two-column
+// score board (GOALS / KICK n/5 / SAVED / NEXT), 5 kick dots, big
+// GOAL!/NO GOAL! result banner, lime #CCFF00 accents, arrow aim
+// buttons — while the casino mechanics stay EXACTLY as the LALIGA
+// rebuild: 5 tap-to-aim target zones over the goal, the doubling ladder
+// [1.96, 3.92, 7.84, 15.68, 31.36], bet controls (Min 0.10, Max
+// 4,000.00), the big green Kick! circle, GOAL! / NO GOAL! states, and
+// a gold Cash Out after each goal or Kick!! to climb. The striker
+// always wears the gold #9 kit (no team picker). Keeper logic follows
+// the classic zone-match pattern (adhkr81/Penalty-Shooter- reference):
+// the keeper dives to a zone; if it is the shot's zone the shot is
+// saved. Save chance is 40% per shot, so a goal is the common outcome;
+// one save ends the run and the stake is gone. One stake rides the
+// whole shootout (unchanged settle flow — settle() still computes the
+// payout from the multiplier; server cap is stake × 31.36 via games.ts).
+// FanZone has no stake, no ladder, no Cash Out — those are ours and
+// they stay. The keeper + striker are our DRAWN SVG figures
+// (penalty-svgs.tsx), not FanZone's emoji-sized divs. The ad-boards
+// strip is gone — FanZone's arena has no ad boards, and the 38px was
+// needed to keep Kick! visible above the fixed bottom dock at 390px.
 
 "use client";
 
@@ -27,14 +34,16 @@ const SAVE_CHANCE = 0.4;
 const BET_MIN = 0.1;
 const BET_MAX = 4000;
 
-interface Zone { id: string; label: string; fx: number; fy: number }
+interface Zone { id: string; label: string; fx: number; fy: number; rot: number }
 // The video's five targets: three across the top, two low in the corners.
+// rot is the aim-arrow rotation (FanZone's direction-arrow selector
+// language): up-left, up, up-right, down-left, down-right.
 const ZONES: Zone[] = [
-  { id: "tl", label: "Top left", fx: 0.14, fy: 0.16 },
-  { id: "tc", label: "Top centre", fx: 0.5, fy: 0.12 },
-  { id: "tr", label: "Top right", fx: 0.86, fy: 0.16 },
-  { id: "bl", label: "Bottom left", fx: 0.12, fy: 0.8 },
-  { id: "br", label: "Bottom right", fx: 0.88, fy: 0.8 },
+  { id: "tl", label: "Top left", fx: 0.14, fy: 0.16, rot: -45 },
+  { id: "tc", label: "Top centre", fx: 0.5, fy: 0.12, rot: 0 },
+  { id: "tr", label: "Top right", fx: 0.86, fy: 0.16, rot: 45 },
+  { id: "bl", label: "Bottom left", fx: 0.12, fy: 0.8, rot: -135 },
+  { id: "br", label: "Bottom right", fx: 0.88, fy: 0.8, rot: 135 },
 ];
 
 interface Aim { sx: number; sy: number; x: number; y: number; cx: number; cy: number; fx: number; fy: number; gl: number; gt: number; gw: number; gh: number; label: string }
@@ -299,11 +308,13 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
 
   const selectedZone = selected ? ZONES.find((z) => z.id === selected) : undefined;
   const cashOutAmt = goals >= 1 ? Math.round(stake * LADDER[goals - 1] * 100) / 100 : 0;
-  // FanZone-style score board: goals scored + the kick number (1–5).
-  // Kicks taken = goals + the save that ended the run (if any); the
-  // current kick is the next one while the shootout is live.
+  // FanZone's two-column score board: GOALS + the kick number (1–5) on
+  // the first row, SAVED + the NEXT rung on the second. Kicks taken =
+  // goals + the save that ended the run (if any); the current kick is
+  // the next one while the shootout is live.
   const kicksTaken = goals + (savedAt >= 0 ? 1 : 0);
   const kickNum = playing ? Math.min(5, kicksTaken + 1) : Math.max(1, Math.min(5, kicksTaken));
+  const nextMult = goals >= 5 ? null : LADDER[goals];
 
   return (
     <RoomShell game={game} subtitle="5 shots · ladder to ×31.36 · cash out after any goal" stats={room.stats} history={room.history}>
@@ -315,24 +326,27 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
           </span>
         ))}
       </div>
-      <div className="pn2-score" aria-label="Shootout score">
-        <div className="pn2-score-cell">
-          <small>GOALS</small>
-          <b>{goals}</b>
-        </div>
-        <div className="pn2-score-mid"><span>KICK {kickNum}/5</span></div>
-        <div className="pn2-score-cell">
-          <small>SAVED</small>
-          <b>{savedAt >= 0 ? 1 : 0}</b>
-        </div>
-      </div>
       <div className={`pn-stage${playing ? " armed" : ""}${shaking ? " shake" : ""}`} id="pnStage" ref={stageRef}>
+        <div className="pn2-board" aria-label="Shootout score">
+          <div className="pn2-board-card">
+            <small>GOALS</small>
+            <b>{goals}</b>
+          </div>
+          <div className="pn2-board-mid"><span>KICK {kickNum}/5</span></div>
+          <div className="pn2-board-card">
+            <small>SAVED</small>
+            <b className="is-saved">{savedAt >= 0 ? 1 : 0}</b>
+          </div>
+          <div className="pn2-board-card">
+            <small>NEXT</small>
+            <b className="is-next">{nextMult === null ? "—" : `×${nextMult}`}</b>
+          </div>
+        </div>
         <div className="pn-lights" aria-hidden="true">
           <div className="pn-pylon l"><i /><i /><i /><i /><i /><i /></div><div className="pn-pylon r"><i /><i /><i /><i /><i /><i /></div>
           <div className="pn-cone l" /><div className="pn-cone r" />
         </div>
         <div className="pn-crowd" aria-hidden="true" />
-        <div className="pn-boards" aria-hidden="true"><span>ROYALE GOLD</span><span className="mid">PENALTY SHOOTOUT</span><span>TOP PRIZE ×31.36</span></div>
         <div className={`pn-goal${rippling ? " ripple" : ""}`} ref={goalRef} role="img" aria-label="The goal and its keeper — tap a target zone, then Kick!">
           <div className="pn-net-back" aria-hidden="true" />
           <div className="pn-net-side l" aria-hidden="true" />
@@ -350,19 +364,23 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
               aria-pressed={selected === z.id}
               aria-label={`Aim ${z.label}`}
             >
-              <span className="pn2-zone-in" aria-hidden="true" />
+              <span className="pn2-zone-in" aria-hidden="true">
+                <svg viewBox="0 0 24 24" style={{ transform: `rotate(${z.rot}deg)` }}><path d="M12 2.5 L19 11 L14.8 11 L14.8 21.5 L9.2 21.5 L9.2 11 L5 11 Z" fill="currentColor" /></svg>
+              </span>
             </button>
           ))}
+        </div>
+        <div className={`pn2-result${result ? (result.kind === "saved" ? " saved" : " goal") : ""}`} aria-live="polite">
+          {result && <b>{result.kind === "saved" ? "NO GOAL!" : `GOAL! ×${result.mult}`}</b>}
         </div>
         <div className="pn-grass"><span className="pn-spot" aria-hidden="true" /></div>
         <div className={`pn-striker ${strikerPose}`} aria-hidden="true"><StrikerSvg /></div>
         <div className="pn-ball" ref={ballRef} aria-hidden="true" style={ballStyle} />
-        {result && (
-          <div className={`pn2-result ${result.kind === "saved" ? "saved" : ""}`} aria-live="polite">
-            <b>{result.kind === "saved" ? "NO GOAL!" : "GOAL!"}</b>
-            {result.kind === "goal" && result.mult !== undefined && <span>×{result.mult}</span>}
-          </div>
-        )}
+      </div>
+      <div className="pn-shots" aria-label="Shots taken">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <span key={i} className={`pn-shotdot${i < goals ? " goal" : i === savedAt ? " miss" : ""}`} />
+        ))}
       </div>
       <div className="pn2-bet" aria-label="Bet amount">
         <div className="pn2-bet-row">
@@ -404,11 +422,6 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
           <small>{selectedZone ? selectedZone.label : "Random"}</small>
         </div>
       )}
-      <div className="pn-shots" aria-label="Shots taken">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <span key={i} className={`pn-shotdot${i < goals ? " goal" : i === savedAt ? " miss" : ""}`} />
-        ))}
-      </div>
       <p className="bottle-msg xg-msg">{msg}</p>
     </RoomShell>
   );
