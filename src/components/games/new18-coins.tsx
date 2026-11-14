@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtCoins } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
 // ---------- Bingo Blitz ----------
@@ -67,9 +68,11 @@ export function BingoBlitzRoom({ game }: { game: GameDef }) {
     setPhase("drawing");
     setDrawn([]);
     setMsg("Drawing the balls…");
+    playSfx("spin", room.muted);
     picks.forEach((n, i) => {
       window.setTimeout(() => {
         setDrawn((d) => [...d, n]);
+        playSfx("tick", room.muted);
         if (i === picks.length - 1) {
           const all = new Set(picks);
           const isHit = (v: number | "FREE") => v === "FREE" || all.has(v as number);
@@ -117,6 +120,10 @@ export function BrickBreakerRoom({ game }: { game: GameDef }) {
   const [broken, setBroken] = useState(0);
   const [msg, setMsg] = useState("Break the wall — clear all 24 bricks for ×5, 80% for ×3, half for ×2. One ball — miss it and you lose. Drag or use ← →.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // All-games sound pass: bricks break inside the rAF loop, so the
+  // mute flag is read through a ref (mirror the Plinko pattern).
+  const mutedRef = useRef(room.muted);
+  mutedRef.current = room.muted;
   const sRef = useRef({ px: 120, bx: 150, by: 300, vx: 3, vy: -3.4, bricks: [] as boolean[], broken: 0, over: false, trail: [] as { x: number; y: number }[] });
   const rafRef = useRef(0);
   const settledRef = useRef(false);
@@ -230,6 +237,7 @@ export function BrickBreakerRoom({ game }: { game: GameDef }) {
         if (s.bx > x - 6 && s.bx < x + BW + 6 && s.by > y - 6 && s.by < y + BH + 6) {
           s.bricks[r * 8 + c] = false;
           s.broken++;
+          playSfx("crack", mutedRef.current);
           setBroken(s.broken);
           s.vy = -s.vy;
           if (s.broken >= 24) { draw(); void finish(s.broken); return; }
@@ -327,6 +335,8 @@ export function StackTowerRoom({ game }: { game: GameDef }) {
       if (!settledRef.current) { settledRef.current = true; await room.settle(stake, payout, { placed, mult }); }
       return;
     }
+    // Landed on the tower — a crack for the block.
+    playSfx("crack", room.muted);
     const nb = { x: left, w: right - left };
     const next = [...blocksRef.current, nb];
     setBlocks(next);
@@ -436,6 +446,7 @@ export function BubbleShooterRoom({ game }: { game: GameDef }) {
 
   const shoot = () => {
     if (phase !== "playing" || flying || shots <= 0) return;
+    playSfx("shoot", room.muted);
     const color = curRef.current;
     curRef.current = Math.floor(Math.random() * 4);
     setShots((s) => s - 1);
@@ -648,6 +659,7 @@ export function BullseyeDartsRoom({ game }: { game: GameDef }) {
 
   const throwDart = async () => {
     if (phase !== "playing") return;
+    playSfx("shoot", room.muted);
     const jx = aim.x + (Math.random() * 16 - 8);
     const jy = aim.y + (Math.random() * 16 - 8);
     const dist = Math.hypot(jx, jy);
@@ -747,6 +759,7 @@ export function ConnectFourRoom({ game }: { game: GameDef }) {
     if (phase !== "playing") return;
     const mine = dropIn(board, col, 1);
     if (!mine) { setMsg("That column is full — pick another."); return; }
+    playSfx("pop", room.muted);
     let b = mine.board;
     setBoard(b);
     if (checkWin(b) === 1) { void endRound(b, 1); return; }

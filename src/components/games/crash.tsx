@@ -19,7 +19,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
-import { useStore } from "../../lib/store";
+import { playSfx, useStore } from "../../lib/store";
 import type { CrashSceneState } from "../../lib/three/crash";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
@@ -228,6 +228,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
 
   const doCrash = useCallback(async (rv: Reveal) => {
     if (phaseRef.current === "crashed") return;
+    playSfx("boom", room.muted);
     setReveal(rv);
     setCrashPoint(rv.crashPoint);
     setMult(rv.crashPoint);
@@ -548,6 +549,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
     // curve is below it, and the server re-checks on settle anyway.
     const m = Math.min(multAt(Date.now() - startRef.current), DISPLAY_CAP);
     const payout = Math.round(bet.stake * m * 100) / 100;
+    playSfx("blip", room.muted);
     // 3D: the first cash-out of the round starts the cash lift.
     if (!cashT0Ref.current) cashT0Ref.current = performance.now();
     setBets((bs) => bs.map((b) => (b === bet ? { ...b, cashed: true, payout } : b)));

@@ -818,6 +818,10 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
   const [power, setPower] = useState("");
   const [msg, setMsg] = useState("Pick a difficulty, set your stake and start. Reach the kill goal to win — EASY 20 pays ×2, MEDIUM 35 pays ×3, HARD 50 pays ×4.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // All-games sound pass: shots spawn inside the rAF loop, so the mute
+  // flag is read through a ref (mirror the Car Crash mutedRef pattern).
+  const mutedRef = useRef(room.muted);
+  mutedRef.current = room.muted;
   const stRef = useRef<RsState | null>(null);
   const rafRef = useRef(0);
   const killsRef = useRef(0);
@@ -918,6 +922,7 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
       if (firingRef.current && st.fireT <= 0) {
         if (st.double > 0) { st.shots.push({ x: st.rx - 10, y: st.ry - 26 }); st.shots.push({ x: st.rx + 10, y: st.ry - 26 }); }
         else st.shots.push({ x: st.rx, y: st.ry - 30 });
+        playSfx("shoot", mutedRef.current);
         st.fireT = st.rapid > 0 ? 70 : 140;
       }
       // Wave spawner (v48): waves of 2–4, growing with kills.
@@ -1328,6 +1333,7 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
     st.fruits = st.fruits.filter((v) => v !== f);
     if (f.kind === "💣") {
       // Bomb: red flash + dark/orange burst, costs a life (port rule).
+      playSfx("boom", room.muted);
       st.flash = 0.65;
       for (let i = 0; i < 22; i++) {
         const dir = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 6;
@@ -1340,6 +1346,7 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
       return;
     }
     // Sliced fruit splits into two halves with a juice burst (v48).
+    playSfx("slice", room.muted);
     const px = Math.cos(ang + Math.PI / 2), py = Math.sin(ang + Math.PI / 2);
     const cols = FN_JUICE[f.kind] ?? FN_JUICE["🍎"];
     [-1, 1].forEach((s) => {

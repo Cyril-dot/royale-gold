@@ -13,6 +13,7 @@
 import { useRef, useState } from "react";
 import { fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
 type Suit = "♠" | "♥" | "♦" | "♣";
@@ -76,6 +77,7 @@ export function BaccaratRoom({ game }: { game: GameDef }) {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
     setPhase("dealing");
     setPc([]); setBc([]);
+    playSfx("deal", room.muted);
     const deck = newDeck();
     const p = [deck[0], deck[2]];
     const b = [deck[1], deck[3]];
@@ -175,6 +177,7 @@ export function ThreeCardPokerRoom({ game }: { game: GameDef }) {
   const deal = async () => {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
     setPhase("dealt");
+    playSfx("deal", room.muted);
     const deck = newDeck();
     const p = deck.slice(0, 3);
     const d = deck.slice(3, 6);
@@ -244,6 +247,7 @@ export function SicBoRoom({ game }: { game: GameDef }) {
     if (rolling) return;
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
     setRolling(true);
+    playSfx("blip", room.muted);
     const d: [number, number, number] = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
     const iv = window.setInterval(() => setDice([1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)]), 90);
     window.setTimeout(() => {
@@ -325,6 +329,7 @@ export function JacksOrBetterRoom({ game }: { game: GameDef }) {
 
   const deal = () => {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
+    playSfx("deal", room.muted);
     const deck = newDeck();
     deckRef.current = deck;
     setHand(deck.slice(0, 5));

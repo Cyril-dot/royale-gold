@@ -10,6 +10,7 @@
 import { useId, useRef, useState } from "react";
 import { fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
 type Sym = "seven" | "bar" | "bell" | "cherry" | "lemon" | "coin";
@@ -96,6 +97,7 @@ export function GoldenReelsRoom({ game }: { game: GameDef }) {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
     setSpinning(true);
     setWin(null);
+    playSfx("spin", room.muted);
     const result: Sym[] = [randSym(), randSym(), randSym()];
     // Reels cycle fast, then stop left → right.
     const iv = window.setInterval(() => {

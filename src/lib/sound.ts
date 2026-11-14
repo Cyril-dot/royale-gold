@@ -82,6 +82,35 @@ export const sfx = {
     tone(90, 0.35, "sine", 0.22);
     tone(55, 0.4, "sawtooth", 0.08, 0.02);
   },
+  // All-games sound pass: card deal snap.
+  deal(muted: boolean) {
+    if (muted) return;
+    tone(640, 0.05, "triangle", 0.12);
+    tone(480, 0.06, "triangle", 0.1, 0.04);
+  },
+  // Slice / scratch — fast descending swish.
+  slice(muted: boolean) {
+    if (muted) return;
+    tone(1500, 0.05, "sine", 0.1);
+    tone(800, 0.07, "sine", 0.08, 0.03);
+  },
+  // Shoot / fire — short zap.
+  shoot(muted: boolean) {
+    if (muted) return;
+    tone(880, 0.06, "square", 0.08);
+    tone(320, 0.09, "square", 0.07, 0.04);
+  },
+  // Spin start — ascending arpeggio.
+  spin(muted: boolean) {
+    if (muted) return;
+    [440, 554, 659].forEach((f, i) => tone(f, 0.05, "triangle", 0.1, i * 0.04));
+  },
+  // Break / drop — short sharp crack.
+  crack(muted: boolean) {
+    if (muted) return;
+    tone(220, 0.06, "square", 0.1);
+    tone(110, 0.1, "sine", 0.1, 0.02);
+  },
 };
 
 // Verification hook (Round 31): a rig cannot hear audio, so every

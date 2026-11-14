@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, fmtCoins } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
 const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
@@ -177,6 +178,7 @@ export function CandyRoom({ game }: { game: GameDef }) {
       if (chain >= 2) gained *= 2;
       scoreRef.current += gained;
       setScore(scoreRef.current);
+      playSfx("pop", room.muted);
       // floating score + burst sparks over the clear, then the pop
       const keys = [...clearSet];
       let sr = 0, sc = 0;
@@ -464,6 +466,7 @@ export function TetrisRoom({ game }: { game: GameDef }) {
     const g = G.current;
     const piece = g.cur;
     if (!piece) return;
+    playSfx("crack", room.muted);
     const nb = g.board.map((row) => [...row]);
     piece.m.forEach((row, r) => row.forEach((v, c) => {
       if (v && piece.y + r >= 0 && piece.y + r < 20) nb[piece.y + r][piece.x + c] = piece.type;
@@ -691,6 +694,10 @@ export function TriviaRoom({ game }: { game: GameDef }) {
   const [answers, setAnswers] = useState<number[]>([]);
   const [picked, setPicked] = useState<number | null>(null);
   const [time, setTime] = useState(15);
+  // All-games sound pass: answer is a useCallback whose deps don't
+  // include room, so the mute flag is read through a ref.
+  const mutedRef = useRef(room.muted);
+  mutedRef.current = room.muted;
   const [phase, setPhase] = useState<"idle" | "playing" | "done">("idle");
   const [result, setResult] = useState<{ correct: number; payoutCoins: number; breakdown: { question: number; correct: boolean }[] } | null>(null);
   const [msg, setMsg] = useState("Tap an answer before the 15 seconds run out. 7 right pays 10 coins, 9 pays 15, 10 pays 25.");
@@ -709,6 +716,7 @@ export function TriviaRoom({ game }: { game: GameDef }) {
   };
 
   const answer = useCallback((choice: number) => {
+    playSfx("blip", mutedRef.current);
     if (phase !== "playing" || picked !== null) return;
     setPicked(choice);
     setMsg("Answer locked in — next question…");
@@ -801,6 +809,10 @@ export function SnakeRoom({ game }: { game: GameDef }) {
   const [speed, setSpeed] = useState(130);
   const [msg, setMsg] = useState("Steer with the arrow keys, swipe, or the on-screen arrows. Eat apples for +10 pts — don't hit the walls or yourself.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // All-games sound pass: eating happens inside the rAF loop, so the
+  // mute flag is read through a ref (mirror the Plinko pattern).
+  const mutedRef = useRef(room.muted);
+  mutedRef.current = room.muted;
   const stRef = useRef<{ snake: { x: number; y: number }[]; dir: { x: number; y: number }; apple: { x: number; y: number }; speed: number } | null>(null);
   const pendRef = useRef<{ x: number; y: number } | null>(null);
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
@@ -874,6 +886,7 @@ export function SnakeRoom({ game }: { game: GameDef }) {
       if (head.x === st.apple.x && head.y === st.apple.y) {
         scoreRef.current += 10;
         setScore(scoreRef.current);
+        playSfx("pop", mutedRef.current);
         st.speed = Math.max(70, st.speed - 3);
         setSpeed(st.speed);
         st.apple = placeApple(st.snake);
@@ -957,6 +970,10 @@ export function Game2048Room({ game }: { game: GameDef }) {
   const [maxTile, setMaxTile] = useState(0);
   const [score, setScore] = useState(0);
   const [msg, setMsg] = useState("Slide the tiles to merge them — reach 256 for 10 coins, 512 for 20, 1024 for 50.");
+  // All-games sound pass: move is a useCallback whose deps don't
+  // include room, so the mute flag is read through a ref.
+  const mutedRef = useRef(room.muted);
+  mutedRef.current = room.muted;
   const boardRef = useRef<number[][]>([]);
   const maxRef = useRef(0);
   const scoreRef = useRef(0);
@@ -1023,6 +1040,7 @@ export function Game2048Room({ game }: { game: GameDef }) {
     setScore(scoreRef.current);
     boardRef.current = nb;
     setBoard(nb);
+    if (gained > 0) playSfx("pop", mutedRef.current);
     if (mx >= 1024) { await finishRef.current("top"); return; }
     if (!canMove(nb)) { await finishRef.current("stuck"); }
   }, [playing, over]);

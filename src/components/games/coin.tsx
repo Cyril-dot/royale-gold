@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtCoins } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
 function useCoin(game: GameDef, subtitle: string, intro?: string) {
@@ -38,6 +39,7 @@ export function KenoRoom({ game }: { game: GameDef }) {
 
   const toggle = (n: number) => {
     if (done || drawing) return;
+    playSfx("blip", room.muted);
     setPicked((p) => (p.includes(n) ? p.filter((x) => x !== n) : p.length < 3 ? [...p, n] : p));
   };
   const quickPick = () => {
@@ -59,6 +61,7 @@ export function KenoRoom({ game }: { game: GameDef }) {
   };
   const draw = () => {
     if (picked.length !== 3 || done || drawing) { if (picked.length !== 3) setMsg("Pick 3 numbers first."); return; }
+    playSfx("spin", room.muted);
     const pool = Array.from({ length: 10 }, (_, i) => i + 1);
     const d: number[] = [];
     while (d.length < 5) { const n = pool.splice(Math.floor(Math.random() * pool.length), 1)[0]; d.push(n); }
@@ -143,6 +146,7 @@ export function MemoryRoom({ game }: { game: GameDef }) {
   };
   const flip = (i: number) => {
     if (!started || over || flipped.includes(i) || matched.includes(i) || flipped.length === 2) return;
+    playSfx("flip", room.muted);
     const f = [...flipped, i];
     setFlipped(f);
     if (f.length === 2) {
@@ -254,6 +258,7 @@ export function WhackRoom({ game }: { game: GameDef }) {
     if (!playing || !active || active.hole !== hole) return;
     // v48 export economy: golden +10, normal +3, bomb −10 (round goes on).
     const pts = active.kind === "golden" ? 10 : active.kind === "bomb" ? -10 : 3;
+    playSfx("pop", room.muted);
     scoreRef.current += pts;
     setScore(scoreRef.current);
     if (hideRef.current) clearTimeout(hideRef.current);
@@ -507,6 +512,7 @@ export function ScratchRoom({ game }: { game: GameDef }) {
 
   const onRevealed = (i: number) => {
     void i;
+    playSfx("slice", room.muted);
     revealedCount.current += 1;
     if (revealedCount.current >= 9) void doSettle();
   };

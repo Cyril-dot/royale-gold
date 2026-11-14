@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
 interface CarReveal { serverSeed: string; clientSeed: string; nonce: number; crashPoint: number; hash: string }
@@ -224,6 +225,7 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
     const payout = Math.round(stake * odds * 100) / 100;
+    playSfx("blip", room.muted);
     setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtCash(payout)}! The balloon floats away.`);
     await room.settle(stake, payout, { odds }, roundIdRef.current || undefined);
     void revealAfterEnd();
@@ -233,6 +235,7 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
   const crash = useCallback(async (rv?: CarReveal) => {
     const st = stateRef.current;
     if (!st) return;
+    playSfx("boom", room.muted);
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
     setPopped(true);

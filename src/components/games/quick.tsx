@@ -369,6 +369,7 @@ export function HiLoRoom({ game }: { game: GameDef }) {
   const start = () => { const c = drawCardObj(); setCard(c); setChain(0); setPlaying(true); setMsg(`You're looking at the ${cardLabel(c)}. Higher or lower for the next card? First right guess pays ×1.90.`); };
   const guess = async (dir: "hi" | "lo") => {
     if (!playing) return;
+    playSfx("blip", room.muted);
     const next = drawCardObj();
     if (next.rank === card.rank) {
       // Push — same rank, no harm done: free re-deal, chain rides on.
@@ -434,6 +435,7 @@ export function RpsRoom({ game }: { game: GameDef }) {
   const throwHand = async (pick: string) => {
     if (throwing) return;
     setThrowing(true);
+    playSfx("blip", room.muted);
     const c = ["rock", "paper", "scissors"][Math.floor(Math.random() * 3)];
     setYou(pick); setCpu("rock");
     const beats: Record<string, string> = { rock: "scissors", paper: "rock", scissors: "paper" };
@@ -503,6 +505,7 @@ export function LimboRoom({ game }: { game: GameDef }) {
   const roll = async () => {
     if (rolling) return;
     setRolling(true);
+    playSfx("blip", room.muted);
     const r = Math.random() * 100;
     const th = 100 / target;
     const t0 = Date.now();
@@ -555,6 +558,7 @@ export function RedBlackRoom({ game }: { game: GameDef }) {
   const start = () => { setChain(0); setPlaying(true); setLast(null); setMsg("The next card is face down. Call it — red or black?"); };
   const guess = async (pick: "red" | "black") => {
     if (!playing) return;
+    playSfx("blip", room.muted);
     const c = drawCardObj();
     setLast(c);
     const out = c.red ? "red" : "black";
@@ -612,6 +616,7 @@ export function WarRoom({ game }: { game: GameDef }) {
     if (dealing) return;
     setDealing(true);
     setRevealed(false);
+    playSfx("deal", room.muted);
     const y = drawCardObj(), d = drawCardObj();
     setYou(y); setDealer(d);
     setTimeout(async () => {
@@ -665,6 +670,7 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
     if (!playing || busy) return;
     setBusy(true);
     setPicked(i);
+    playSfx("pop", room.muted);
     if (i === gold) {
       const s = step + 1;
       setStep(s);
@@ -739,6 +745,7 @@ export function MiniRouletteRoom({ game }: { game: GameDef }) {
     if (spinning) return;
     setSpinning(true);
     setResult({ text: "No more bets…", cls: "" });
+    playSfx("spin", room.muted);
     const out = Math.floor(Math.random() * 37);
     const finish = async () => {
       setSpun(out);
@@ -838,6 +845,7 @@ export function BottleRoom({ game, variant = "room" }: { game: GameDef; variant?
     setSpinning(true);
     setLost(false);
     setKnocked(false);
+    playSfx("spin", room.muted);
     setMsg("Spinning… the bottle is flying round the wheel.");
     const result: "up" | "down" = Math.random() < 0.5 ? "up" : "down";
     // Land the neck exactly up (+90°) or down (270°) after 4–6 turns.

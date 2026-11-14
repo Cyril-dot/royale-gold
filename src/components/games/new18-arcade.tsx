@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
+import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 
 // --- Drawn art (no emoji): tower tile marks, fish, rod, horse, flag ---
@@ -200,6 +201,8 @@ export function TowerClimbRoom({ game }: { game: GameDef }) {
       await room.settle(stake, 0, { diff, row, trapped: true });
       return;
     }
+    // Safe tile — a pop for the step up (the trap path stays silent).
+    playSfx("pop", room.muted);
     const mult = cfg.ladder[row];
     if (row === cfg.rows - 1) {
       setPhase("done");
@@ -353,6 +356,7 @@ export function GoldenCatchRoom({ game }: { game: GameDef }) {
 
   const catchFish = (f: Fish) => {
     if (phase !== "playing") return;
+    playSfx("pop", room.muted);
     potRef.current = Math.round((potRef.current + FISH_VAL[f.kind]) * 100) / 100;
     caughtRef.current += 1;
     setPot(potRef.current);
@@ -415,6 +419,7 @@ export function GoldRushDerbyRoom({ game }: { game: GameDef }) {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
     setPhase("racing");
     setWinner(null);
+    playSfx("spin", room.muted);
     let hs = HORSES.map((h) => ({ ...h, pos: 0, speed: 0.8 + Math.random() * 0.6 }));
     setHorses(hs);
     setMsg(`And they're off! ${HORSES[pick].name} is your horse.`);

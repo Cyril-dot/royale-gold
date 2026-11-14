@@ -128,6 +128,7 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
     const y = [d.pop()!, d.pop()!];
     const dl = [d.pop()!, d.pop()!];
     setDeck(d); setYou(y); setDealer(dl); setPlaying(true); setHideHole(true); setDealId((n) => n + 1);
+    playSfx("deal", room.muted);
     if (bjValue(y) === 21) {
       setHideHole(false);
       setPlaying(false);
@@ -140,6 +141,7 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
     const d = [...deck];
     const c = d.pop()!;
     const y = [...you, c];
+    playSfx("flip", room.muted);
     setDeck(d); setYou(y); setDealId((n) => n + 1);
     const v = bjValue(y);
     if (v > 21) {
@@ -203,6 +205,7 @@ export function PokerRoom({ game }: { game: GameDef }) {
     setDealer(dl);
     setBoard([d.pop()!, d.pop()!, d.pop()!, d.pop()!, d.pop()!]);
     setStage(1); setYouHand(""); setDealerHand(""); setWinner(null);
+    playSfx("deal", room.muted);
     // The artifact names the hand in the deal message.
     setMsg(`Your hand: ${y.map(cardName).join(" ")} — flop is up. The pot is ${fmtCash(stake * 2)}. Reveal the turn and river when you're ready.`);
   };
@@ -283,6 +286,7 @@ export function RouletteRoom({ game }: { game: GameDef }) {
     if (room.balance < stake) { toast(`Not enough ${room.simMode ? "SIM" : "cash"} — top up to play`, "lose"); return; }
     setSpinning(true);
     setResult({ text: "No more bets…", cls: "" });
+    playSfx("spin", room.muted);
     setMsg("The wheel is spinning and the ball is live — you're on " + (betKind === "straight" ? "number " + pick : betKind) + ".");
     try {
       const res = await api<PlayResult>("/api/games/play", {

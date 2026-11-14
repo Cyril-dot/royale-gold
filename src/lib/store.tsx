@@ -228,6 +228,6 @@ export function useStore(): Store {
   return s;
 }
 
-export function playSfx(kind: "blip" | "flip" | "cheer" | "groan" | "tick" | "pop" | "boom", muted: boolean) {
+export function playSfx(kind: "blip" | "flip" | "cheer" | "groan" | "tick" | "pop" | "boom" | "deal" | "slice" | "shoot" | "spin" | "crack", muted: boolean) {
   sfx[kind](muted);
 }
