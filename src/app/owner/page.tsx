@@ -26,6 +26,7 @@ export default function OwnerPage() {
   const [err, setErr] = useState("");
   const [date, setDate] = useState("");
   useEffect(() => { setDate(todayStr()); }, []);
+  const [tab, setTab] = useState<"per-day" | "rollup">("per-day");
   const [dayAdmins, setDayAdmins] = useState<OwnerDayAdmin[] | null>(null);
   const [dayTotals, setDayTotals] = useState<{ deposits: number; totalAmount: number; totalCommission: number } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -177,40 +178,56 @@ export default function OwnerPage() {
           ))}
         </section>
 
-        <section className="admin-sec">
-          <h3>Per-day per-admin commission</h3>
-          <label className="date-pick">Pick a day <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} /></label>
-          {dayTotals && <p>{dayTotals.deposits} deposits · {fmtCash(dayTotals.totalAmount)} deposited · {fmtCash(dayTotals.totalCommission)} commission on {date}</p>}
-          {dayAdmins && dayAdmins.length === 0 && <p className="bh-empty">No deposits that day.</p>}
-          {dayAdmins?.map((da) => (
-            <div key={da.admin.id} className="day-admin">
-              <h4>{da.admin.name} — {fmtCash(da.totalAmount)} · {fmtCash(da.totalCommission)} commission</h4>
-              <div className="rg48-twrap">
-                <table className="dep-table">
-                  <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th></tr></thead>
-                  <tbody>
-                    {da.deposits.map((d) => (
-                      <tr key={d.id}><td>{d.userName}</td><td>{d.userContact}</td><td>{fmtCash(d.amount)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtCash(d.commission)} ({d.pctInForce}%)</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        <section className="admin-sec ow-commission">
+          <h3>Commission</h3>
+          <div className="ow-tabs" role="tablist" aria-label="Commission views">
+            <button type="button" role="tab" id="ow-tab-per-day" aria-selected={tab === "per-day"} aria-controls="ow-panel-per-day" className={`ow-tab${tab === "per-day" ? " ow-tab-active" : ""}`} onClick={() => setTab("per-day")}>Per-day</button>
+            <button type="button" role="tab" id="ow-tab-rollup" aria-selected={tab === "rollup"} aria-controls="ow-panel-rollup" className={`ow-tab${tab === "rollup" ? " ow-tab-active" : ""}`} onClick={() => setTab("rollup")}>All-admins rollup</button>
+          </div>
+          {tab === "per-day" ? (
+            <div role="tabpanel" id="ow-panel-per-day" aria-labelledby="ow-tab-per-day">
+              <label className="date-pick">Pick a day <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} /></label>
+              {dayTotals && (
+                <>
+                  <div className="sum-cards">
+                    <div className="sum-card"><span>Deposits</span><b>{dayTotals.deposits}</b></div>
+                    <div className="sum-card"><span>Total deposited</span><b>{fmtCash(dayTotals.totalAmount)}</b></div>
+                    <div className="sum-card"><span>Commission</span><b>{fmtCash(dayTotals.totalCommission)}</b></div>
+                  </div>
+                  <p className="ow-day-cap">Commission on {date}</p>
+                </>
+              )}
+              {dayAdmins && dayAdmins.length === 0 && <p className="bh-empty">No deposits that day.</p>}
+              {dayAdmins?.map((da) => (
+                <div key={da.admin.id} className="day-admin">
+                  <h4>{da.admin.name} — {fmtCash(da.totalAmount)} · {fmtCash(da.totalCommission)} commission</h4>
+                  <div className="rg48-twrap">
+                    <table className="dep-table">
+                      <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th></tr></thead>
+                      <tbody>
+                        {da.deposits.map((d) => (
+                          <tr key={d.id}><td>{d.userName}</td><td>{d.userContact}</td><td>{fmtCash(d.amount)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtCash(d.commission)} ({d.pctInForce}%)</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </section>
-
-        <section className="admin-sec">
-          <h3>All-admins rollup — every active day</h3>
-          {!rollup || rollup.days.length === 0 ? <p>No commission days yet.</p> : (
-            <div className="rg48-twrap">
-              <table className="dep-table">
-                <thead><tr><th>Date</th><th>Admin</th><th>Deposits</th><th>Total deposited</th><th>Commission</th></tr></thead>
-                <tbody>
-                  {rollup.days.map((d, i) => (
-                    <tr key={`${d.date}-${d.adminId}-${i}`}><td>{d.date}</td><td>{d.adminName}</td><td>{d.deposits}</td><td>{fmtCash(d.totalAmount)}</td><td>{fmtCash(d.totalCommission)}</td></tr>
-                  ))}
-                </tbody>
-              </table>
+          ) : (
+            <div role="tabpanel" id="ow-panel-rollup" aria-labelledby="ow-tab-rollup">
+              {!rollup || rollup.days.length === 0 ? <p>No commission days yet.</p> : (
+                <div className="rg48-twrap">
+                  <table className="dep-table">
+                    <thead><tr><th>Date</th><th>Admin</th><th>Deposits</th><th>Total deposited</th><th>Commission</th></tr></thead>
+                    <tbody>
+                      {rollup.days.map((d, i) => (
+                        <tr key={`${d.date}-${d.adminId}-${i}`}><td>{d.date}</td><td>{d.adminName}</td><td>{d.deposits}</td><td>{fmtCash(d.totalAmount)}</td><td>{fmtCash(d.totalCommission)}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </section>
