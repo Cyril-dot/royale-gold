@@ -187,7 +187,14 @@ body {
 .sc-cell.open{background:#141828;color:var(--gold-2,#FFD964)}
 
 /* car crash / rocket / fruit */
-.cc-canvas,.rs-canvas,.sn-canvas{width:100%;max-width:400px;height:auto;display:block;margin:0 auto;background:#070A18;border-radius:16px;border:1px solid rgba(242,194,48,.4);touch-action:none}
+.cc-canvas,.rs-canvas,.sn-canvas{width:100%;max-width:400px;height:auto;display:block;margin:0 auto;background:#070A18;border-radius:16px;border:1px solid rgba(242,194,48,.4);touch-action:pan-y}
+/* Scroll fix (15 Nov 2026): game surfaces allow vertical page scroll
+   (pan-y) EXCEPT while a round is live — the room adds .live to its
+   surface when play starts, which restores touch-action:none so drags
+   steer/slice/swap instead of scrolling. This (0,2,0) override beats
+   every (0,1,0) base rule in the game stylesheets regardless of load
+   order, so the base rules below only ever need pan-y. */
+.cc-canvas.live,.rs-canvas.live,.sn-canvas.live,.tt-board.live,.g48-boardwrap.live,.cc-board.live,.cc-inner.live,.v18-bubbleboard.live{touch-action:none}
 .cc-steer{display:flex;gap:16px;justify-content:center;margin-top:10px}
 .cc-steer button{width:72px;height:56px;border-radius:14px;border:1px solid rgba(242,194,48,.5);background:#141828;color:#FFF6D8;font-size:24px;cursor:pointer}
 .cc-stage{text-align:center}

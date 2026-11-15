@@ -2,11 +2,15 @@
    All new-game styles live here, .v18- prefixed so nothing collides
    with v48.css / globals.css / games-v17-*.css. Brand tokens only:
    midnight #070812, felt #0C2B22, gold #F2C230, cream #FFF6D8,
-   red #E5322D. Touch: game surfaces use touch-action:none;
-   buttons use touch-action:manipulation. Hover is capability-gated. */
+   red #E5322D. Touch: game surfaces use touch-action:pan-y so a
+   vertical drag scrolls the page (tap-only / horizontal-only surfaces:
+   canvas, stack, dartboard, pond); the bubble board adds .live while
+   a round is playing, which restores touch-action:none for aiming
+   (see the .live override in globals.css). Buttons use
+   touch-action:manipulation. Hover is capability-gated. */
 
 .v18-stage { position: relative; width: 100%; max-width: 430px; margin: 0 auto; background: #070A18; border: 1px solid rgba(242,194,48,.4); border-radius: 16px; padding: 14px; }
-.v18-canvas { display: block; width: 100%; height: auto; border-radius: 12px; touch-action: none; -webkit-user-select: none; user-select: none; }
+.v18-canvas { display: block; width: 100%; height: auto; border-radius: 12px; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 .v18-hud { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; margin: 10px 0 4px; font-size: 13px; font-weight: 700; color: #FFF6D8; }
 .v18-hud b { color: #F2C230; font-weight: 900; }
 .v18-hud .win b { color: #3ED97E; }
@@ -81,7 +85,7 @@
 .v18-ball.hit { background: #F2C230; border-color: #8A6D1B; }
 
 /* --- Stack Tower --- */
-.v18-stack { position: relative; height: 300px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #070812, #0C2B22); border: 1px solid rgba(242,194,48,.4); touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer; }
+.v18-stack { position: relative; height: 300px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #070812, #0C2B22); border: 1px solid rgba(242,194,48,.4); touch-action: pan-y; -webkit-user-select: none; user-select: none; cursor: pointer; }
 .v18-block { position: absolute; height: 22px; border-radius: 4px; border: 1px solid rgba(7,8,18,.6); }
 .v18-block.swing { transition: none; }
 .v18-stack-hint { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 12px; font-weight: 800; color: #FFF6D8; opacity: .8; pointer-events: none; }
@@ -90,7 +94,7 @@
 .v18-aim { font-size: 12px; font-weight: 800; color: #FFF6D8; opacity: .8; text-align: center; margin-top: 6px; }
 
 /* --- Bullseye Darts --- */
-.v18-dartboard { position: relative; width: 260px; height: 260px; margin: 8px auto; border-radius: 50%; background: #14213D; border: 3px solid #C99612; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; cursor: crosshair; }
+.v18-dartboard { position: relative; width: 260px; height: 260px; margin: 8px auto; border-radius: 50%; background: #14213D; border: 3px solid #C99612; overflow: hidden; touch-action: pan-y; -webkit-user-select: none; user-select: none; cursor: crosshair; }
 .v18-dartboard .ring { position: absolute; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%,-50%); }
 .v18-dartboard .r1 { width: 250px; height: 250px; background: #FFF6D8; }
 .v18-dartboard .r2 { width: 200px; height: 200px; background: #14213D; }
@@ -113,7 +117,7 @@
 .v18-c4cell.win { outline: 3px solid #FFF6D8; outline-offset: 1px; }
 
 /* --- Golden Catch fish (DOM stage) --- */
-.v18-pond { position: relative; height: 260px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #0E332A, #070812); border: 1px solid rgba(242,194,48,.4); touch-action: none; -webkit-user-select: none; user-select: none; }
+.v18-pond { position: relative; height: 260px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #0E332A, #070812); border: 1px solid rgba(242,194,48,.4); touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 .v18-fish { position: absolute; cursor: pointer; touch-action: manipulation; font-size: 30px; line-height: 1; transition: transform .15s ease; will-change: left, top; }
 .v18-fish:active { transform: scale(1.25); }
 .v18-fish .v { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); font-size: 10px; font-weight: 900; color: #F2C230; background: rgba(7,8,18,.75); border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
@@ -134,7 +138,7 @@
 .v18-drawn { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 34px; margin: 8px 0; }
 
 /* Bubble Shooter: the board, bubbles, aim line, shooter */
-.v18-bubbleboard { position: relative; height: 320px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #0E332A, #070812); border: 1px solid rgba(242,194,48,.4); touch-action: none; -webkit-user-select: none; user-select: none; cursor: crosshair; }
+.v18-bubbleboard { position: relative; height: 320px; overflow: hidden; border-radius: 12px; background: linear-gradient(180deg, #0E332A, #070812); border: 1px solid rgba(242,194,48,.4); touch-action: pan-y; -webkit-user-select: none; user-select: none; cursor: crosshair; }
 .v18-bub { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 2px solid rgba(7,8,18,.5); box-shadow: 0 2px 6px rgba(0,0,0,.4); }
 .v18-bub.fly { z-index: 3; }
 .v18-aimline { position: absolute; left: 50%; bottom: 32px; width: 2px; height: 220px; margin-left: -1px; background: repeating-linear-gradient(180deg, rgba(255,246,216,.75) 0 6px, transparent 6px 12px); transform-origin: bottom center; pointer-events: none; }

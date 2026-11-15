@@ -2,14 +2,16 @@
    Owned by the round-17 arcade worker. Loaded last so these rules beat
    globals.css / v48.css. Brand tokens only: midnight #070812, felt
    #0C2B22, gold #F2C230, cream #FFF6D8, red #E5322D.
-   Touch rules: canvases own every axis (touch-action:none), controls
-   are 44px+ targets with press feedback on :active, no hover-only
-   states, no text selection on controls. */
+   Touch rules: canvases allow vertical page scroll (touch-action:pan-y)
+   except while a round is live — the room adds .live to the canvas,
+   which restores touch-action:none (see the .live override in
+   globals.css). Controls are 44px+ targets with press feedback on
+   :active, no hover-only states, no text selection on controls. */
 
 /* --- shared canvas behaviour --- */
 .cc-canvas,
 .rs-canvas {
-  touch-action: none;
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -169,7 +171,9 @@
   font-size: 19px;
   letter-spacing: 0.08em;
   cursor: pointer;
-  touch-action: none;
+  /* Scroll fix (15 Nov 2026): a button, not a gesture surface — a drag
+     starting on it must scroll the page (manipulation), not die. */
+  touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;

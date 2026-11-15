@@ -346,8 +346,8 @@ export function CandyRoom({ game }: { game: GameDef }) {
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
         <div className="cc-hud"><span>SCORE <b>{score}</b></span><span>MOVES <b>{moves}</b></span><span>TIER <b>×{candyTier(score)}</b></span><span>BEST <b>{Math.max(best, score)}</b></span></div>
         <div className="cc-boardwrap">
-          <div className="cc-board">
-            <div className="cc-inner" ref={boardInnerRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { dragRef.current = null; }}>
+          <div className={playing ? "cc-board live" : "cc-board"}>
+            <div className={playing ? "cc-inner live" : "cc-inner"} ref={boardInnerRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { dragRef.current = null; }}>
               {pieces.map((p) => (
                 <div key={p.id} role="button" tabIndex={0} aria-label={`Candy row ${p.r + 1} column ${p.c + 1}`}
                   className={`cc-candy${clearing.has(p.id) ? " clearing" : ""}${sel && sel[0] === p.r && sel[1] === p.c ? " sel" : ""}`}
@@ -653,7 +653,7 @@ export function TetrisRoom({ game }: { game: GameDef }) {
         </div>
         <div style={{ position: "relative" }} ref={boardWrapRef}
           onPointerDown={onBoardPointerDown} onPointerMove={onBoardPointerMove} onPointerUp={endGesture} onPointerCancel={() => { gestureRef.current.pid = null; }}>
-          <div className="tt-board">
+          <div className={playing ? "tt-board live" : "tt-board"}>
             {display.map((row, r) => row.map((v, c) => (
               <span key={`${r}-${c}`} className={`tt-cell${v === "ghost" ? " ghost" : v ? " on" : ""}`} style={v && v !== "ghost" ? { background: TT_COLORS[v] } : undefined} />
             )))}
@@ -941,7 +941,7 @@ export function SnakeRoom({ game }: { game: GameDef }) {
     <RoomShell game={game} subtitle="Eat apples (+10 pts), don't hit the walls or yourself. Entry 5 coins — 100+ pays 10, 200+ pays 20, 300+ pays 40." stats={room.stats} history={room.history}>
       <div className="xg-controls">
         <div className="sn-hud"><span>SCORE <b>{score}</b></span><span>SPEED <b>×{(130 / speed).toFixed(1)}</b></span><span>PAYOUT <b>{payoutFor(score)} coins</b></span></div>
-        <canvas ref={canvasRef} width={400} height={400} className="sn-canvas" aria-label="Snake board" onPointerDown={onCanvasPointerDown} onPointerUp={onCanvasPointerUp} onPointerCancel={() => { swipeRef.current = null; }} />
+        <canvas ref={canvasRef} width={400} height={400} className={playing ? "sn-canvas live" : "sn-canvas"} aria-label="Snake board" onPointerDown={onCanvasPointerDown} onPointerUp={onCanvasPointerUp} onPointerCancel={() => { swipeRef.current = null; }} />
         <div className="sn-arrows">
           <button type="button" aria-label="Up" onPointerDown={(e) => { e.preventDefault(); setDir(0, -1); }}>↑</button>
           <button type="button" aria-label="Left" onPointerDown={(e) => { e.preventDefault(); setDir(-1, 0); }}>←</button>
@@ -1084,7 +1084,7 @@ export function Game2048Room({ game }: { game: GameDef }) {
     <RoomShell game={game} subtitle="Slide the tiles — reach 256 for 10 coins, 512 for 20, 1024 for 50. Entry 5 coins." stats={room.stats} history={room.history}>
       <div className="xg-controls">
         <div className="g48-hud"><span>SCORE <b>{score}</b></span><span>BEST TILE <b>{maxTile || "—"}</b></span><span>PAYOUT <b>{g48Tier(maxTile)} coins</b></span></div>
-        <div className="g48-boardwrap" onPointerDown={onBoardPointerDown} onPointerUp={onBoardPointerUp} onPointerCancel={() => { swipeRef.current = null; }}>
+        <div className={playing ? "g48-boardwrap live" : "g48-boardwrap"} onPointerDown={onBoardPointerDown} onPointerUp={onBoardPointerUp} onPointerCancel={() => { swipeRef.current = null; }}>
           <div className="g48-board">
             {board.map((row, r) => row.map((v, c) => <span key={`${r}-${c}`} className={`g48-tile${v ? ` on v${Math.min(v, 2048)}` : ""}`}>{v || ""}</span>))}
           </div>

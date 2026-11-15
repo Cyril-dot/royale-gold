@@ -626,7 +626,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
         <div className="cc-stage">
           <div className="cc-hud"><span>ODDS <b>×{odds.toFixed(2)}</b></span><span>COINS <b>{coins}</b></span><span>CASH OUT <b>{fmtCash(Math.round(stake * odds * 100) / 100)}</b></span><span>TIME <b>{drive.t.toFixed(1)}s</b></span><span>DIST <b>{drive.d}m</b></span><span>SPEED <b>{drive.v} km/h</b></span></div>
           <div style={{ position: "relative" }}>
-            <canvas ref={canvasRef} width={300} height={420} className="cc-canvas" onPointerDown={onCarDown} onPointerMove={onCarMove} onPointerUp={onCarUp} onPointerCancel={onCarUp} aria-label="Car Crash road — drag to steer" />
+            <canvas ref={canvasRef} width={300} height={420} className={playing ? "cc-canvas live" : "cc-canvas"} onPointerDown={onCarDown} onPointerMove={onCarMove} onPointerUp={onCarUp} onPointerCancel={onCarUp} aria-label="Car Crash road — drag to steer" />
             {flash && <div className="cc-flash pop" key={flash.n}>{flash.txt}</div>}
             {crashInfo && !playing && (
               <div className="cc-crash">CRASHED<b>×{crashInfo.point.toFixed(2)} · {crashInfo.coins} {crashInfo.coins === 1 ? "COIN" : "COINS"}</b>The stake is gone — cash out earlier next run.</div>
@@ -1146,7 +1146,7 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
           <div className="rs-goal-bar"><i style={{ width: `${Math.min(100, (kills / goal.kills) * 100)}%` }} /></div>
         </div>
         <div className="rs-hud"><span>KILLS <b>{kills}/{goal.kills}</b></span><span>SPEED <b>×{Math.min(3, Math.pow(1.02, kills)).toFixed(1)}</b></span><span>LIVES <b>{"♥".repeat(Math.max(0, lives))}</b></span><span>COINS <b>{coins}</b></span><span>PAYS <b>×{goal.mult.toFixed(2)}</b></span><span className="rs-pow">{power}</span></div>
-        <canvas ref={canvasRef} width={400} height={420} className="rs-canvas" onPointerDown={onShipDown} onPointerMove={onShipMove} onPointerUp={onShipUp} onPointerCancel={onShipUp} aria-label="Rocket Shooter — drag to steer and fire" />
+        <canvas ref={canvasRef} width={400} height={420} className={playing ? "rs-canvas live" : "rs-canvas"} onPointerDown={onShipDown} onPointerMove={onShipMove} onPointerUp={onShipUp} onPointerCancel={onShipUp} aria-label="Rocket Shooter — drag to steer and fire" />
         <button className="rs-fire" type="button" onPointerDown={onFireDown} onPointerUp={onFireUp} onPointerLeave={onFireUp} onPointerCancel={onFireUp} disabled={!playing} aria-label="Hold to fire">HOLD TO FIRE</button>
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Launch · {fmtCash(stake)}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
@@ -1548,7 +1548,7 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
         <div className="rs-hud"><span>SCORE <b>{score}</b></span><span>LIVES <b>{"♥".repeat(Math.max(0, lives))}</b></span><span>COINS <b>{coins}</b></span><span>TIME <b>{timeLeft}s</b></span></div>
         <div style={{ position: "relative" }}>
-          <canvas ref={canvasRef} width={400} height={420} className="rs-canvas" onPointerDown={beginSwipe} onPointerMove={moveSwipe} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={endSwipe} aria-label="Fruit Ninja — drag across fruit to slice" />
+          <canvas ref={canvasRef} width={400} height={420} className={playing ? "rs-canvas live" : "rs-canvas"} onPointerDown={beginSwipe} onPointerMove={moveSwipe} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={endSwipe} aria-label="Fruit Ninja — drag across fruit to slice" />
           {!playing && <div className="fn-idle"><b>Swipe to slice</b><span>Fruit = 10 pts · combos ×2/×3 · coins +25 pts · powerups hide in the volleys · a bomb ends the round on the spot</span></div>}
         </div>
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start slicing · {stake} coins</button>}

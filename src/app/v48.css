@@ -1317,7 +1317,7 @@ body.room-open #gamesPage{display:none}
 @media (max-width:640px){.cc-stage{margin-top:12px}}
 .cc-hud{position:static;pointer-events:none;margin-bottom:10px}
 .cc-boardwrap{position:relative}
-.cc-board{position:relative;width:100%;aspect-ratio:1;border-radius:22px;border:1px solid rgba(242,194,48,.65);box-shadow:0 30px 70px rgba(0,0,0,.6),0 0 60px rgba(242,194,48,.1),inset 0 2px 0 rgba(255,232,154,.28),inset 0 -20px 38px rgba(0,0,0,.55),inset 0 0 70px rgba(0,0,0,.4);background:radial-gradient(90% 55% at 50% 0%,rgba(242,194,48,.13),transparent 62%),radial-gradient(65% 50% at 82% 88%,rgba(139,61,217,.16),transparent 70%),radial-gradient(120% 130% at 50% 0%,#1C1132,#0A0618 78%);overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+.cc-board{position:relative;width:100%;aspect-ratio:1;border-radius:22px;border:1px solid rgba(242,194,48,.65);box-shadow:0 30px 70px rgba(0,0,0,.6),0 0 60px rgba(242,194,48,.1),inset 0 2px 0 rgba(255,232,154,.28),inset 0 -20px 38px rgba(0,0,0,.55),inset 0 0 70px rgba(0,0,0,.4);background:radial-gradient(90% 55% at 50% 0%,rgba(242,194,48,.13),transparent 62%),radial-gradient(65% 50% at 82% 88%,rgba(139,61,217,.16),transparent 70%),radial-gradient(120% 130% at 50% 0%,#1C1132,#0A0618 78%);overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none}
 /* the tiles: a checker of two midnight shades, one tile per cell */
 .cc-board::before{content:"";position:absolute;inset:10px;z-index:0;border-radius:10px;background-image:conic-gradient(from 90deg at 50% 50%,rgba(255,246,216,.06) 90deg,rgba(0,0,0,.14) 90deg 180deg,rgba(255,246,216,.06) 180deg 270deg,rgba(0,0,0,.14) 270deg);background-size:25% 25%;pointer-events:none}
 /* the bevel: a dark groove and a light lip on every cell edge */
@@ -1517,7 +1517,11 @@ body.room-open #gamesPage{display:none}
 @media (prefers-reduced-motion: reduce){.pn-goal.ripple{animation:none!important}.pn-keeper .kp-svg{animation:none!important}}
 /* ============ v41 — PENALTY: full stadium scene, striker, drag-to-shoot ============ */
 .pn-stage{background:radial-gradient(130% 90% at 50% -10%,rgba(255,232,154,.30),transparent 55%),linear-gradient(180deg,#081A38 0%,#0B2145 34%,#0E3A2A 62%,#0C2B22 100%)}
-.pn-stage.armed{touch-action:none}
+/* Scroll fix (15 Nov 2026): the old .pn-stage.armed rule set
+   touch-action:none on the WHOLE stage during a round, so no drag
+   starting anywhere on the stage could scroll the page. Removed — only
+   the goal itself (.pn-goal) owns touches, for aiming; the rest of the
+   stage scrolls. */
 .pn-stage.shake{animation:pnShake .45s ease}
 @keyframes pnShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-5px,2px)}45%{transform:translate(5px,-2px)}70%{transform:translate(-3px,-1px)}}
 .pn-lights{position:absolute;inset:0;z-index:1;pointer-events:none}
@@ -2038,7 +2042,7 @@ table.rg48-t tr.rg48-click:hover td{background:rgba(255,176,0,.05)}
 .tv-timerbar{height:9px;border-radius:99px;background:rgba(255,246,216,.1);overflow:hidden;margin-bottom:14px}
 .tv-timerbar i{display:block;height:100%;background:linear-gradient(90deg,#3ED97E,var(--gold-2));border-radius:99px}
 .sn-wrap{display:grid;place-items:center}
-.sn-canvas{background:#05070F;border:1px solid var(--line);border-radius:14px;max-width:100%;touch-action:none}
+.sn-canvas{background:#05070F;border:1px solid var(--line);border-radius:14px;max-width:100%;touch-action:pan-y}
 .sn-pad{display:grid;grid-template-columns:repeat(3,58px);gap:8px;justify-content:center;margin-top:14px}
 .sn-pad button{height:52px;border-radius:12px;border:1px solid var(--line);background:var(--steel);color:var(--ink);font-size:19px;cursor:pointer}
 .sn-pad button:active{border-color:var(--gold);color:var(--gold-2)}

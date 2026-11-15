@@ -549,7 +549,7 @@ export function BubbleShooterRoom({ game }: { game: GameDef }) {
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={phase === "playing"} />
         <div className="v18-stage">
           <div className="v18-hud"><span>SHOTS <b>{shots}</b></span><span>POPPED <b>{popped}</b></span><span>NEXT <b className="v18-nextdot" style={{ ["--bub" as string]: BUB_COLORS[curRef.current] }} aria-hidden="true" /></span></div>
-          <div ref={stageRef} className="v18-bubbleboard" onPointerMove={aim} onPointerDown={(e) => { aim(e); shoot(); }} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "ArrowLeft") setAngle((a) => Math.max(-75, a - 5)); if (e.key === "ArrowRight") setAngle((a) => Math.min(75, a + 5)); if (e.key === " " || e.key === "Enter") { e.preventDefault(); shoot(); } }} aria-label="Bubble shooter board — aim and tap to shoot">
+          <div ref={stageRef} className={phase === "playing" ? "v18-bubbleboard live" : "v18-bubbleboard"} onPointerMove={aim} onPointerDown={(e) => { aim(e); shoot(); }} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "ArrowLeft") setAngle((a) => Math.max(-75, a - 5)); if (e.key === "ArrowRight") setAngle((a) => Math.min(75, a + 5)); if (e.key === " " || e.key === "Enter") { e.preventDefault(); shoot(); } }} aria-label="Bubble shooter board — aim and tap to shoot">
             {grid.map((row, r) => row.map((v, c) => {
               if (v === null || v === undefined) return null;
               const [x, y] = cellXY(r, c);
