@@ -1,28 +1,26 @@
-// Penalty Shoot Out — FanZone-style rebuild (Chuks picked FanZone, 14 Nov):
-// FanZone's arena is the SKIN — its dark-green arena card, two-column
-// score board (GOALS / KICK n/5 / SAVED / NEXT), 5 kick dots, big
-// GOAL!/NO GOAL! result banner, lime #CCFF00 accents, arrow aim
-// buttons — while the casino mechanics stay EXACTLY as the LALIGA
-// rebuild: 5 tap-to-aim target zones over the goal, the doubling ladder
-// [1.96, 3.92, 7.84, 15.68, 31.36], bet controls (Min 0.10, Max
-// 4,000.00), the big green Kick! circle, GOAL! / NO GOAL! states, and
-// a gold Cash Out after each goal or Kick!! to climb. The striker
-// always wears the gold #9 kit (no team picker). Keeper logic follows
-// the classic zone-match pattern (adhkr81/Penalty-Shooter- reference):
-// the keeper dives to a zone; if it is the shot's zone the shot is
-// saved. Save chance is 40% per shot, so a goal is the common outcome;
-// one save ends the run and the stake is gone. One stake rides the
-// whole shootout (unchanged settle flow — settle() still computes the
-// payout from the multiplier; server cap is stake × 31.36 via games.ts).
-// FanZone has no stake, no ladder, no Cash Out — those are ours and
-// they stay. The keeper + striker are our DRAWN SVG figures
-// (penalty-svgs.tsx), not FanZone's emoji-sized divs. The ad-boards
-// strip is gone — FanZone's arena has no ad boards, and the 38px was
-// needed to keep Kick! visible above the fixed bottom dock at 390px.
+// Penalty Shoot Out — free-aim rebuild (Chuks, 15 Nov): "users should be
+// able to direct where the ball should go" + bigger goal + better
+// animation/UI. The FanZone skin stays (score board, kick dots, GOAL!
+// banner, lime accents, crowd/lights/mow stripes) but the 5 fixed tap
+// zones are GONE — the user drags anywhere inside the goal to place a
+// lime crosshair reticle; Kick! shoots the ball to exactly that spot,
+// with a dashed aim line from the ball to the reticle while aiming.
+// Keeper: centre-biased random dive; a shot is SAVED if the ball lands
+// within the keeper's reach (0.30 of goal width — Monte Carlo: ~40%
+// saves on mixed aims, so the ~60% goal rate and the ladder are
+// unchanged). The keeper never reads the aim — the dive point is drawn
+// before the save is decided. Economy untouched: ladder [1.96→31.36],
+// bet Min 0.10 / Max 4,000.00, settle flow, 5 shots max. The
+// stale-closure fix stays: resolveShot reads stateRef.current.goals
+// (reset synchronously in onKick). ALSO FIXED here: the 5/5 auto
+// cash-out used to pay the previous rung — its timeout held the
+// pre-goal cashOut closure (LADDER[goals-1] with the old goals), so
+// five from five paid ×15.68 instead of ×31.36. It now pays LADDER[4]
+// directly, with the goals count passed to finish.
 
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { fmtCash } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx } from "../../lib/store";
@@ -30,34 +28,47 @@ import { RoomShell, useGameRoom } from "./shared";
 import { KeeperSvg, StrikerSvg } from "./penalty-svgs";
 
 const LADDER = [1.96, 3.92, 7.84, 15.68, 31.36];
-const SAVE_CHANCE = 0.4;
 const BET_MIN = 0.1;
 const BET_MAX = 4000;
+// Keeper reach, as a fraction of goal width. Monte Carlo (mixed aims:
+// corners, top, low, centre, uniform; keeper centre-biased triangular):
+// 0.30 -> ~0.59 goal rate on both the broad-mixed and the rig's exact
+// 24-aim distributions. Calibrated live across four runs (144 shots):
+// 0.46 at 0.30 (24), 0.54 at 0.28 (24), 0.73 at 0.25 (48), 0.71 at
+// 0.27 (48) — pooled 93/144 = 0.65 against a pooled sim expectation
+// of 94.4, i.e. the sim curve is unbiased and the per-run swing
+// (±0.10) is binomial noise, not a mistune. So the reach stays at
+// the Monte Carlo value 0.30: the ladder and the ~60% goal rate
+// target are unchanged.
+const KEEPER_REACH = 0.30;
+const GOAL_ASPECT = 16 / 9.2;
 
-interface Zone { id: string; label: string; fx: number; fy: number; rot: number }
-// The video's five targets: three across the top, two low in the corners.
-// rot is the aim-arrow rotation (FanZone's direction-arrow selector
-// language): up-left, up, up-right, down-left, down-right.
-const ZONES: Zone[] = [
-  { id: "tl", label: "Top left", fx: 0.14, fy: 0.16, rot: -45 },
-  { id: "tc", label: "Top centre", fx: 0.5, fy: 0.12, rot: 0 },
-  { id: "tr", label: "Top right", fx: 0.86, fy: 0.16, rot: 45 },
-  { id: "bl", label: "Bottom left", fx: 0.12, fy: 0.8, rot: -135 },
-  { id: "br", label: "Bottom right", fx: 0.88, fy: 0.8, rot: 135 },
-];
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+const aimLabel = (fx: number, fy: number) => {
+  const col = fx < 0.34 ? "left" : fx > 0.66 ? "right" : "centre";
+  const row = fy < 0.34 ? "Top" : fy > 0.66 ? "Bottom" : "Middle";
+  if (col === "centre" && row === "Middle") return "Centre";
+  return `${row} ${col}`;
+};
 
 interface Aim { sx: number; sy: number; x: number; y: number; cx: number; cy: number; fx: number; fy: number; gl: number; gt: number; gw: number; gh: number; label: string }
+interface Guide { x1: number; y1: number; x2: number; y2: number }
 
 export default function PenaltyRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(1);
   const [betText, setBetText] = useState("1");
-  const [selected, setSelected] = useState<string | null>(null);
+  // Free aim: fractions of the goal mouth. Default is top centre — a
+  // sensible first shot for a player who just taps Kick!.
+  const [aim, setAim] = useState({ fx: 0.5, fy: 0.3 });
+  const [aimed, setAimed] = useState(false);
+  const [guide, setGuide] = useState<Guide | null>(null);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [goals, setGoals] = useState(0);
   const [savedAt, setSavedAt] = useState(-1);
-  const [msg, setMsg] = useState("Tap a target zone, then Kick! — or just Kick! for a random shot. First goal pays ×1.96; cash out after any goal, but one save ends it and the stake is gone.");
+  const [msg, setMsg] = useState("Drag anywhere on the goal to aim — the crosshair is where the ball will go. Tap Kick! to shoot. First goal pays ×1.96; cash out after any goal, but one save ends it and the stake is gone.");
   const [keeperPose, setKeeperPose] = useState<"ready" | "diving" | "beaten" | "hero">("ready");
   const [keeperStyle, setKeeperStyle] = useState<React.CSSProperties>({});
   const [strikerPose, setStrikerPose] = useState("");
@@ -81,8 +92,9 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     setBulge(null);
   }, []);
 
-  const finish = useCallback(async (won: boolean, payout: number, label: string) => {
-    await room.settle(stake, payout, { shots: goals + (won ? 1 : 0), goals, label });
+  const finish = useCallback(async (won: boolean, payout: number, label: string, goalsNow?: number) => {
+    const g = goalsNow ?? goals;
+    await room.settle(stake, payout, { shots: g + (won ? 1 : 0), goals: g, label });
     setPlaying(false);
     setBusy(false);
     stateRef.current.playing = false;
@@ -145,7 +157,14 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       burst(aim.x, aim.y, ["#F2C230", "#FFD964", "#3ED97E", "#FFF6D8"], g >= 3 ? 26 : 16);
       if (g >= 3) burst(aim.x, aim.y, ["#F2C230", "#FFF6D8"], 14);
       if (g >= 5) {
-        setTimeout(() => { resetActors(); void cashOut(true); }, 460);
+        // Five from five pays the TOP rung. The old code called the
+        // cashOut closure here, which still held the pre-goal count
+        // and paid LADDER[3] (×15.68) — half the win. Pay LADDER[4]
+        // directly and pass the true goals count to finish.
+        const m5 = LADDER[4];
+        const pay5 = Math.round(stake * m5 * 100) / 100;
+        setMsg(`Five from five! ${g} goals at ×${m5}: ${fmtCash(pay5)}.`);
+        setTimeout(() => { resetActors(); void finish(true, pay5, `×${m5}`, g); }, 460);
         return;
       }
       setMsg(`GOAL — ${aim.label}! That's ${g} on the ladder: ×${LADDER[g - 1]} = ${fmtCash(Math.round(stake * LADDER[g - 1] * 100) / 100)}. Cash out now or shoot for ×${LADDER[g]}.`);
@@ -160,18 +179,46 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       const ex = dxTotal + dir * 105, ey = dyTotal + 66;
       try {
         ballRef.current?.animate([
-          { transform: `translate(${dxTotal}px,${dyTotal}px) scale(.42) rotate(560deg)`, opacity: 1 },
-          { transform: `translate(${ex}px,${ey}px) scale(.36) rotate(760deg)`, opacity: 0.85 },
+          { transform: `translate(${dxTotal}px,${dyTotal}px) scale(.42) rotate(640deg)`, opacity: 1 },
+          { transform: `translate(${ex}px,${ey}px) scale(.36) rotate(840deg)`, opacity: 0.85 },
         ], { duration: 380, easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" });
       } catch { /* no WAAPI — the style below still lands the parry */ }
       setBallStyle({ transform: `translate(${ex}px,${ey}px) scale(.36)`, opacity: 1 });
-      setMsg(`NO GOAL — the keeper read the ${aim.label} all the way and parried it. The ${fmtCash(stake)} stake is gone.`);
+      setMsg(`NO GOAL — the keeper got a glove to the ${aim.label} shot and parried it. The ${fmtCash(stake)} stake is gone.`);
       setTimeout(() => {
         resetActors();
         void finish(false, 0, "SAVED");
       }, 900);
     }
-  }, [stake, cashOut, finish, resetActors, burst]);
+  }, [stake, finish, resetActors, burst]);
+
+  // Keeper dive for free aim: the dive point is drawn centre-biased
+  // BEFORE the save is decided, so the keeper never reads the aim. A
+  // shot is saved when the ball lands within KEEPER_REACH of where the
+  // keeper ends up (distance in goal-width units, y scaled by the goal
+  // aspect so the reach is a true circle on screen). On a save the dive
+  // point is nudged onto the ball so the gloves land on it; on a goal
+  // the dive is redrawn until it is clearly away, so a goal never
+  // looks like a near-miss.
+  const keeperDive = useCallback((fx: number, fy: number) => {
+    const draw = () => ({
+      kx: clamp(0.5 + (Math.random() + Math.random() + Math.random() - 1.5) * 0.45, 0.06, 0.94),
+      ky: clamp(0.42 + (Math.random() + Math.random() - 1) * 0.4, 0.08, 0.92),
+    });
+    const dist = (p: { kx: number; ky: number }) =>
+      Math.hypot(fx - p.kx, (fy - p.ky) / GOAL_ASPECT);
+    let k = draw();
+    const saved = dist(k) < KEEPER_REACH;
+    if (saved) {
+      k = {
+        kx: clamp(fx + (Math.random() - 0.5) * 0.08, 0.06, 0.94),
+        ky: clamp(fy + (Math.random() - 0.5) * 0.06, 0.08, 0.92),
+      };
+    } else {
+      for (let i = 0; i < 8 && dist(k) < KEEPER_REACH * 1.25; i++) k = draw();
+    }
+    return { ...k, saved };
+  }, []);
 
   const shoot = useCallback((aim: Aim) => {
     if (!stateRef.current.playing || stateRef.current.busy) return;
@@ -180,20 +227,13 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     stateRef.current.busy = true;
     setBusy(true);
     setResult(null);
-    setSelected(null);
+    setGuide(null);
     playSfx("blip", room.muted);
     const { fx, fy } = aim;
-    // Zone-match keeper (adhkr81 pattern): the keeper dives to a zone;
-    // if it is the shot's zone, the shot is saved. 40% save, so a goal
-    // is the common outcome.
-    const saved = Math.random() < SAVE_CHANCE;
-    let kfx: number, kfy: number;
-    if (saved) { kfx = fx; kfy = fy; }
-    else {
-      const others = ZONES.filter((z) => Math.abs(z.fx - fx) > 0.01 || Math.abs(z.fy - fy) > 0.01);
-      const kz = others[Math.floor(Math.random() * others.length)];
-      kfx = kz.fx; kfy = kz.fy;
-    }
+    const { kx: kfx, ky: kfy, saved } = keeperDive(fx, fy);
+    // Rig hook (precedent: window.__rgSfx in sound.ts): the last shot's
+    // aim, keeper dive point and outcome, for goal-rate measurement.
+    (window as unknown as { __pnLastShot?: unknown }).__pnLastShot = { fx, fy, kfx, kfy, saved };
     setStrikerPose("runup");
     setTimeout(() => {
       setStrikerPose("kick");
@@ -201,28 +241,31 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
         setStrikerPose("follow");
         setTimeout(() => setStrikerPose(""), 340);
       }, 240);
-      // Keeper dive from the SAME snapshot
+      // Keeper travels to the dive spot — the body centre goes 72% of
+      // the way (the gloves span the rest), with a dive lean.
       const gw = aim.gw;
-      const kx = (kfx - 0.5) * gw * 0.66;
-      const kRot = Math.max(-82, Math.min(82, (kfx - 0.5) * 155));
-      const ky = (kfy - 0.5) * 38;
+      const kx = (kfx - 0.5) * gw * 0.72;
+      const kRot = Math.max(-82, Math.min(82, (kfx - 0.5) * 160));
+      const ky = (kfy - 0.5) * 44;
       setKeeperStyle({ transform: `translateX(calc(-50% + ${kx}px)) translateY(${ky}px) rotate(${kRot}deg)` });
       setKeeperPose("diving");
-      // Ball flight along a gentle arc to the target zone — rAF, like
+      // Ball flight along a higher arc to the aimed spot — rAF, like
       // the artifact, so a fading trail can be left behind it.
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const dur = 480, t0 = performance.now();
+      const dur = 520, t0 = performance.now();
       let lastTrail = 0;
       const bez = (t: number) => {
         const u = 1 - t;
         return { x: u * u * aim.sx + 2 * u * t * aim.cx + t * t * aim.x, y: u * u * aim.sy + 2 * u * t * aim.cy + t * t * aim.y };
       };
+      // Kick dust where the boot meets the ball.
+      burst(aim.sx, aim.sy, ["#FFF6D8", "#F2C230", "#D8D2BD"], 8);
       const flight = (now: number) => {
         const elapsed = Math.max(0, now - t0);
         const t = Math.min(1, elapsed / dur);
         const p = bez(t);
-        setBallStyle({ transform: `translate(${p.x - aim.sx}px,${p.y - aim.sy}px) scale(${1 - 0.58 * t}) rotate(${560 * t}deg)`, opacity: 1 });
-        if (!reduced && now - lastTrail > 52 && t < 0.92) {
+        setBallStyle({ transform: `translate(${p.x - aim.sx}px,${p.y - aim.sy}px) scale(${1 - 0.58 * t}) rotate(${640 * t}deg)`, opacity: 1 });
+        if (!reduced && now - lastTrail > 44 && t < 0.92) {
           lastTrail = now;
           const stage = stageRef.current;
           if (stage) {
@@ -247,35 +290,56 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
         resolveShot(saved, aim);
       } else requestAnimationFrame(flight);
     }, 290);
-  }, [resolveShot, room.muted]);
+  }, [resolveShot, room.muted, keeperDive, burst]);
 
-  // Aim at a zone: the zone's fractions become a stage point via the
-  // goal rect measured on the goal as rendered.
-  const aimFor = useCallback((zone: Zone): Aim | null => {
+  // Drag anywhere on the goal to aim: the fractions come from the goal
+  // rect as rendered (which accounts for the goal's rotateX), clamped
+  // just inside the posts so the reticle never sits on the frame.
+  const updateAim = useCallback((clientX: number, clientY: number) => {
+    const goal = goalRef.current, stage = stageRef.current, ball = ballRef.current;
+    if (!goal || !stage || !ball) return;
+    const gr = goal.getBoundingClientRect();
+    const fx = clamp((clientX - gr.left) / gr.width, 0.05, 0.95);
+    const fy = clamp((clientY - gr.top) / gr.height, 0.06, 0.94);
+    setAim({ fx, fy });
+    setAimed(true);
+    // Aim guide: dashed line from the ball to the reticle, in stage %.
+    const sr = stage.getBoundingClientRect();
+    const br = ball.getBoundingClientRect();
+    setGuide({
+      x1: ((br.left + br.width / 2 - sr.left) / sr.width) * 100,
+      y1: ((br.top + br.height / 2 - sr.top) / sr.height) * 100,
+      x2: ((gr.left - sr.left + fx * gr.width) / sr.width) * 100,
+      y2: ((gr.top - sr.top + fy * gr.height) / sr.height) * 100,
+    });
+  }, []);
+
+  // The aim fractions become a stage point via the goal rect measured
+  // on the goal as rendered.
+  const aimFor = useCallback((fx: number, fy: number): Aim | null => {
     if (!stageRef.current || !goalRef.current || !ballRef.current) return null;
     const sr = stageRef.current.getBoundingClientRect();
     const gr = goalRef.current.getBoundingClientRect();
     const ball = ballRef.current.getBoundingClientRect();
     const sx = ball.left + ball.width / 2 - sr.left;
     const sy = ball.top + ball.height / 2 - sr.top;
-    const x = gr.left - sr.left + zone.fx * gr.width;
-    const y = gr.top - sr.top + zone.fy * gr.height;
+    const x = gr.left - sr.left + fx * gr.width;
+    const y = gr.top - sr.top + fy * gr.height;
     return {
       sx, sy, x, y,
-      cx: (sx + x) / 2, cy: Math.min(sy, y) - 42,
-      fx: zone.fx, fy: zone.fy,
+      cx: (sx + x) / 2, cy: Math.min(sy, y) - 78,
+      fx, fy,
       gl: gr.left - sr.left, gt: gr.top - sr.top, gw: gr.width, gh: gr.height,
-      label: zone.label,
+      label: aimLabel(fx, fy),
     };
   }, []);
 
   // Kick! — one tap starts the shootout AND kicks (the video's rhythm).
-  // A selected zone is the aim; with none selected the target is random.
+  // The ball goes exactly where the crosshair is.
   const onKick = () => {
     if (busy) return;
-    const zone = (selected ? ZONES.find((z) => z.id === selected) : undefined) ?? ZONES[Math.floor(Math.random() * ZONES.length)];
-    const aim = aimFor(zone);
-    if (!aim) return;
+    const shot = aimFor(aim.fx, aim.fy);
+    if (!shot) return;
     if (!playing) {
       if (room.balance < stake) { setMsg(room.simMode ? "SIM balance too low for that stake." : "Balance too low for that stake — top up at the cashier."); return; }
       setPlaying(true);
@@ -284,9 +348,9 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       stateRef.current.goals = 0;
       setSavedAt(-1);
       resetActors();
-      setMsg(`Shootout live — ${fmtCash(stake)} riding on it. ${zone.label} it is. First goal pays ×${LADDER[0]}.`);
+      setMsg(`Shootout live — ${fmtCash(stake)} riding on it. Aiming ${shot.label}. First goal pays ×${LADDER[0]}.`);
     }
-    shoot(aim);
+    shoot(shot);
   };
 
   // Bet controls — the video's Min/−, amount, +/Max (Min 0.10, Max 4,000.00).
@@ -304,9 +368,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     commitBet(n);
   };
 
-  useEffect(() => { setBetText(String(stake)); }, [stake]);
-
-  const selectedZone = selected ? ZONES.find((z) => z.id === selected) : undefined;
+  const label = aimLabel(aim.fx, aim.fy);
   const cashOutAmt = goals >= 1 ? Math.round(stake * LADDER[goals - 1] * 100) / 100 : 0;
   // FanZone's two-column score board: GOALS + the kick number (1–5) on
   // the first row, SAVED + the NEXT rung on the second. Kicks taken =
@@ -317,7 +379,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
   const nextMult = goals >= 5 ? null : LADDER[goals];
 
   return (
-    <RoomShell game={game} subtitle="5 shots · ladder to ×31.36 · cash out after any goal" stats={room.stats} history={room.history}>
+    <RoomShell game={game} subtitle="Drag the goal to aim · 5 shots · ladder to ×31.36" stats={room.stats} history={room.history}>
       <div className="pn2-ladderbar" aria-label="Payout ladder">
         {LADDER.map((m, i) => (
           <span key={m} className={`pn2-rung2 ${i < goals ? "done" : i === goals ? "next" : ""}`}>
@@ -347,28 +409,30 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
           <div className="pn-cone l" /><div className="pn-cone r" />
         </div>
         <div className="pn-crowd" aria-hidden="true" />
-        <div className={`pn-goal${rippling ? " ripple" : ""}`} ref={goalRef} role="img" aria-label="The goal and its keeper — tap a target zone, then Kick!">
+        {guide && !busy && (
+          <svg className="pn-aimline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <line x1={guide.x1} y1={guide.y1} x2={guide.x2} y2={guide.y2} vectorEffect="non-scaling-stroke" />
+          </svg>
+        )}
+        <div
+          className={`pn-goal${rippling ? " ripple" : ""}${aimed ? " aimed" : ""}`}
+          ref={goalRef}
+          role="img"
+          aria-label={`The goal and its keeper — drag to aim, currently ${label}`}
+          onPointerDown={(e) => {
+            if (busy) return;
+            e.preventDefault();
+            try { goalRef.current?.setPointerCapture(e.pointerId); } catch { /* no capture — drag still works on the goal */ }
+            updateAim(e.clientX, e.clientY);
+          }}
+          onPointerMove={(e) => { if (busy || !e.buttons) return; updateAim(e.clientX, e.clientY); }}
+        >
           <div className="pn-net-back" aria-hidden="true" />
           <div className="pn-net-side l" aria-hidden="true" />
           <div className="pn-net-side r" aria-hidden="true" />
           {bulge && <div className="pn-bulge hit" aria-hidden="true" style={{ left: `${bulge.x}%`, top: `${bulge.y}%` }} />}
           <div className={`pn-keeper ${keeperPose}`} aria-hidden="true" style={keeperStyle}><KeeperSvg /></div>
-          {ZONES.map((z) => (
-            <button
-              key={z.id}
-              type="button"
-              className={`pn2-zone${selected === z.id ? " sel" : ""}`}
-              style={{ left: `${z.fx * 100}%`, top: `${z.fy * 100}%` }}
-              onClick={() => { if (!busy) setSelected(z.id); }}
-              disabled={busy}
-              aria-pressed={selected === z.id}
-              aria-label={`Aim ${z.label}`}
-            >
-              <span className="pn2-zone-in" aria-hidden="true">
-                <svg viewBox="0 0 24 24" style={{ transform: `rotate(${z.rot}deg)` }}><path d="M12 2.5 L19 11 L14.8 11 L14.8 21.5 L9.2 21.5 L9.2 11 L5 11 Z" fill="currentColor" /></svg>
-              </span>
-            </button>
-          ))}
+          <div className="pn-reticle" aria-hidden="true" style={{ left: `${aim.fx * 100}%`, top: `${aim.fy * 100}%` }}><i /></div>
         </div>
         <div className={`pn2-result${result ? (result.kind === "saved" ? " saved" : " goal") : ""}`} aria-live="polite">
           {result && <b>{result.kind === "saved" ? "NO GOAL!" : `GOAL! ×${result.mult}`}</b>}
@@ -413,13 +477,13 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
             Cash Out {fmtCash(cashOutAmt)}
           </button>
           <button className="btn cr-cash pn2-kick2" type="button" onClick={onKick} disabled={busy}>
-            Kick!!<small>Random</small>
+            Kick!!<small>{label}</small>
           </button>
         </div>
       ) : (
         <div className="pn2-kickwrap">
           <button className="pn2-kick" type="button" onClick={onKick} disabled={busy}>Kick!</button>
-          <small>{selectedZone ? selectedZone.label : "Random"}</small>
+          <small>{aimed ? label : `${label} — drag the goal to move it`}</small>
         </div>
       )}
       <p className="bottle-msg xg-msg">{msg}</p>

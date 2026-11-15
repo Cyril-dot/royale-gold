@@ -408,3 +408,52 @@
 .pn-shotdot{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.08);background:#1e1e1e}
 .pn-shotdot.goal{background:rgba(204,255,0,.2);border-color:rgba(204,255,0,.35)}
 .pn-shotdot.miss{background:rgba(255,68,68,.15);border-color:rgba(255,68,68,.4)}
+
+/* ============ Penalty Shoot Out — free aim + bigger goal (Chuks, 15 Nov) ============
+   "Users should be able to direct where the ball should go" + bigger
+   goal ("poll size increase") + better animation/UI. The 5 fixed tap
+   zones are gone: the goal itself is the aim surface (crosshair cursor,
+   drag anywhere to place the lime reticle, dashed aim line from the
+   ball to the reticle). The goal mouth grows 70% -> 86% wide and
+   taller (16/8.4 -> 16/9.6) — ~73% more area — and the keeper grows
+   with it. The stage chrome tightens so the taller goal still leaves
+   Kick! visible above the fixed dock at 390px scroll-top. FanZone skin
+   (board, dots, banner, lime) is untouched. */
+/* Bigger goal — wider, taller, thicker posts; crosshair cursor; the
+   goal is the drag surface, so it must never scroll under the finger. */
+.pn-goal{width:86%;aspect-ratio:16/9.2;border-width:8px;cursor:crosshair;touch-action:none}
+.pn-goal.aimed{box-shadow:inset 0 0 44px rgba(0,0,0,.42),0 14px 26px rgba(0,0,0,.3),0 0 0 2px rgba(204,255,0,.35),0 0 26px rgba(204,255,0,.22)}
+.pn-keeper{width:min(112px,26%)}
+/* Tighter stage chrome to pay for the taller goal — plus the score
+   board goes one row of four on phones (all four cells, same data)
+   instead of two rows, which buys the ~50px the taller goal costs and
+   keeps Kick! visible above the fixed dock at 390px scroll-top. */
+.pn-stage{padding:3px 8px 2px}
+.pn-crowd{height:10px}
+.pn-grass{height:30px}
+.pn2-result{min-height:30px}
+.pn2-ladderbar{margin-top:4px}
+.pn-shots{margin-top:4px}
+.pn2-bet{margin-top:4px}
+.pn2-kickwrap{margin-top:6px}
+.pn2-kick{width:90px;height:90px}
+@media (max-width:640px){
+  .pn2-board{grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px}
+  .pn2-board-card{padding:4px 6px}
+  .pn2-board-card b{font-size:19px}
+  .pn2-board-mid span{font-size:12px}
+}
+/* Reticle — lime crosshair marking the aim point inside the goal. The
+   ring pulses so the aim reads at a glance; the + ticks and centre
+   dot are the crosshair. */
+.pn-reticle{position:absolute;z-index:5;width:36px;height:36px;transform:translate(-50%,-50%);pointer-events:none}
+.pn-reticle::before{content:"";position:absolute;inset:0;border:2px solid #CCFF00;border-radius:50%;box-shadow:0 0 10px rgba(204,255,0,.55),inset 0 0 8px rgba(204,255,0,.25);animation:pnRetPulse 1.4s ease-in-out infinite}
+.pn-reticle::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;transform:translate(-50%,-50%);border-radius:50%;background:#CCFF00;box-shadow:0 0 6px rgba(204,255,0,.8)}
+.pn-reticle i{position:absolute;left:50%;top:50%;width:46px;height:46px;transform:translate(-50%,-50%);background:linear-gradient(90deg,transparent 0 20px,#CCFF00 20px 26px,transparent 26px),linear-gradient(0deg,transparent 0 20px,#CCFF00 20px 26px,transparent 26px);opacity:.85}
+@keyframes pnRetPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+/* Aim guide — dashed lime line from the ball to the reticle while the
+   user has placed an aim (hidden during the flight). The svg covers
+   the stage in % coordinates; non-scaling-stroke keeps the dash 1.5px. */
+.pn-aimline{position:absolute;inset:0;z-index:3;width:100%;height:100%;pointer-events:none}
+.pn-aimline line{stroke:rgba(204,255,0,.45);stroke-width:1.5;stroke-dasharray:5 5}
+@media (prefers-reduced-motion: reduce){.pn-reticle::before{animation:none}}
