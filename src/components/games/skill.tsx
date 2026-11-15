@@ -23,7 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, fmtCoins } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx } from "../../lib/store";
-import { RoomShell, StakeChips, useGameRoom } from "./shared";
+import { RoomShell, StakeChips, fireConfetti, useGameRoom } from "./shared";
 
 const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 const nextFrame = () => new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())));
@@ -395,7 +395,10 @@ const dropMsFor = (level: number) => Math.max(110, Math.round(760 * Math.pow(0.8
 const fmtClock = (s: number) => { const t = Math.max(0, s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 function tetrisTier(score: number) { return score >= 2500 ? 3 : score >= 1500 ? 2 : score >= 800 ? 1 : 0; }
 interface TTPiece { type: string; m: number[][]; x: number; y: number }
-interface TTState { board: string[][]; cur: TTPiece | null; next: string; score: number; lines: number; level: number; timeLeft: number; playing: boolean; settled: boolean }
+interface TTState { board: string[][]; cur: TTPiece | null; next: string; score: number; lines: number; level: number; timeLeft: number; playing: boolean; settled: boolean; banked: number; roundId: string }
+// banked = coins already cashed out mid-round this round; roundId
+// identifies the round to the server so a replayed cash-out is
+// rejected there (the server sums this round's cash-out rows).
 const emptyTTBoard = (): string[][] => Array.from({ length: 20 }, () => Array(10).fill(""));
 const ttCollides = (b: string[][], shape: number[][], x: number, y: number) => {
   for (let r = 0; r < shape.length; r++) for (let c = 0; c < shape[r].length; c++) {
@@ -410,7 +413,7 @@ const ttCollides = (b: string[][], shape: number[][], x: number, y: number) => {
 export function TetrisRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(5);
-  const G = useRef<TTState>({ board: emptyTTBoard(), cur: null, next: "T", score: 0, lines: 0, level: 1, timeLeft: TT_ROUND_SECS, playing: false, settled: false });
+  const G = useRef<TTState>({ board: emptyTTBoard(), cur: null, next: "T", score: 0, lines: 0, level: 1, timeLeft: TT_ROUND_SECS, playing: false, settled: false, banked: 0, roundId: "" });
   const [board, setBoard] = useState<string[][]>(G.current.board);
   const [cur, setCur] = useState<TTPiece | null>(null);
   const [nextType, setNextType] = useState("T");
@@ -420,6 +423,27 @@ export function TetrisRoom({ game }: { game: GameDef }) {
   const [timeLeft, setTimeLeft] = useState(TT_ROUND_SECS);
   const [playing, setPlaying] = useState(false);
   const [msg, setMsg] = useState("Set your stake and start. Clear lines before the stack tops out — a Tetris (4 lines at once) pays 800.");
+  // Per-line cash-out (15 Nov 2026): the tier payout the score has
+  // earned so far can be banked mid-round and the game goes on.
+  // bankable = stake x tier(score) - banked, so the end-of-round
+  // settle pays only the remainder — banked lines are never paid
+  // twice. The offer appears after a line clear and auto-dismisses
+  // after 6s; ignoring it changes nothing (it pays at the end).
+  const [banked, setBanked] = useState(0);
+  const [cashOutOffer, setCashOutOffer] = useState<number | null>(null);
+  const [cashOutBusy, setCashOutBusy] = useState(false);
+  const offerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearOffer = () => {
+    if (offerTimerRef.current) { clearTimeout(offerTimerRef.current); offerTimerRef.current = null; }
+    setCashOutOffer(null);
+  };
+  const showOffer = (amount: number) => {
+    setCashOutOffer(amount);
+    if (offerTimerRef.current) clearTimeout(offerTimerRef.current);
+    offerTimerRef.current = setTimeout(() => setCashOutOffer(null), 6000);
+  };
+  const bankable = (g: TTState) => Math.max(0, stake * tetrisTier(g.score) - g.banked);
+  useEffect(() => () => { if (offerTimerRef.current) clearTimeout(offerTimerRef.current); }, []);
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<{ pid: number | null; sx: number; sy: number; lx: number; ly: number; accX: number; accY: number; t0: number; moved: boolean; hardDone: boolean }>({ pid: null, sx: 0, sy: 0, lx: 0, ly: 0, accX: 0, accY: 0, t0: 0, moved: false, hardDone: false });
   const settleRef = useRef(room.settle);
@@ -429,7 +453,7 @@ export function TetrisRoom({ game }: { game: GameDef }) {
     const g = G.current;
     setBoard(g.board); setCur(g.cur); setNextType(g.next);
     setScore(g.score); setLines(g.lines); setLevel(g.level);
-    setTimeLeft(g.timeLeft); setPlaying(g.playing);
+    setTimeLeft(g.timeLeft); setPlaying(g.playing); setBanked(g.banked);
   };
   const randType = () => TT_TYPES[Math.floor(Math.random() * TT_TYPES.length)];
 
@@ -438,18 +462,55 @@ export function TetrisRoom({ game }: { game: GameDef }) {
     if (g.settled) return;
     g.settled = true;
     g.playing = false;
+    clearOffer();
     sync();
     const mult = tetrisTier(g.score);
-    const payout = Math.round(stake * mult);
+    // NO DOUBLE PAY: the final settle pays only the tier payout not
+    // already banked mid-round (banked lines are excluded here).
+    const payout = Math.max(0, Math.round(stake * mult) - g.banked);
+    const bankedNote = g.banked > 0 ? `${fmtCoins(g.banked)} coins already banked mid-round. ` : "";
     setMsg(reason === "topout"
-      ? `Topped out — ${g.score} pts, ${g.lines} lines. ${mult > 0 ? `${fmtCoins(payout)} coins paid ×${mult}.` : "Under 800, so the stake is gone."}`
-      : mult >= 2 ? `Time! ${g.score} pts — ${fmtCoins(payout)} coins paid ×${mult}.`
-      : mult === 1 ? `Time! ${g.score} pts — your ${fmtCoins(stake)} coins stake comes back ×1; 1,500+ pays ×2.`
+      ? `Topped out — ${g.score} pts, ${g.lines} lines. ${bankedNote}${payout > 0 ? `${fmtCoins(payout)} coins paid ×${mult}.` : mult > 0 ? "The full tier payout is already in your wallet." : "Under 800, so the stake is gone."}`
+      : mult >= 2 ? `Time! ${g.score} pts — ${bankedNote}${payout > 0 ? `${fmtCoins(payout)} coins paid ×${mult}.` : "The full tier payout is already in your wallet."}`
+      : mult === 1 ? `Time! ${g.score} pts — ${bankedNote}${payout > 0 ? `your ${fmtCoins(stake)} coins stake comes back ×1; 1,500+ pays ×2.` : "Your stake is already back in your wallet; 1,500+ pays ×2."}`
       : `Time! ${g.score} pts, under 800 — the stake is gone. Tetrises are where the points live.`);
-    await settleRef.current(stake, payout, { score: g.score, lines: g.lines, mult });
+    await settleRef.current(stake, payout, { score: g.score, lines: g.lines, mult, banked: g.banked });
   };
   const endRoundRef = useRef(endRound);
   endRoundRef.current = endRound;
+
+  // Per-line cash-out: bank the tier payout earned so far and keep
+  // playing. The server credits the coins and enforces the cap
+  // (stake x tier - already banked this round), so a replayed tap
+  // can never double-pay. The board is untouched — the next piece
+  // is already live.
+  const cashOut = async () => {
+    const g = G.current;
+    const amount = cashOutOffer;
+    if (!g.playing || g.settled || cashOutBusy || amount == null || amount <= 0) return;
+    setCashOutBusy(true);
+    try {
+      const r = await api<{ amount: number; banked: number; cash: number; coins: number; sim: number }>("/api/games/cashout", {
+        method: "POST",
+        body: JSON.stringify({ game: "tetris", stake, score: g.score, lines: g.lines, amount, roundId: g.roundId }),
+      });
+      // Server is the authority on banked — sync from its reply.
+      g.banked = r.banked;
+      sync();
+      clearOffer();
+      await room.refresh();
+      playSfx("cheer", room.muted);
+      fireConfetti();
+      setMsg(`Cashed out ${fmtCoins(r.amount)} coins — ${fmtCoins(r.banked)} banked this round. Keep playing!`);
+    } catch (ex) {
+      // A failed cash-out leaves the lines pending — they pay at the
+      // end as normal, so the player loses nothing.
+      clearOffer();
+      setMsg(ex instanceof Error ? ex.message : "Cash-out failed — the lines stay pending and pay at the end.");
+    } finally {
+      setCashOutBusy(false);
+    }
+  };
 
   const spawn = () => {
     const g = G.current;
@@ -479,6 +540,11 @@ export function TetrisRoom({ game }: { game: GameDef }) {
       g.score += TT_POINTS[cleared];
       g.lines += cleared;
       g.level = 1 + Math.floor(g.lines / 10);
+      // Per-line cash-out: the lines just cleared may have unlocked a
+      // new tier — offer the bankable amount (tier payout not yet
+      // banked). Ignoring it changes nothing: it pays at the end.
+      const b = bankable(g);
+      if (b > 0 && g.playing) showOffer(b);
     }
     g.cur = null;
     sync();
@@ -571,6 +637,9 @@ export function TetrisRoom({ game }: { game: GameDef }) {
     const g = G.current;
     g.board = emptyTTBoard();
     g.score = 0; g.lines = 0; g.level = 1; g.timeLeft = TT_ROUND_SECS;
+    g.banked = 0;
+    g.roundId = `tetris-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    clearOffer();
     g.next = randType();
     g.playing = true; g.settled = false;
     spawn();
@@ -651,6 +720,14 @@ export function TetrisRoom({ game }: { game: GameDef }) {
             <i key={`${r}-${c}`} className={v ? "on" : ""} style={v ? { background: TT_COLORS[nextType] } : undefined} />
           )))}</span></span>
         </div>
+        {playing && (
+          <div className="tt-bank" aria-live="polite">
+            <span>BANKED <b>{fmtCoins(banked)} coins</b></span>
+            <button type="button" className="tt-bank-pending" onClick={() => { const b = bankable(G.current); if (b > 0) showOffer(b); }} disabled={cashOutBusy}>
+              PENDING <b>{fmtCoins(Math.max(0, stake * tetrisTier(score) - banked))} coins</b>
+            </button>
+          </div>
+        )}
         <div style={{ position: "relative" }} ref={boardWrapRef}
           onPointerDown={onBoardPointerDown} onPointerMove={onBoardPointerMove} onPointerUp={endGesture} onPointerCancel={() => { gestureRef.current.pid = null; }}>
           <div className={playing ? "tt-board live" : "tt-board"}>
@@ -660,6 +737,18 @@ export function TetrisRoom({ game }: { game: GameDef }) {
           </div>
           {!playing && <div className="fn-idle"><b>2 minutes on the clock</b><span>800+ pts returns your stake · 1,500+ pays ×2 · 2,500+ pays ×3 · every 10 lines the fall speeds up</span></div>}
         </div>
+        {playing && cashOutOffer != null && (
+          <div className="tt-cashout" role="status">
+            <div className="tt-cashout-text">
+              <b>Line cleared! Cash Out &amp; Continue — +{fmtCoins(cashOutOffer)} coins</b>
+              <span>Bank the tier payout earned so far and keep playing — or ignore this and it pays at the end.</span>
+            </div>
+            <button type="button" className="btn btn-gold" onClick={cashOut} disabled={cashOutBusy}>
+              {cashOutBusy ? "Banking…" : `Cash Out ${fmtCoins(cashOutOffer)}`}
+            </button>
+            <button type="button" className="tt-cashout-x" onClick={clearOffer} aria-label="Dismiss cash-out">×</button>
+          </div>
+        )}
         {playing && (
           <div className="tt-btns">
             <button type="button" className="btn btn-ghost" onClick={() => move(-1)}>←</button>

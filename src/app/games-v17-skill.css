@@ -103,6 +103,59 @@
   line-height: 1.5;
 }
 
+/* Per-line cash-out (15 Nov 2026): banked/pending strip + the
+   Cash Out & Continue prompt. In normal flow, never over the board,
+   so it can never block a gesture or the next piece. */
+.tt-bank {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: rgba(255, 246, 216, .75);
+}
+.tt-bank b { color: #F2C230; }
+.tt-bank-pending {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: right;
+}
+.tt-bank-pending:disabled { cursor: default; opacity: .6; }
+.tt-cashout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 2px solid #F2C230;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(242, 194, 48, .16), rgba(12, 43, 34, .9));
+  box-shadow: 0 4px 16px rgba(242, 194, 48, .25);
+}
+.tt-cashout-text { flex: 1 1 auto; min-width: 0; }
+.tt-cashout-text b { display: block; font-size: 14px; color: #FFF6D8; }
+.tt-cashout-text span { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 600; color: rgba(255, 246, 216, .7); line-height: 1.4; }
+.tt-cashout .btn { flex: none; white-space: nowrap; }
+.tt-cashout-x {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 246, 216, .12);
+  color: #FFF6D8;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 /* ============ Trivia — timer bar + 2-col options (v48) ============ */
 .tv-timerbar i {
   display: block;

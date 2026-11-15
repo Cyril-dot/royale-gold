@@ -179,12 +179,16 @@ export function useGameRoom(game: GameDef) {
       setWallet({ cash: r.cash, coins: r.coins, sim: r.sim });
       // P0 Batch 2 (O10): the toast shows the EFFECTIVE payout the
       // server settled — equal to the requested one unless the owner's
-      // per-game max-payout cap cut it down.
+      // per-game max-payout cap cut it down. Tetris can also bank coins
+      // mid-round (result.banked); the toast counts those too, so a
+      // fully-banked round reads as a win, not a loss.
       const effPayout = typeof r.payout === "number" ? r.payout : payout;
-      const won = effPayout > stake;
-      const amt = isCoin ? `${fmtCoins(effPayout)} coins` : fmtCash(effPayout);
-      toast(won ? `You won ${amt}` : effPayout > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtCash(stake)}`, won ? "win" : "lose");
-      if (won) { playSfx("cheer", muted); fireConfetti(); } else if (effPayout === 0) playSfx("groan", muted);
+      const banked = typeof result.banked === "number" ? result.banked : 0;
+      const totalWon = effPayout + banked;
+      const won = totalWon > stake;
+      const amt = isCoin ? `${fmtCoins(totalWon)} coins` : fmtCash(totalWon);
+      toast(won ? `You won ${amt}` : totalWon > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtCash(stake)}`, won ? "win" : "lose");
+      if (won) { playSfx("cheer", muted); fireConfetti(); } else if (totalWon === 0) playSfx("groan", muted);
       await loadStats();
       return true;
     } catch (ex) {

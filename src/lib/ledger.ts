@@ -215,7 +215,7 @@ export async function buildLedger(opts: {
         // P1 Batch 1 (A17/A18): a bonus grant or a promo redemption is a
         // BalanceAdjustment too, but the ledger names it so it is never
         // mistaken for a manual adjustment.
-        detail: a.kind === "bonus" ? `Bonus ${a.direction} (${a.wallet})` : a.kind === "promo" ? `Promo credit (${a.wallet})` : `Manual ${a.direction} (${a.wallet})`,
+        detail: a.kind === "bonus" ? `Bonus ${a.direction} (${a.wallet})` : a.kind === "promo" ? `Promo credit (${a.wallet})` : a.kind === "cashout" ? `Tetris line cash-out (${a.wallet})` : `Manual ${a.direction} (${a.wallet})`,
         reason: a.reason, createdAt: a.createdAt.toISOString(),
       });
     }
