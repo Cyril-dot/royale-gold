@@ -496,7 +496,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
       // collisions (port thresholds, unchanged)
       const carY = H - 90;
       for (const ob of st.obstacles) {
-        if (Math.abs(ob.y - carY) < 55 && Math.abs(ob.x - st.x) < 42) { beginCrashFx(); return; }
+        if (Math.abs(ob.y - carY) < 55 && Math.abs(ob.x - st.x) < 42) { beginCrashFx(); rafRef.current = requestAnimationFrame(loop); return; }
         if (Math.abs(ob.y - carY) < 90 && Math.abs(ob.x - st.x) < 70 && Math.abs(ob.x - st.x) >= 42) {
           // near miss — once per obstacle
           if (!ob.nm) {
@@ -520,7 +520,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
           showFlash("COIN +0.10×");
         }
       }
-      if (o >= 50) { beginCrashFx(); return; }
+      if (o >= 50) { beginCrashFx(); rafRef.current = requestAnimationFrame(loop); return; }
       // Drive HUD, once a second. (A plain frame counter cannot live
       // here: this effect re-runs on every render because `crash` changes
       // identity each render, which would reset any closure counter.)
