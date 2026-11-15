@@ -457,3 +457,45 @@
 .pn-aimline{position:absolute;inset:0;z-index:3;width:100%;height:100%;pointer-events:none}
 .pn-aimline line{stroke:rgba(204,255,0,.45);stroke-width:1.5;stroke-dasharray:5 5}
 @media (prefers-reduced-motion: reduce){.pn-reticle::before{animation:none}}
+
+/* ============ RPS impress (15 Nov 2026) — Chuks: "its bad bro yeah" ============
+   What was bad: the picks were plain text pills with no hand art, the
+   versus moment was a static "VS" with a 520ms shake, and the outcome
+   lived only in the small message line — no banner, no winner glow, no
+   drama. Same game, same rules, same ×2 payout — UI + animation only.
+   Scoped under .rps2-* so no other room is touched. The .rps-hand base
+   (v48.css) still sizes the circles; .rps2-hand only enlarges them and
+   adds the win/lose states. */
+.rps2-banner{min-height:46px;display:grid;place-items:center;font-family:var(--disp);font-size:26px;letter-spacing:.05em;text-transform:uppercase;text-align:center;margin-bottom:12px;line-height:1.1}
+.rps2-banner--hint{font-family:var(--font);font-size:14px;font-weight:700;letter-spacing:.02em;text-transform:none;color:var(--muted)}
+.rps2-banner--chant{color:var(--gold-2);text-shadow:0 0 18px rgba(242,194,48,.45)}
+.rps2-banner--win{color:#3ED97E;text-shadow:0 0 26px rgba(62,217,126,.55);animation:rps2Pop .45s cubic-bezier(.3,1.4,.4,1)}
+.rps2-banner--lose{color:#FF8580;text-shadow:0 0 22px rgba(229,50,45,.4);animation:rps2Pop .45s cubic-bezier(.3,1.4,.4,1)}
+.rps2-banner--draw{color:#FFF6D8;text-shadow:0 0 18px rgba(242,194,48,.4);animation:rps2Pop .45s cubic-bezier(.3,1.4,.4,1)}
+@keyframes rps2Pop{0%{transform:scale(.7);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+.rps2-side{display:flex;flex-direction:column;align-items:center;gap:8px}
+.rps2-who{font-family:var(--mono);font-size:11px;font-weight:900;letter-spacing:.22em;color:var(--muted)}
+.rps2-hand{width:132px;height:132px;transition:transform .25s ease,opacity .25s ease,filter .25s ease,box-shadow .25s ease}
+.rps2-hand svg{width:102px;height:102px}
+@media (max-width:380px){.rps2-hand{width:118px;height:118px}.rps2-hand svg{width:92px;height:92px}}
+.rps2-hand.rps2-won{border-color:var(--gold);box-shadow:0 0 0 2px rgba(242,194,48,.7),0 0 34px rgba(62,217,126,.55),0 14px 28px rgba(0,0,0,.45);transform:scale(1.05)}
+.rps2-hand.rps2-lost{opacity:.45;filter:grayscale(.6)}
+.rps2-hand.rps2-draw{border-color:var(--gold);box-shadow:0 0 0 2px rgba(242,194,48,.5),0 0 22px rgba(242,194,48,.35),0 14px 28px rgba(0,0,0,.45)}
+.rps2-score{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:16px;font-family:var(--mono);font-weight:800;font-size:13px;color:var(--muted)}
+.rps2-score b{color:var(--ink)}
+.rps2-dots{display:inline-flex;gap:5px}
+.rps2-dots i{width:10px;height:10px;border-radius:50%;border:1px solid var(--line-gold);background:rgba(4,6,13,.5)}
+.rps2-dots i.on{background:var(--gold);box-shadow:0 0 8px rgba(242,194,48,.8)}
+.rps2-dots.cpu i.on{background:#E5322D;border-color:#E5322D;box-shadow:0 0 8px rgba(229,50,45,.8)}
+.rps2-picks{margin-top:14px}
+.rps2-pick{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:16px;border:1px solid rgba(255,246,216,.3);background:rgba(4,6,13,.5);color:var(--ink);font-weight:900;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .15s ease,box-shadow .2s ease,border-color .2s ease,background .2s ease}
+.rps2-pick-art{width:56px;height:56px;display:grid;place-items:center;flex:none}
+.rps2-pick-art svg{width:56px;height:56px}
+.rps2-pick-txt{font-size:15px;letter-spacing:.03em;line-height:1.15;text-align:center}
+.rps2-pick-txt small{display:block;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.02em}
+.rps2-pick:hover{transform:translateY(-2px);border-color:var(--line-gold)}
+.rps2-pick:active{transform:scale(.96)}
+.rps2-pick.rps2-picked{background:linear-gradient(180deg,var(--gold-2),var(--gold) 55%,#D9A41C);color:#231600;border-color:var(--gold);box-shadow:0 0 0 2px rgba(242,194,48,.5),0 10px 22px rgba(242,194,48,.3)}
+.rps2-pick.rps2-picked small{color:#5E4303}
+.rps2-pick[disabled]{opacity:.55}
+@media (prefers-reduced-motion: reduce){.rps2-banner--win,.rps2-banner--lose,.rps2-banner--draw{animation:none}.rps-hand.shake{animation:none}}

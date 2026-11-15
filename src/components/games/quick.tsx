@@ -432,53 +432,120 @@ export function RpsRoom({ game }: { game: GameDef }) {
   const [throwing, setThrowing] = useState(false);
   const [youWins, setYouWins] = useState(0);
   const [cpuWins, setCpuWins] = useState(0);
+  const [lastPick, setLastPick] = useState<string | null>(null);
+  const [result, setResult] = useState<"win" | "lose" | "draw" | null>(null);
+  const [match, setMatch] = useState<"you" | "cpu" | null>(null);
+  const [chant, setChant] = useState("");
+  const cycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (cycleRef.current) clearInterval(cycleRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
   const throwHand = async (pick: string) => {
     if (throwing) return;
     setThrowing(true);
+    setResult(null);
+    setMatch(null);
+    setLastPick(pick);
     playSfx("blip", room.muted);
     const c = ["rock", "paper", "scissors"][Math.floor(Math.random() * 3)];
-    setYou(pick); setCpu("rock");
+    setYou(pick);
     const beats: Record<string, string> = { rock: "scissors", paper: "rock", scissors: "paper" };
-    setTimeout(async () => {
+    // Impress (15 Nov 2026): the shoot chant — the CPU hand cycles
+    // rock → paper → scissors while both hands shake, then the real
+    // pick is revealed at 520ms. The outcome was already drawn above;
+    // the cycling is visual only, so the odds never change.
+    const cycle = ["rock", "paper", "scissors", "rock"] as const;
+    const chants = ["ROCK…", "PAPER…", "SCISSORS…", "SHOOT!"];
+    let step = 0;
+    setCpu("rock");
+    setChant("ROCK…");
+    cycleRef.current = setInterval(() => {
+      step++;
+      if (step < 4) { setCpu(cycle[step]); setChant(chants[step]); }
+    }, 130);
+    timerRef.current = setTimeout(async () => {
+      if (cycleRef.current) { clearInterval(cycleRef.current); cycleRef.current = null; }
       setCpu(c);
+      setChant("");
       setThrowing(false);
+      playSfx("flip", room.muted);
       let yw = youWins, cw = cpuWins;
       let roundMsg = "";
+      let res: "win" | "lose" | "draw" = "draw";
       if (pick === c) {
         roundMsg = `Draw — ${RPS_NAMES[pick]} meets ${RPS_NAMES[c]}. Your ${fmtCash(stake)} stake comes straight back.`;
         await room.settle(stake, stake, { pick, cpu: c, draw: true });
       } else if (beats[pick] === c) {
         yw++;
         setYouWins(yw);
+        res = "win";
         roundMsg = `${RPS_NAMES[pick]} beats ${RPS_NAMES[c]} — ${fmtCash(stake * 2)} paid to your balance.`;
         await room.settle(stake, stake * 2, { pick, cpu: c });
       } else {
         cw++;
         setCpuWins(cw);
+        res = "lose";
         roundMsg = `${RPS_NAMES[c]} beats ${RPS_NAMES[pick]} — the ${fmtCash(stake)} stake is gone. Throw again.`;
         await room.settle(stake, 0, { pick, cpu: c });
       }
+      setResult(res);
       if (yw >= 2 || cw >= 2) {
+        setMatch(yw >= 2 ? "you" : "cpu");
         roundMsg += yw >= 2 ? " MATCH — you take the best-of-3!" : " MATCH — the CPU takes this best-of-3. New match starts now.";
         setYouWins(0); setCpuWins(0);
       }
       setMsg(roundMsg);
     }, 520);
   };
+  const banner = throwing
+    ? { cls: "rps2-banner--chant", text: chant }
+    : match === "you"
+      ? { cls: "rps2-banner--win", text: "MATCH — YOU TAKE IT!" }
+      : match === "cpu"
+        ? { cls: "rps2-banner--lose", text: "MATCH — CPU TAKES IT" }
+        : result === "win"
+          ? { cls: "rps2-banner--win", text: "YOU WIN! ×2" }
+          : result === "lose"
+            ? { cls: "rps2-banner--lose", text: "CPU WINS" }
+            : result === "draw"
+              ? { cls: "rps2-banner--draw", text: "DRAW — STAKE BACK" }
+              : { cls: "rps2-banner--hint", text: "Tap a hand to throw" };
+  const youCls = `rps-hand rps2-hand${throwing ? " shake" : ""}${result === "win" ? " rps2-won" : result === "lose" ? " rps2-lost" : result === "draw" ? " rps2-draw" : ""}`;
+  const cpuCls = `rps-hand rps2-hand${throwing ? " shake" : ""}${result === "lose" ? " rps2-won" : result === "win" ? " rps2-lost" : result === "draw" ? " rps2-draw" : ""}`;
   return (
     <Shell game={game} subtitle="Win the throw, ×2. A draw returns your stake." stake={stake} setStake={setStake} msg={msg} stats={room.stats} history={room.history}>
-      <div className="qg-stage">
+      <div className="qg-stage rps2-stage">
+        <div className={`rps2-banner ${banner.cls}`} aria-live="polite">{banner.text}</div>
         <div className="rps-hands">
-          <div className={`rps-hand${throwing ? " shake" : ""}`} dangerouslySetInnerHTML={{ __html: RPS_ICONS[you] }} />
+          <div className="rps2-side">
+            <div className={youCls} dangerouslySetInnerHTML={{ __html: RPS_ICONS[you] }} />
+            <span className="rps2-who">YOU</span>
+          </div>
           <span className="rps-versus">VS</span>
-          <div className={`rps-hand${throwing ? " shake" : ""}`} dangerouslySetInnerHTML={{ __html: RPS_ICONS[cpu] }} />
+          <div className="rps2-side">
+            <div className={cpuCls} dangerouslySetInnerHTML={{ __html: RPS_ICONS[cpu] }} />
+            <span className="rps2-who">CPU</span>
+          </div>
         </div>
-        <div className="rps-score">BEST OF 3 — YOU <b>{youWins}</b> · CPU <b>{cpuWins}</b> · STREAK <b>{room.stats?.streak ?? 0}</b></div>
+        <div className="rps2-score">
+          <span>BEST OF 3</span>
+          <span className="rps2-dots" aria-label={`You have ${youWins} wins`}>
+            <i className={youWins >= 1 ? "on" : ""} /><i className={youWins >= 2 ? "on" : ""} />
+          </span>
+          <b>YOU {youWins} · CPU {cpuWins}</b>
+          <span className="rps2-dots cpu" aria-label={`CPU has ${cpuWins} wins`}>
+            <i className={cpuWins >= 1 ? "on" : ""} /><i className={cpuWins >= 2 ? "on" : ""} />
+          </span>
+          <span>STREAK {room.stats?.streak ?? 0}</span>
+        </div>
       </div>
-      <div className="xg-pickrow">
+      <div className="xg-pickrow rps2-picks">
         {(["rock", "paper", "scissors"] as const).map((p) => (
-          <button key={p} type="button" className="xg-pick" onClick={() => void throwHand(p)} disabled={throwing}>
-            <span className="xg-pick-txt">{RPS_NAMES[p]}<small>{p === "rock" ? "crushes scissors" : p === "paper" ? "covers rock" : "cut paper"}</small></span>
+          <button key={p} type="button" className={`rps2-pick${lastPick === p ? " rps2-picked" : ""}`} onClick={() => void throwHand(p)} disabled={throwing} aria-pressed={lastPick === p && result !== null}>
+            <span className="rps2-pick-art" dangerouslySetInnerHTML={{ __html: RPS_ICONS[p] }} />
+            <span className="rps2-pick-txt">{RPS_NAMES[p]}<small>{p === "rock" ? "crushes scissors" : p === "paper" ? "covers rock" : "cut paper"}</small></span>
           </button>
         ))}
       </div>
