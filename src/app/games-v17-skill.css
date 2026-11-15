@@ -167,6 +167,42 @@
 @media (min-width: 521px) {
   .tv-opts { grid-template-columns: 1fr 1fr; }
 }
+/* Reveal colours must beat the gold .picked state (both are (0,2,0);
+   this sheet loads after v48, so these win on ties). */
+.tv-opt.right { background: rgba(62, 217, 126, .18); border-color: #3ED97E; color: #B9F5D2; }
+.tv-opt.wrong { background: rgba(229, 50, 45, .16); border-color: #E5322D; color: #FFC4C2; }
+
+/* ============ Trivia — Nov 2026: settings, earned chip, answer board ============ */
+.tv-set-label { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: rgba(255, 246, 216, .65); margin: 16px 0 8px; }
+.tv-set-label:first-child { margin-top: 4px; }
+.tv-diff-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tv-diff { background: #141828; border: 1px solid rgba(255, 246, 216, .2); border-radius: 12px; color: #FFF6D8; padding: 12px 8px; font: inherit; cursor: pointer; text-align: center; }
+.tv-diff b { display: block; font-size: 15px; }
+.tv-diff span { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; color: rgba(255, 246, 216, .6); line-height: 1.35; }
+.tv-diff.on { background: linear-gradient(180deg, #FFD964, #D9A41C); border-color: #F2C230; color: #231600; }
+.tv-diff.on span { color: rgba(35, 22, 0, .72); }
+.tv-seg { display: flex; gap: 8px; }
+.tv-seg button { flex: 1; background: #141828; border: 1px solid rgba(255, 246, 216, .2); border-radius: 10px; color: #FFF6D8; padding: 11px 6px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.tv-seg button.on { background: linear-gradient(180deg, #FFD964, #D9A41C); border-color: #F2C230; color: #231600; }
+.tv-note { margin: 14px 0; font-size: 13px; font-weight: 600; color: rgba(255, 246, 216, .75); line-height: 1.5; }
+.tv-settings .xg-action { width: 100%; margin-top: 4px; }
+.tv-diff-chip { text-transform: capitalize; color: #F2C230; }
+.tv-earned-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 800; color: #F2C230; margin: 2px 0 10px; min-height: 18px; }
+.tv-plus { color: #3ED97E; animation: tv-plus-pop .45s ease; }
+@keyframes tv-plus-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.tv-board { margin: 6px 0 14px; }
+.tv-board-title { font-size: 15px; font-weight: 800; color: #FFF6D8; margin: 0 0 10px; }
+.tv-board-q { background: #101527; border: 1px solid rgba(255, 246, 216, .16); border-left: 4px solid #E5322D; border-radius: 12px; padding: 12px; margin-bottom: 10px; text-align: left; }
+.tv-board-q.ok { border-left-color: #3ED97E; }
+.tv-board-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 800; color: rgba(255, 246, 216, .6); }
+.tv-board-mark { color: #FF8A80; }
+.tv-board-q.ok .tv-board-mark { color: #3ED97E; }
+.tv-board-text { margin: 8px 0; font-size: 15px; font-weight: 700; color: #FFF6D8; line-height: 1.4; }
+.tv-board-your { margin: 4px 0; font-size: 13.5px; font-weight: 600; line-height: 1.45; }
+.tv-board-your.ok { color: #B9F5D2; }
+.tv-board-your.bad { color: #FFC4C2; }
+.tv-board-correct { margin: 4px 0 0; font-size: 13.5px; font-weight: 700; color: #3ED97E; line-height: 1.45; }
+.tv-result .xg-action { width: 100%; margin-top: 8px; }
 
 /* ============ Snake — swipe surface, D-pad stays 44px+ ============
    Scroll fix (15 Nov 2026): pan-y unless the room adds .live while a

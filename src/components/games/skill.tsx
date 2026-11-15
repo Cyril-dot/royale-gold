@@ -1,5 +1,6 @@
 // Skill coin games — Candy Crush (match-3, 30 moves), Tetris (lines),
-// Trivia (server questions + grading, 15s each), Snake (entry 5,
+// Trivia (difficulty + settings, 1 coin per right answer, server
+// per-answer grading + full answer board), Snake (entry 5,
 // 100+→10 / 200+→20 / 300+→40 coins), 2048 (entry 5, 256→10 / 512→20 /
 // 1024→50 coins). Candy/Tetris payout tiers are the v48 export's exact
 // tables: Candy ≥500 ×1, ≥1000 ×2, ≥1500 ×3; Tetris ≥800 ×1, ≥1500 ×2,
@@ -766,71 +767,109 @@ export function TetrisRoom({ game }: { game: GameDef }) {
 }
 
 // ---------------- Trivia ----------------
-// Artifact restore: the draining 15s timer bar under the HUD and the
-// two-column option grid on wider screens. Per-question right/wrong
-// reveal is NOT restored: the port's questions endpoint deliberately
-// withholds the answer key (server grading, anti-cheat), so the client
-// cannot know which option is right until the final breakdown —
-// restoring the artifact's green/red reveal would need an API change
-// outside this file's scope. The final breakdown already shows ✓/✗
-// per question.
+// Nov 2026 rebuild: the player sets the difficulty (easy/medium/hard —
+// wired to real question pools classified in the seed bank, plus the
+// clock: easy 20s, medium 15s, hard 10s), the question count (5/10)
+// and the seconds per question. Every correct answer banks 1 coin as
+// the game goes on (shown live), paid at grading on top of the
+// milestone table. Each answer is graded by the server as it lands
+// (POST /api/games/trivia/answer) — the client gets the right/wrong
+// reveal for THAT question only, the key for unanswered questions
+// never leaves the server, and answers must arrive in order so the
+// key cannot be probed early. After the game the answer board shows
+// every question with your answer and the correct one; the last
+// finished round is kept in localStorage so the board is still there
+// when you come back.
+type TriviaDifficulty = "easy" | "medium" | "hard";
 interface TriviaQ { id: string; question: string; options: string[]; category: string }
+interface TriviaBoardRow { question: number; text: string; category: string; options: string[]; yourAnswer: number; correctAnswer: number; correct: boolean }
+interface TriviaResult { correct: number; total: number; difficulty: TriviaDifficulty; payoutCoins: number; perAnswerCoins: number; breakdown: TriviaBoardRow[] }
+interface TriviaSettings { difficulty: TriviaDifficulty; count: number; timePerQ: number }
+const TRIVIA_DIFFS: { id: TriviaDifficulty; label: string; time: number; blurb: string }[] = [
+  { id: "easy", label: "Easy", time: 20, blurb: "Gentlest questions · 20s each" },
+  { id: "medium", label: "Medium", time: 15, blurb: "A mix of everything · 15s each" },
+  { id: "hard", label: "Hard", time: 10, blurb: "Toughest questions · 10s each" },
+];
+const TRIVIA_LAST_KEY = "rg-trivia-last";
+function triviaMilestoneText(total: number): string {
+  const mid = Math.ceil(total * 0.7);
+  const high = Math.ceil(total * 0.9);
+  const parts = [`${mid} right pays 10`];
+  if (high < total) parts.push(`${high} right pays 15`);
+  parts.push(`all ${total} right pays 25`);
+  return parts.join(" · ");
+}
+function TriviaBoard({ result }: { result: TriviaResult }) {
+  return (
+    <div className="tv-board">
+      <h4 className="tv-board-title">Answer board — {result.correct}/{result.total} right</h4>
+      {result.breakdown.map((b) => (
+        <div key={b.question} className={`tv-board-q${b.correct ? " ok" : " bad"}`}>
+          <div className="tv-board-head"><span>Q{b.question}</span><span>{b.category}</span><span className="tv-board-mark">{b.correct ? "✓ Right" : "✗ Wrong"}</span></div>
+          <p className="tv-board-text">{b.text}</p>
+          <p className={`tv-board-your${b.correct ? " ok" : " bad"}`}>Your answer: {b.yourAnswer >= 0 ? b.options[b.yourAnswer] : "No answer — time ran out"}</p>
+          {!b.correct && <p className="tv-board-correct">Correct answer: {b.options[b.correctAnswer]}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
 export function TriviaRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
+  const [settings, setSettings] = useState<TriviaSettings>({ difficulty: "medium", count: 10, timePerQ: 15 });
   const [qs, setQs] = useState<TriviaQ[]>([]);
   const [token, setToken] = useState("");
   const [idx, setIdx] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
   const [picked, setPicked] = useState<number | null>(null);
+  const [reveal, setReveal] = useState<{ correct: boolean; correctIndex: number } | null>(null);
+  const [earned, setEarned] = useState(0);
   const [time, setTime] = useState(15);
+  const [timePerQ, setTimePerQ] = useState(15);
   // All-games sound pass: answer is a useCallback whose deps don't
   // include room, so the mute flag is read through a ref.
   const mutedRef = useRef(room.muted);
   mutedRef.current = room.muted;
   const [phase, setPhase] = useState<"idle" | "playing" | "done">("idle");
-  const [result, setResult] = useState<{ correct: number; payoutCoins: number; breakdown: { question: number; correct: boolean }[] } | null>(null);
-  const [msg, setMsg] = useState("Tap an answer before the 15 seconds run out. 7 right pays 10 coins, 9 pays 15, 10 pays 25.");
+  const [result, setResult] = useState<TriviaResult | null>(null);
+  const [last, setLast] = useState<TriviaResult | null>(null);
+  const [msg, setMsg] = useState("Pick a difficulty, set your round, and play. Every right answer earns 1 coin.");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const start = async () => {
+  useEffect(() => {
     try {
-      const r = await api<{ roundToken: string; questions: TriviaQ[] }>("/api/games/trivia/questions");
+      const raw = localStorage.getItem(TRIVIA_LAST_KEY);
+      if (raw) setLast(JSON.parse(raw) as TriviaResult);
+    } catch { /* no last round stored */ }
+  }, []);
+
+  const start = async (s: TriviaSettings = settings) => {
+    try {
+      const r = await api<{ roundToken: string; questions: TriviaQ[]; difficulty: TriviaDifficulty; total: number; timePerQ: number }>(
+        `/api/games/trivia/questions?difficulty=${s.difficulty}&count=${s.count}&time=${s.timePerQ}`,
+      );
       setToken(r.roundToken);
       setQs(r.questions);
-      setIdx(0); setAnswers([]); setPicked(null); setTime(15); setPhase("playing"); setResult(null);
-      setMsg("Question 1 of 10 — good luck.");
+      setIdx(0); setPicked(null); setReveal(null); setEarned(0);
+      setTime(r.timePerQ); setTimePerQ(r.timePerQ); setPhase("playing"); setResult(null);
+      setMsg(`Question 1 of ${r.total} — good luck.`);
     } catch (ex) {
       setMsg(ex instanceof Error ? ex.message : "Could not load questions.");
     }
   };
 
-  const answer = useCallback((choice: number) => {
-    playSfx("blip", mutedRef.current);
-    if (phase !== "playing" || picked !== null) return;
-    setPicked(choice);
-    setMsg("Answer locked in — next question…");
-    const a = [...answers, choice];
-    setAnswers(a);
-    setTimeout(() => {
-      if (idx + 1 >= qs.length) {
-        void grade(a);
-      } else {
-        setIdx(idx + 1); setPicked(null); setTime(15);
-        setMsg(`Question ${idx + 2} of 10 — good luck.`);
-      }
-    }, 600);
-  }, [phase, picked, answers, idx, qs.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const grade = async (a: number[]) => {
+  const grade = async () => {
     setPhase("done");
     if (timerRef.current) clearInterval(timerRef.current);
     try {
-      const r = await api<{ correct: number; total: number; payoutCoins: number; cash: number; coins: number; breakdown: { question: number; correct: boolean }[] }>("/api/games/trivia/grade", {
+      const r = await api<{ correct: number; total: number; difficulty: TriviaDifficulty; payoutCoins: number; perAnswerCoins: number; cash: number; coins: number; breakdown: TriviaBoardRow[] }>("/api/games/trivia/grade", {
         method: "POST",
-        body: JSON.stringify({ roundToken: token, answers: a }),
+        body: JSON.stringify({ roundToken: token }),
       });
-      setResult(r);
-      setMsg(`${r.correct}/10 correct — ${r.payoutCoins > 0 ? `${r.payoutCoins} coins paid` : "no payout this round"}.`);
+      const res: TriviaResult = { correct: r.correct, total: r.total, difficulty: r.difficulty, payoutCoins: r.payoutCoins, perAnswerCoins: r.perAnswerCoins, breakdown: r.breakdown };
+      setResult(res);
+      try { localStorage.setItem(TRIVIA_LAST_KEY, JSON.stringify(res)); setLast(res); } catch { /* storage unavailable */ }
+      setMsg(`${r.correct}/${r.total} correct — ${r.payoutCoins > 0 ? `${r.payoutCoins} coins paid` : "no payout this round"}.`);
+      if (r.payoutCoins >= 25) { fireConfetti(); playSfx("cheer", mutedRef.current); }
       await room.refreshStats();
       await room.refresh();
     } catch (ex) {
@@ -838,45 +877,117 @@ export function TriviaRoom({ game }: { game: GameDef }) {
     }
   };
 
+  const answer = useCallback(async (choice: number) => {
+    if (phase !== "playing" || picked !== null) return;
+    playSfx("blip", mutedRef.current);
+    setPicked(choice);
+    const myIdx = idx;
+    try {
+      const r = await api<{ correct: boolean; earned: number; correctIndex: number }>("/api/games/trivia/answer", {
+        method: "POST",
+        body: JSON.stringify({ roundToken: token, index: myIdx, choice }),
+      });
+      setReveal({ correct: r.correct, correctIndex: r.correctIndex });
+      setEarned(r.earned);
+      if (r.correct) {
+        playSfx("pop", mutedRef.current);
+        setMsg("Right — +1 coin banked.");
+      } else {
+        setMsg(choice === -1 ? "Time up — that one got away." : "Not this time — the right answer is highlighted.");
+      }
+    } catch (ex) {
+      setMsg(ex instanceof Error ? ex.message : "Could not grade that answer.");
+      setReveal({ correct: false, correctIndex: -1 });
+    }
+    await sleep(1400);
+    if (myIdx + 1 >= qs.length) {
+      void grade();
+    } else {
+      setIdx(myIdx + 1); setPicked(null); setReveal(null); setTime(timePerQ);
+      setMsg(`Question ${myIdx + 2} of ${qs.length} — good luck.`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, picked, idx, qs.length, token, timePerQ]);
+
   useEffect(() => {
     if (phase !== "playing") return;
     timerRef.current = setInterval(() => {
       setTime((t) => {
-        // hold the bar still during the locked-in pause
+        // hold the bar still during the locked-in reveal pause
         if (picked !== null) return t;
         if (t <= 1) {
           // time out on this question — count as wrong (-1 sentinel)
-          if (picked === null) answer(-1);
-          return 15;
+          if (picked === null) void answer(-1);
+          return timePerQ;
         }
         return t - 1;
       });
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [phase, idx, picked, answer]);
+  }, [phase, idx, picked, answer, timePerQ]);
 
   const q = qs[idx];
   return (
-    <RoomShell game={game} subtitle="10 questions, 15 seconds each. Entry 5 coins — 7 right pays 10, 9 pays 15, 10 pays 25." stats={room.stats} history={room.history}>
+    <RoomShell game={game} subtitle={`${settings.count} questions, ${settings.timePerQ}s each · Entry 5 coins · 1 coin per right answer`} stats={room.stats} history={room.history}>
       <div className="xg-controls">
-        {phase === "idle" && <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Start round · 5 coins</button>}
+        {phase === "idle" && (
+          <div className="tv-settings">
+            <p className="tv-set-label">Difficulty</p>
+            <div className="tv-diff-row">
+              {TRIVIA_DIFFS.map((d) => (
+                <button key={d.id} type="button" className={`tv-diff${settings.difficulty === d.id ? " on" : ""}`} onClick={() => setSettings((s) => ({ ...s, difficulty: d.id, timePerQ: d.time }))}>
+                  <b>{d.label}</b><span>{d.blurb}</span>
+                </button>
+              ))}
+            </div>
+            <p className="tv-set-label">Questions per round</p>
+            <div className="tv-seg">
+              {[5, 10].map((n) => (
+                <button key={n} type="button" className={settings.count === n ? "on" : ""} onClick={() => setSettings((s) => ({ ...s, count: n }))}>{n} questions</button>
+              ))}
+            </div>
+            <p className="tv-set-label">Seconds per question</p>
+            <div className="tv-seg">
+              {[10, 15, 20].map((n) => (
+                <button key={n} type="button" className={settings.timePerQ === n ? "on" : ""} onClick={() => setSettings((s) => ({ ...s, timePerQ: n }))}>{n}s</button>
+              ))}
+            </div>
+            <p className="tv-note">Entry 5 coins · every right answer earns 1 coin · {triviaMilestoneText(settings.count)}</p>
+            <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Start round · 5 coins</button>
+            {last && (
+              <>
+                <p className="tv-set-label">Your last round</p>
+                <TriviaBoard result={last} />
+              </>
+            )}
+          </div>
+        )}
         {phase === "playing" && q && (
           <div className="tv-stage">
-            <div className="tv-hud"><span>Q {idx + 1}/10</span><span>{q.category}</span><span>{time}s</span></div>
-            <div className="tv-timerbar"><i style={{ width: `${(time / 15) * 100}%` }} /></div>
+            <div className="tv-hud"><span>Q {idx + 1}/{qs.length}</span><span>{q.category}</span><span className="tv-diff-chip">{settings.difficulty}</span><span>{time}s</span></div>
+            <div className="tv-earned-row"><span>◉ {earned} coin{earned === 1 ? "" : "s"} banked</span>{reveal && reveal.correct && <span className="tv-plus">+1 coin</span>}</div>
+            <div className="tv-timerbar"><i style={{ width: `${(time / timePerQ) * 100}%` }} /></div>
             <h3 className="tv-q">{q.question}</h3>
             <div className="tv-opts">
               {q.options.map((o, i) => (
-                <button key={i} type="button" className={`tv-opt${picked === i ? " picked" : ""}`} onClick={() => answer(i)} disabled={picked !== null}>{o}</button>
+                <button
+                  key={i}
+                  type="button"
+                  className={`tv-opt${picked === i ? " picked" : ""}${reveal ? (i === reveal.correctIndex ? " right" : picked === i ? " wrong" : "") : ""}`}
+                  onClick={() => void answer(i)}
+                  disabled={picked !== null}
+                >{o}</button>
               ))}
             </div>
           </div>
         )}
         {phase === "done" && result && (
           <div className="tv-result">
-            <h3>{result.correct}/10 correct — {result.payoutCoins} coins</h3>
-            <div className="tv-breakdown">{result.breakdown.map((b, i) => <span key={i} className={b.correct ? "win" : "lose"}>Q{i + 1} {b.correct ? "✓" : "✗"}</span>)}</div>
+            <h3>{result.correct}/{result.total} correct — {result.payoutCoins} coins</h3>
+            <p className="tv-note">{result.perAnswerCoins} coin{result.perAnswerCoins === 1 ? "" : "s"} from right answers{result.payoutCoins > result.perAnswerCoins ? ` · topped up to ${result.payoutCoins} by the milestone` : ""}.</p>
+            <TriviaBoard result={result} />
             <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Play again · 5 coins</button>
+            <button className="btn xg-action" type="button" onClick={() => setPhase("idle")}>Change settings</button>
           </div>
         )}
         <p className="bottle-msg xg-msg">{msg}</p>
@@ -1193,3 +1304,4 @@ export function Game2048Room({ game }: { game: GameDef }) {
     </RoomShell>
   );
 }
+

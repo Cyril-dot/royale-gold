@@ -226,6 +226,10 @@ model TriviaQuestion {
   options     Json
   answerIndex Int
   category    String
+  // Trivia difficulty (Nov 2026): easy | medium | hard. The player picks
+  // the difficulty before a round; the questions endpoint deals only
+  // from that pool. Easy 20s/question, medium 15s, hard 10s.
+  difficulty  String @default("medium")
 }
 
 // P0 Batch 1 (A5/O8): a withdrawal is a REQUEST only — no real money
