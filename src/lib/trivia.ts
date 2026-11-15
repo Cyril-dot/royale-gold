@@ -49,6 +49,14 @@ export interface TriviaRound {
   recorded: (number | null)[];
   /** Per-answer reward banked so far (1 coin per correct answer). */
   earned: number;
+  /**
+   * Generated questions in this round, keyed by their "gen-…" id.
+   * They have no DB row, so the round token carries their text,
+   * options and category (the grade route builds the answer board
+   * from this when a question id is not in the bank). Bank questions
+   * are not stored here — their data is read back from the DB.
+   */
+  generated: Record<string, { question: string; options: string[]; category: string }>;
   createdAt: number;
 }
 
@@ -60,6 +68,7 @@ export function createTriviaRound(
   answers: number[],
   difficulty: TriviaDifficulty,
   timePerQ: number,
+  generated: { id: string; question: string; options: string[]; category: string }[] = [],
 ): TriviaRound {
   const round: TriviaRound = {
     token: crypto.randomUUID(),
@@ -71,6 +80,9 @@ export function createTriviaRound(
     timePerQ,
     recorded: questionIds.map(() => null),
     earned: 0,
+    generated: Object.fromEntries(
+      generated.map((g) => [g.id, { question: g.question, options: g.options, category: g.category }]),
+    ),
     createdAt: Date.now(),
   };
   rounds.set(round.token, round);

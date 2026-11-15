@@ -2,10 +2,15 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ok, toErrorResponse } from "@/lib/http";
 import { createTriviaRound, parseDifficulty, TRIVIA_DIFFICULTIES } from "@/lib/trivia";
+import { generateTriviaQuestions, generatedCountFor } from "@/lib/trivia-gen";
 
 /**
- * Deal a trivia round: N random questions from the chosen difficulty
- * pool, without answers. Query params:
+ * Deal a trivia round: N questions from the chosen difficulty pool —
+ * a mix of curated bank questions and questions generated at deal
+ * time (see src/lib/trivia-gen.ts; TRIVIA_GENERATED_SHARE of the
+ * round is generated, the rest is bank). No answers are returned; the
+ * round token holds them server-side.
+ * Query params:
  *   difficulty=easy|medium|hard (default medium)
  *   count=5|10 (default 10)
  *   time=10|15|20 seconds per question (default = the difficulty's clock)
@@ -26,23 +31,48 @@ export async function GET(req: Request) {
       where: { difficulty },
       select: { id: true, question: true, options: true, answerIndex: true, category: true },
     });
-    if (all.length < count) {
+    // Bank first, then generated — the bank is finite, so if it cannot
+    // cover its share the generator fills the rest of the round.
+    const bankCount = Math.min(count - generatedCountFor(count), all.length);
+    const shuffledBank = [...all].sort(() => Math.random() - 0.5).slice(0, bankCount);
+    const generated = generateTriviaQuestions(
+      difficulty,
+      count - bankCount,
+      shuffledBank.map((q) => q.question),
+    );
+    if (shuffledBank.length + generated.length < count) {
       return ok({ error: `Not enough ${difficulty} questions yet` }, 503);
     }
-    const shuffled = [...all].sort(() => Math.random() - 0.5).slice(0, count);
+    const dealt = [
+      ...shuffledBank.map((q) => ({
+        id: q.id,
+        question: q.question,
+        options: q.options as string[],
+        answerIndex: q.answerIndex,
+        category: q.category,
+      })),
+      ...generated.map((g) => ({
+        id: g.id,
+        question: g.question,
+        options: [...g.options],
+        answerIndex: g.answerIndex,
+        category: g.category,
+      })),
+    ].sort(() => Math.random() - 0.5);
     const round = createTriviaRound(
       user.id,
-      shuffled.map((q) => q.id),
-      shuffled.map((q) => q.answerIndex),
+      dealt.map((q) => q.id),
+      dealt.map((q) => q.answerIndex),
       difficulty,
       timePerQ,
+      generated,
     );
     return ok({
       roundToken: round.token,
       difficulty,
       total: count,
       timePerQ,
-      questions: shuffled.map((q) => ({
+      questions: dealt.map((q) => ({
         id: q.id,
         question: q.question,
         options: q.options as string[],

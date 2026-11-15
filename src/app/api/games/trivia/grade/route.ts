@@ -40,11 +40,14 @@ export async function POST(req: Request) {
     const byId = new Map(rows.map((r) => [r.id, r]));
     const breakdown = round.questionIds.map((id, i) => {
       const row = byId.get(id);
-      const options = (row?.options as string[]) ?? [];
+      // Generated questions have no DB row — their text/options live
+      // in the round token (see src/lib/trivia.ts).
+      const gen = round.generated[id];
+      const options = (row?.options as string[]) ?? gen?.options ?? [];
       return {
         question: i + 1,
-        text: row?.question ?? "",
-        category: row?.category ?? "",
+        text: row?.question ?? gen?.question ?? "",
+        category: row?.category ?? gen?.category ?? "",
         options,
         yourAnswer: answers[i],
         correctAnswer: round.answers[i],
