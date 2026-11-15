@@ -34,8 +34,11 @@ const anton = Anton({ weight: "400", subsets: ["latin"], variable: "--font-displ
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-body" });
 
 export const metadata: Metadata = {
+  // metadataBase makes og:image absolute (https://royale-omega.vercel.app/...)
+  // — without it Next.js emits http://localhost:3000 and link previews break.
+  metadataBase: new URL("https://royale-omega.vercel.app"),
   title: "Royale Gold",
-  description: "Royale Gold — 31 games. Cash in GH₵, coins for play.",
+  description: "Royale Gold — 46 games. Cash in GH₵, coins for play.",
   // PWA: the manifest route comes from app/manifest.ts; the icon routes
   // come from app/icon.png and app/apple-icon.png (Next 16 serves image
   // icons at /icon.png and /apple-icon.png — the extensionless paths
