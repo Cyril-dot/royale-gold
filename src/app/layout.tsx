@@ -24,6 +24,8 @@ import "./owner-commission.css";
 import "./admin-commission.css";
 import "./admin-players.css";
 import { StoreProvider } from "../lib/store";
+import { ANTI_CLONE_EARLY_SCRIPT } from "../lib/anti-clone";
+import AntiCloneGuard from "../components/AntiCloneGuard";
 import Header from "../components/Header";
 import Dock from "../components/Dock";
 import AuthModal from "../components/AuthModal";
@@ -71,7 +73,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${anton.variable} ${outfit.variable}`}>
       <body>
+        {/*
+          Anti-clone guard (Nov 2026): a RAW inline <script> as the
+          first child of <body> — it runs DURING parsing, before any
+          of the app HTML is parsed, so a clone shows a dead page and
+          never a flash of the real site. Do NOT replace this with
+          next/script beforeInteractive: in App Router that script only
+          exists inside the streamed RSC flight data and executes after
+          hydration, i.e. after the app has rendered (verified 15 Nov
+          2026 — the literal tag never appears in the initial HTML).
+          Kills ONLY that visitor's session (clears the rg-session
+          marker, blanks the page) on any hostname other than
+          royale-omega.vercel.app / localhost / 127.0.0.1. A background
+          re-check also runs in AntiCloneGuard below.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: ANTI_CLONE_EARLY_SCRIPT }} />
         <StoreProvider>
+          <AntiCloneGuard />
           <Header />
           <Toasts />
           {children}
