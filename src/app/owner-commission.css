@@ -109,3 +109,25 @@
 .ow-page .wd-row{border-top:0}
 .ow-page .code-row{border-top:0}
 .ow-page .dep-table th,.ow-page .dep-table td{border-top:0}
+
+/* --- Overview dashboard + Payouts tab (Nov 2026) ---
+   Dashboard: the "today" figure under each total, same flat tile
+   language. Payouts: the 14-day strip (gold = owed, green = all paid,
+   filled = selected) and the Paid/Unpaid/Rejected flag colours —
+   green and gold variants of the existing .ow-game-flag (red .bad
+   already existed and reads as Rejected). */
+.ow-page .sum-card span.ow-dash-today{display:block;font-size:12px;letter-spacing:0;color:var(--muted,rgba(255,246,216,.7));margin-top:4px}
+.ow-game-flag.ok{color:#3ED97E;border-color:rgba(62,217,126,.5)}
+.ow-game-flag.gold{color:#FFD964;border-color:rgba(242,194,48,.5)}
+.ow-paydays{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ow-paydays::-webkit-scrollbar{display:none}
+.ow-payday{flex:none;min-height:44px;padding:9px 12px;border-radius:999px;border:1px solid rgba(242,194,48,.25);background:#141828;color:var(--muted,rgba(255,246,216,.7));font-size:12.5px;font-weight:700;white-space:nowrap;touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer}
+.ow-payday-owed{border-color:rgba(242,194,48,.6);color:#FFD964}
+.ow-payday-paid{border-color:rgba(62,217,126,.5);color:#3ED97E}
+.ow-payday-on{background:linear-gradient(180deg,#FFD964,#D9A41C);border-color:#FFD964;color:#231600}
+.ow-payday-pick{display:inline-flex;align-items:center;gap:6px;flex:none;font-size:12.5px;font-weight:700;color:var(--muted,rgba(255,246,216,.7));white-space:nowrap}
+.ow-payday-pick input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:8px 10px;font-family:var(--font);font-size:16px}
+@media (hover:hover) and (pointer:fine){
+  .ow-payday:hover{border-color:rgba(242,194,48,.6);color:#FFF6D8}
+  .ow-payday-on:hover{color:#231600}
+}

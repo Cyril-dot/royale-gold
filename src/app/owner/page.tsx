@@ -250,7 +250,6 @@ function OwnerWalletForm({ w, onSave }: {
         <input type="checkbox" checked={wd} onChange={(e) => setWd(e.target.checked)} />
         Coins are withdrawable
       </label>
-      <p className="ow-day-cap">Coins are play-only by default. Turning this on records the policy only — no coin payout path exists yet, so coins still cannot be paid out.</p>
       <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void save()}>Save wallet config</button>
     </div>
   );
@@ -503,11 +502,6 @@ function OwnerGatewaySection() {
             ? <span className="ow-game-flag">KEYS SAVED</span>
             : <span className="ow-game-flag bad">NO KEYS</span>}
         </div>
-        <p className="ow-game-note">
-          {gw.ghMomoGateway === "payteller"
-            ? "PayTeller is live for Ghana MoMo — MTN, Telecel and AirtelTigo deposits go through PayTeller hosted checkout. The demo cashier is off for these methods."
-            : "Demo cashier is live for Ghana MoMo. Flip to PayTeller once the keys below are saved and tested."}
-        </p>
         <div className="ow-game-toggles">
           <button type="button" className={`btn btn-sm ${gw.ghMomoGateway === "demo" ? "btn-gold" : "btn-ghost"}`} disabled={busy} onClick={() => flip("demo")} aria-pressed={gw.ghMomoGateway === "demo"}>Demo</button>
           <button type="button" className={`btn btn-sm ${gw.ghMomoGateway === "payteller" ? "btn-gold" : "btn-ghost"}`} disabled={busy} onClick={() => flip("payteller")} aria-pressed={gw.ghMomoGateway === "payteller"}>PayTeller</button>
@@ -526,7 +520,6 @@ function OwnerGatewaySection() {
           <code className="ow-gw-url">{gw.webhookUrl}</code>
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => void copyWebhook()}>Copy</button>
         </div>
-        <p className="ow-game-note">Keys are encrypted on the server. Blank fields keep the saved value. One real GH₵ deposit is the only live proof — a green test only checks the connection.</p>
       </div>
     </div>
   );
@@ -534,11 +527,12 @@ function OwnerGatewaySection() {
 
 // Owner panel rebuild (Nov 2026) — msport tab layout: one tab at a
 // time, pill nav, one card at a time. Same RG dark/gold look.
-type OwTab = "overview" | "manage" | "finance" | "reports" | "engage" | "settings";
+type OwTab = "overview" | "manage" | "finance" | "payouts" | "reports" | "engage" | "settings";
 const OWNER_TABS: { id: OwTab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "manage", label: "Manage" },
   { id: "finance", label: "Finance" },
+  { id: "payouts", label: "Payouts" },
   { id: "reports", label: "Reports" },
   { id: "engage", label: "Engage" },
   { id: "settings", label: "Settings" },
@@ -919,6 +913,58 @@ export default function OwnerPage() {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (date) void loadDay(date); }, [date, loadDay]);
+
+  // Overview dashboard (Nov 2026): the 7-stat dashboard — one call,
+  // per selected fiat, reloaded with the currency chips.
+  interface DashboardStats {
+    currency: string; date: string;
+    usersTotal: number; usersToday: number;
+    depositedTotal: number; depositedToday: number;
+    paidOutTotal: number; paidOutToday: number;
+    commissionToday: number;
+  }
+  const [dash, setDash] = useState<DashboardStats | null>(null);
+  const loadDash = useCallback(async () => {
+    try { setDash(await api<DashboardStats>(`/api/owner/dashboard-stats?currency=${fiat}`)); } catch { setDash(null); }
+  }, [fiat]);
+  useEffect(() => { void loadDash(); }, [loadDash]);
+
+  // Payouts tab (Nov 2026): the people owed commission each day.
+  // One call per day selection; actions POST back to the same endpoint.
+  interface PayoutAccount { type: string; bankName: string | null; accountNumber: string | null; network: string | null; phoneNumber: string | null; accountName: string }
+  interface PayoutPerson {
+    adminId: string; adminName: string; adminEmail: string | null; adminPhone: string | null;
+    active: boolean; referralCode: string | null;
+    owed: number; paid: number; paidAt: string | null;
+    status: "paid" | "unpaid" | "rejected";
+    account: PayoutAccount | null;
+  }
+  interface PayoutDay { date: string; hasOwed: boolean; allPaid: boolean }
+  interface PayoutsData {
+    day: string; currency: string; people: PayoutPerson[]; days: PayoutDay[];
+    totals: { owed: number; paid: number; unpaid: number; paidCount: number; rejectedCount: number };
+  }
+  const [payoutDay, setPayoutDay] = useState("");
+  const [payouts, setPayouts] = useState<PayoutsData | null>(null);
+  const [payoutBusy, setPayoutBusy] = useState<string | null>(null);
+  const [payoutDetail, setPayoutDetail] = useState<string | null>(null);
+  const loadPayouts = useCallback(async (d: string) => {
+    try { setPayouts(await api<PayoutsData>(`/api/owner/payouts?day=${d}&currency=${fiat}`)); } catch { setPayouts(null); }
+  }, [fiat]);
+  useEffect(() => { setPayoutDay(todayStr()); }, []);
+  useEffect(() => { if (payoutDay) void loadPayouts(payoutDay); }, [payoutDay, loadPayouts]);
+  const markPayout = async (adminId: string, action: "paid" | "unpaid" | "rejected") => {
+    setPayoutBusy(adminId);
+    try {
+      await api("/api/owner/payouts", { method: "POST", body: JSON.stringify({ day: payoutDay, adminId, action, currency: fiat }) });
+      toast(action === "paid" ? "Marked paid" : action === "rejected" ? "Marked rejected" : "Marked unpaid", "win");
+      await loadPayouts(payoutDay);
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not update payout", "lose");
+    } finally {
+      setPayoutBusy(null);
+    }
+  };
 
   // P0 Batch 4 (O6): global player search state. These hooks MUST live
   // above the early returns below — hooks after `if (!user) return`
@@ -1647,13 +1693,12 @@ export default function OwnerPage() {
         {owTab === "overview" && (
           <section className="admin-sec">
           <h3>Overall totals</h3>
-          {/* Round 31: was one plain sentence; now 3 stat tiles, same
-              .sum-card style as the commission tiles below. */}
-          {rollup && (
+          {dash === null ? <p>Loading totals…</p> : (
             <div className="sum-cards">
-              <div className="sum-card"><span>Deposits</span><b>{rollup.totals.deposits}</b></div>
-              <div className="sum-card"><span>Total deposited</span><b>{fmtMoney(rollup.totals.totalAmount, fiat)}</b></div>
-              <div className="sum-card"><span>Commission</span><b>{fmtMoney(rollup.totals.totalCommission, fiat)}</b></div>
+              <div className="sum-card"><span>Users</span><b>{dash.usersTotal.toLocaleString("en-GB")}</b><span className="ow-dash-today">+{dash.usersToday} today</span></div>
+              <div className="sum-card"><span>Total deposited</span><b>{fmtMoney(dash.depositedTotal, fiat)}</b><span className="ow-dash-today">+{fmtMoney(dash.depositedToday, fiat)} today</span></div>
+              <div className="sum-card"><span>Total paid out</span><b>{fmtMoney(dash.paidOutTotal, fiat)}</b><span className="ow-dash-today">+{fmtMoney(dash.paidOutToday, fiat)} today</span></div>
+              <div className="sum-card"><span>Commission to pay today</span><b>{fmtMoney(dash.commissionToday, fiat)}</b></div>
             </div>
           )}
           </section>
@@ -1751,7 +1796,6 @@ export default function OwnerPage() {
         {owTab === "finance" && (
           <section className="admin-sec">
           <h3>Withdrawals{ownerWdPending > 0 ? ` (${ownerWdPending} pending)` : ""}</h3>
-          <p className="rg48-sub">Every pending withdrawal, platform-wide. Requests only — no real money moves. Large amounts (over {symbolFor(fiat)} {wdThreshold.toLocaleString("en-GB")}) need your second approval after the admin’s.</p>
           <div className="money-chips" role="group" aria-label="Filter by status">
             <button type="button" className={!ownerWdStatus ? "on" : ""} onClick={() => setOwnerWdStatus("")}>All</button>
             {["pending", "held", "admin_approved", "approved", "rejected"].map((s) => (
@@ -1793,7 +1837,50 @@ export default function OwnerPage() {
           </section>
         )}
 
-        {owTab === "overview" && (
+
+        {owTab === "finance" && (
+          <section className="admin-sec">
+          <h3>Commission rules</h3>
+          <form className="owner-add" onSubmit={saveRule}>
+            <select value={ruleAdmin} onChange={(e) => setRuleAdmin(e.target.value)} aria-label="Admin (blank = global default)">
+              <option value="">Global default (every admin)</option>
+              {admins.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <select value={ruleModel} onChange={(e) => setRuleModel(e.target.value as "revshare" | "turnover")} aria-label="Model">
+              <option value="revshare">RevShare — % of net loss</option>
+              <option value="turnover">Turnover — % of stakes</option>
+            </select>
+            <label>Rate % <input type="number" min={0} max={100} step={0.5} value={ruleRate} onChange={(e) => setRuleRate(Number(e.target.value))} /></label>
+            <label>Parent share % <input type="number" min={0} max={100} step={0.5} value={ruleParentShare} onChange={(e) => setRuleParentShare(Number(e.target.value))} /></label>
+            <label>From <input type="date" value={ruleFrom} max={todayStr()} onChange={(e) => setRuleFrom(e.target.value)} /></label>
+            <button className="btn btn-gold" type="submit" disabled={ruleBusy}>{ruleBusy ? "Saving…" : "Save rule"}</button>
+          </form>
+          {rules === null ? <p>Loading rules…</p> : rules.length === 0 ? (
+            <p>No rules yet — every admin is on the legacy flat % of deposits.</p>
+          ) : (
+            <div className="rg48-twrap">
+              <table className="dep-table">
+                <thead><tr><th>Applies to</th><th>Model</th><th>Rate</th><th>Parent share</th><th>From</th></tr></thead>
+                <tbody>
+                  {rules.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.adminName ?? "Global default"}</td>
+                      <td>{r.model === "revshare" ? "RevShare" : "Turnover"}</td>
+                      <td>{r.rate}%</td>
+                      <td>{r.parentSharePct > 0 ? `${r.parentSharePct}%` : "—"}</td>
+                      <td>{r.effectiveFrom}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          </section>
+        )}
+
+        {owTab === "finance" && (
           <section className="admin-sec ow-commission">
           <h3>Commission</h3>
           <div className="ow-tabs" role="tablist" aria-label="Commission views">
@@ -1851,52 +1938,7 @@ export default function OwnerPage() {
 
         {owTab === "finance" && (
           <section className="admin-sec">
-          <h3>Commission rules</h3>
-          <p className="rg48-sub">Commission is no longer a flat % of deposits. A rule pays an admin on their players’ ACTIVITY: RevShare = % of net loss (stakes − payouts), Turnover = % of total stakes. The rule in force on a day is what that day pays — past days stay frozen. A day with no rule uses the old flat % of deposits.</p>
-          <form className="owner-add" onSubmit={saveRule}>
-            <select value={ruleAdmin} onChange={(e) => setRuleAdmin(e.target.value)} aria-label="Admin (blank = global default)">
-              <option value="">Global default (every admin)</option>
-              {admins.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-            <select value={ruleModel} onChange={(e) => setRuleModel(e.target.value as "revshare" | "turnover")} aria-label="Model">
-              <option value="revshare">RevShare — % of net loss</option>
-              <option value="turnover">Turnover — % of stakes</option>
-            </select>
-            <label>Rate % <input type="number" min={0} max={100} step={0.5} value={ruleRate} onChange={(e) => setRuleRate(Number(e.target.value))} /></label>
-            <label>Parent share % <input type="number" min={0} max={100} step={0.5} value={ruleParentShare} onChange={(e) => setRuleParentShare(Number(e.target.value))} /></label>
-            <label>From <input type="date" value={ruleFrom} max={todayStr()} onChange={(e) => setRuleFrom(e.target.value)} /></label>
-            <button className="btn btn-gold" type="submit" disabled={ruleBusy}>{ruleBusy ? "Saving…" : "Save rule"}</button>
-          </form>
-          <p className="rg48-mini">Parent share: when this admin has a parent admin, the parent takes this % of the admin&apos;s commission — shown as a separate line on the settlement. It is a reporting line, NOT a deduction: the child&apos;s payout is untouched.</p>
-          {rules === null ? <p>Loading rules…</p> : rules.length === 0 ? (
-            <p>No rules yet — every admin is on the legacy flat % of deposits.</p>
-          ) : (
-            <div className="rg48-twrap">
-              <table className="dep-table">
-                <thead><tr><th>Applies to</th><th>Model</th><th>Rate</th><th>Parent share</th><th>From</th></tr></thead>
-                <tbody>
-                  {rules.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.adminName ?? "Global default"}</td>
-                      <td>{r.model === "revshare" ? "RevShare" : "Turnover"}</td>
-                      <td>{r.rate}%</td>
-                      <td>{r.parentSharePct > 0 ? `${r.parentSharePct}%` : "—"}</td>
-                      <td>{r.effectiveFrom}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          </section>
-        )}
-
-        {owTab === "finance" && (
-          <section className="admin-sec">
           <h3>Settlement</h3>
-          <p className="rg48-sub">Commission owed, paid and still owing per admin — recomputed from the same ledger as the revenue, so the numbers cannot disagree. Recording a payout writes it to the ledger and the audit log and drops the balance.</p>
           <div className="money-dates">
             <label>From <input type="date" value={settleFrom} max={todayStr()} onChange={(e) => setSettleFrom(e.target.value)} /></label>
             <label>To <input type="date" value={settleTo} max={todayStr()} onChange={(e) => setSettleTo(e.target.value)} /></label>
@@ -1909,7 +1951,6 @@ export default function OwnerPage() {
                 <div className="sum-card"><span>Balance</span><b>{fmtMoney(settlement.totals.balance, fiat)}</b></div>
                 <div className="sum-card"><span>Parent shares</span><b>{fmtMoney(settlement.totals.parentShare, fiat)}</b></div>
               </div>
-              <p className="rg48-mini">Parent shares are a reporting line — they are NOT deducted from any admin&apos;s payout.</p>
               {settlement.rows.length === 0 ? <p>No admins yet.</p> : (
                 <div className="rg48-twrap">
                   <table className="dep-table">
@@ -1952,7 +1993,6 @@ export default function OwnerPage() {
         {owTab === "reports" && (
           <section className="admin-sec">
           <h3>Audit log</h3>
-          <p className="rg48-sub">Every admin and owner action, platform-wide. Append-only — nothing edits or deletes these rows.</p>
           <div className="money-filters">
             <div className="money-dates">
               <label>Actor
@@ -2082,7 +2122,6 @@ export default function OwnerPage() {
               <p className="ow-day-cap">
                 {pnl.roundsCash} cash rounds ({fmtMoney(pnl.stakesCash, fiat)} staked − {fmtMoney(pnl.payoutsCash, fiat)} paid out) · {pnl.roundsCoins} coin rounds ({pnl.stakesCoins} staked − {pnl.payoutsCoins} paid out, GGR {pnl.ggrCoins} coins) · {pnl.depositsCount} deposits · {pnl.withdrawalsCount} approved withdrawals.
               </p>
-              <p className="ow-day-cap">{pnl.formula}</p>
             </>
           )}
           </section>
@@ -2091,7 +2130,6 @@ export default function OwnerPage() {
         {owTab === "manage" && (
           <section className="admin-sec">
           <h3>Games ({ownerGames ? ownerGames.length : "…"})</h3>
-          <p className="rg48-sub">Hide a game to take it off the games page, kill one to stop all play on it at once. Economics are per game — empty means the catalogue default, and a max payout above the cap is cut down to it, never rejected.</p>
           <div className="ow-killbar">
             <div>
               <b>Global kill switch</b>
@@ -2146,7 +2184,6 @@ export default function OwnerPage() {
         {owTab === "finance" && (
           <section className="admin-sec">
           <h3>Wallet config</h3>
-          <p className="rg48-sub">The platform rules for both wallets. The conversion rate is enforced server-side.</p>
           {ownerWallet === null ? <p>Loading wallet config…</p> : (
             <OwnerWalletForm key={JSON.stringify(ownerWallet)} w={ownerWallet} onSave={saveOwnerWallet} />
           )}
@@ -2156,7 +2193,6 @@ export default function OwnerPage() {
         {owTab === "finance" && (
           <section className="admin-sec">
           <h3>Currency settings</h3>
-          <p className="rg48-sub">Per-currency money rules — min deposit, min stake, coins conversion rate, LIVE decay step, and the withdrawal amount that also needs the owner&apos;s approval. Change the NGN numbers here; no code change needed. The GHS row stays in sync with Wallet config above.</p>
           <OwnerCurrencyConfig />
           </section>
         )}
@@ -2168,7 +2204,6 @@ export default function OwnerPage() {
         {owTab === "reports" && (
           <section className="admin-sec">
           <h3>Revenue breakdowns</h3>
-          <p className="rg48-sub">Where the money comes from, for the period below — by game, by admin, by day, and by payment method. GGR is stakes minus payouts; coin games are shown apart because their GGR is in coins, not GH₵.</p>
           <div className="money-chips" role="group" aria-label="Analytics period">
             {(["today", "week", "month", "custom"] as const).map((p) => (
               <button key={p} type="button" className={anPreset === p ? "on" : ""} onClick={() => setAnPreset(p)}>
@@ -2279,7 +2314,6 @@ export default function OwnerPage() {
         {owTab === "reports" && (
           <section className="admin-sec">
           <h3>RTP monitor</h3>
-          <p className="rg48-sub">Actual RTP per game for the same period above (payouts ÷ stakes), against the base RTP the game tiles print. A game is flagged when its actual RTP is 10+ points off its base with 50+ rounds; below 50 rounds the sample is too small to flag.</p>
           {rtp === null ? <p>Loading RTP…</p> : (
             <div className="rg48-twrap">
               <table className="dep-table">
@@ -2300,7 +2334,6 @@ export default function OwnerPage() {
               </table>
             </div>
           )}
-          <p className="ow-day-cap">Skill games (Trivia, Snake, 2048, Brick Breaker, Stack Tower, Bubble Shooter, Bullseye Darts, Connect Four) print “Skill” on their tiles, not a number — they have no base RTP to compare against, so they are never flagged.</p>
           </section>
         )}
 
@@ -2358,7 +2391,6 @@ export default function OwnerPage() {
         {owTab === "engage" && (
           <section className="admin-sec">
           <h3>Promotions</h3>
-          <p className="rg48-sub">Named campaigns that grant bonuses automatically — a deposit match credits a % of a deposit (capped, once per player), free coins land on signup or first deposit. Cashback is different: it is paid by hand, for one day at a time, from the button on each cashback promotion. There are no wagering requirements anywhere — a granted bonus is in the wallet the moment it lands.</p>
           <form className="owner-add" onSubmit={createPromo}>
             <input type="text" placeholder="Promotion name" value={promoName} onChange={(e) => setPromoName(e.target.value)} required minLength={3} />
             <select value={promoType} onChange={(e) => setPromoType(e.target.value as "deposit_match" | "free_coins" | "cashback")} aria-label="Promotion type">
@@ -2485,7 +2517,6 @@ export default function OwnerPage() {
         {owTab === "settings" && (
           <section className="admin-sec">
           <h3>Platform settings</h3>
-          <p className="rg48-sub">The site name in the header, the support contact on the account page&apos;s Support form, and maintenance mode. Maintenance mode ON shows “Royale Gold is under maintenance — back soon” on the homepage and an unavailable screen in every game room; the owner and admin panels stay reachable so you can switch it back OFF.</p>
           {platSettings === null ? <p>Loading platform settings…</p> : (
             <form className="owner-add" onSubmit={savePlatSettings}>
               <label>Site name <input type="text" value={platSiteName} onChange={(e) => setPlatSiteName(e.target.value)} maxLength={60} required /></label>
@@ -2502,7 +2533,6 @@ export default function OwnerPage() {
         {owTab === "settings" && (
           <section className="admin-sec">
           <h3>KYC / AML settings</h3>
-          <p className="rg48-sub">The document types players can submit, the auto-approve rule, and the withdrawal KYC threshold. Auto-approve is a URL-host check, NOT a document check — there is no verification service: a submission is approved at once only when its document link&apos;s host is on the allow-list below, and it stays visible in the queue as “auto-approved”. The threshold flags withdrawal requests above it from players whose KYC is not Approved — a warning on the queue, never a block. KYC never blocks a withdrawal outright.</p>
           {kycSettings === null ? <p>Loading KYC settings…</p> : (
             <form className="owner-add" onSubmit={saveKycSettings}>
               <span className="ow-perms-label">Accepted document types:</span>
@@ -2527,7 +2557,6 @@ export default function OwnerPage() {
         {owTab === "settings" && (
           <section className="admin-sec">
           <h3>Support oversight</h3>
-          <p className="rg48-sub">Every open ticket on the platform, and how fast each admin answers. First response is the first admin reply after the ticket was created; a ticket with no admin reply yet counts as unanswered. Reassigning writes “Reassigned to …” into the ticket history and the audit log.</p>
           {support === null ? <p>Loading support…</p> : (
             <>
               <div className="sum-cards">
@@ -2593,7 +2622,6 @@ export default function OwnerPage() {
         {owTab === "manage" && (
           <section className="admin-sec">
           <h3>Agent hierarchy</h3>
-          <p className="rg48-sub">An admin can have a parent admin (a senior agent). The parent&apos;s Overview, Commission and Players pages roll the child downlines in, read-only and labelled. A parent&apos;s share of a child&apos;s commission is a reporting line on the settlement — never deducted from the child&apos;s payout. Two levels only; an admin with no parent works exactly as before.</p>
           {admins.length === 0 ? <p>No admins yet.</p> : (
             <div className="ow-games">
               {admins.filter((a) => !a.parentAdminId).map((p) => {
@@ -2620,7 +2648,6 @@ export default function OwnerPage() {
         {owTab === "finance" && (
           <section className="admin-sec cashier-sec">
           <h3>Cashier</h3>
-          <p className="rg48-sub">What the platform holds per payment method — deposits minus approved withdrawals. Deposits are demo cashier only (no real payment gateway), so these are the platform&apos;s own ledger figures, not a gateway provider&apos;s balance.</p>
           {cashier === null ? <p>Loading cashier…</p> : (
             <>
               <div className="rg48-twrap">
@@ -2650,11 +2677,74 @@ export default function OwnerPage() {
                 <div className="sum-card"><span>Actual wallet balances</span><b>{fmtMoney(cashier.reconciliation.actualWalletBalances, fiat)}</b></div>
                 <div className="sum-card"><span>Difference</span><b>{fmtMoney(cashier.reconciliation.difference, fiat)}</b></div>
               </div>
-              <p className="rg48-mini">Expected = total deposits − total approved withdrawals − total commission paid out ({fmtMoney(cashier.reconciliation.totalDeposited, fiat)} − {fmtMoney(cashier.reconciliation.totalWithdrawn, fiat)} − {fmtMoney(cashier.reconciliation.totalCommissionPaid, fiat)}). Actual = the sum of every player&apos;s cash balance. The difference is the house&apos;s net position — game winnings come from the house, so the two will differ; it is not an error.</p>
             </>
           )}
           </section>
         )}
+
+        {/* Payouts tab (Nov 2026): the people owed commission each day —
+            the drill-down of the dashboard's "Commission to pay today".
+            Day strip (last 14 days, gold = owed, green = all paid) +
+            date input; one row per admin owed that day with a Paid /
+            Unpaid / Rejected pill, one-tap status actions, and an
+            inline Details view (user + saved payout account). */}
+        {owTab === "payouts" && (
+          <CurrencyChips value={fiat} onChange={setFiatSel} label="Owner currency" />
+        )}
+        {owTab === "payouts" && (
+          <section className="admin-sec">
+          <h3>Payouts</h3>
+          {payouts && (
+            <div className="ow-paydays" role="group" aria-label="Recent days">
+              {payouts.days.map((d) => (
+                <button key={d.date} type="button" className={`ow-payday${payoutDay === d.date ? " ow-payday-on" : ""}${d.hasOwed ? (d.allPaid ? " ow-payday-paid" : " ow-payday-owed") : ""}`} onClick={() => setPayoutDay(d.date)} aria-pressed={payoutDay === d.date}>
+                  {new Date(`${d.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                </button>
+              ))}
+              <label className="ow-payday-pick">Pick a day <input type="date" value={payoutDay} max={todayStr()} onChange={(e) => setPayoutDay(e.target.value)} aria-label="Payout day" /></label>
+            </div>
+          )}
+          {payouts === null ? <p>Loading payouts…</p> : payouts.people.length === 0 ? (
+            <p>Nobody to pay that day.</p>
+          ) : (
+            <div className="ow-games">
+              {payouts.people.map((p) => (
+                <div key={p.adminId} className="ow-game-row">
+                  <div className="ow-game-head">
+                    <b>{p.adminName}</b>
+                    <span className="ow-game-cur">{fmtMoney(p.owed, fiat)}</span>
+                    <span className={`ow-game-flag${p.status === "paid" ? " ok" : p.status === "rejected" ? " bad" : " gold"}`}>{p.status === "paid" ? "PAID" : p.status === "rejected" ? "REJECTED" : "UNPAID"}</span>
+                  </div>
+                  {p.paid > 0 && (
+                    <p className="ow-game-note">Paid {fmtMoney(p.paid, fiat)}{p.paidAt ? ` · ${new Date(p.paidAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+                  )}
+                  <div className="ow-game-toggles">
+                    <button type="button" className="btn btn-sm btn-gold" disabled={payoutBusy === p.adminId || p.status === "paid"} onClick={() => void markPayout(p.adminId, "paid")}>{payoutBusy === p.adminId ? "Saving…" : "Mark paid"}</button>
+                    <button type="button" className="btn btn-sm btn-ghost" disabled={payoutBusy === p.adminId || p.status === "unpaid"} onClick={() => void markPayout(p.adminId, "unpaid")}>Not paid</button>
+                    <button type="button" className="btn btn-sm btn-ghost" disabled={payoutBusy === p.adminId || p.status === "rejected"} onClick={() => void markPayout(p.adminId, "rejected")}>Reject</button>
+                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPayoutDetail(payoutDetail === p.adminId ? null : p.adminId)}>{payoutDetail === p.adminId ? "Hide details" : "Details"}</button>
+                  </div>
+                  {payoutDetail === p.adminId && (
+                    <div>
+                      <p className="ow-game-note">{p.adminName}{p.active ? "" : " (deactivated)"} · {p.adminEmail ?? "—"}{p.adminPhone ? ` · ${p.adminPhone}` : ""}{p.referralCode ? ` · Code ${p.referralCode}` : ""}</p>
+                      {p.account ? (
+                        p.account.type === "momo" ? (
+                          <p className="ow-game-note">MoMo · {p.account.network} · {p.account.phoneNumber} · {p.account.accountName}</p>
+                        ) : (
+                          <p className="ow-game-note">Bank · {p.account.bankName} · {p.account.accountNumber} · {p.account.accountName}</p>
+                        )
+                      ) : (
+                        <p className="ow-game-note">No payout account saved.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          </section>
+        )}
+
         {/* P2 Batch 1 (A26): VIP tiers — only the owner edits them (name,
             min deposited, perks). Admins only SEE the tiers, on their
             Players list and the player detail. A tier is a label +
@@ -2662,7 +2752,6 @@ export default function OwnerPage() {
         {owTab === "engage" && (
           <section className="admin-sec">
           <h3>VIP tiers</h3>
-          <p className="rg48-sub">A player&apos;s tier is their total deposited, read live from the ledger — Bronze ≥ GH₵ 0, Silver ≥ GH₵ 500, Gold ≥ GH₵ 2,000 to start. Saving replaces all tiers at once; one tier must start at GH₵ 0.</p>
           <form className="owner-add" onSubmit={saveVipTiers}>
             {vipTiers.map((t, i) => (
               <div key={t.id} className="pd-adjust-row">
@@ -2683,7 +2772,6 @@ export default function OwnerPage() {
               <button className="btn btn-gold" type="submit" disabled={vipBusy}>{vipBusy ? "Saving…" : "Save tiers"}</button>
             </div>
           </form>
-          <p className="rg48-mini">VIP is a label and perks only — it changes no economy, limits or payouts.</p>
           </section>
         )}
 
@@ -2694,7 +2782,6 @@ export default function OwnerPage() {
         {owTab === "reports" && (
           <section className="admin-sec">
           <h3>BI &amp; cohorts</h3>
-          <p className="rg48-sub">Players grouped by the month they joined. Active = played in the last 30 days. GGR = cash stakes − cash payouts. Retention = the % of the cohort who played in month 1, 2 and 3 after joining (a dash means that month has not happened yet).</p>
           {bi === null ? <p>Loading cohorts…</p> : bi.cohorts.length === 0 ? (
             <p>No players yet.</p>
           ) : (
@@ -2806,7 +2893,6 @@ export default function OwnerPage() {
         {owTab === "engage" && (
           <section className="admin-sec">
           <h3>Loyalty</h3>
-          <p className="rg48-sub">Points are a display rule only: {loyalty ? `${loyalty.settings.pointsPerGhs} point${loyalty.settings.pointsPerGhs === 1 ? "" : "s"} per GH₵ 1 staked` : "1 point per GH₵ 1 staked"} — a player&apos;s points are computed live from their total staked, there is no points ledger. A player moves up a tier when their total deposited reaches the tier&apos;s minimum (the VIP tiers above). The birthday bonus is paid once per year by the button below — there is NO cron, so it is manual, not automatic.</p>
           {loyalty === null ? <p>Loading loyalty…</p> : (
             <>
               <form className="owner-add" onSubmit={saveLoyalty}>
@@ -2880,7 +2966,6 @@ export default function OwnerPage() {
         {owTab === "engage" && (
           <section className="admin-sec">
           <h3>Tournaments &amp; jackpots</h3>
-          <p className="rg48-sub">Every tournament on the platform, whoever created it. Ending one pays its prize once as a bonus credit to the leaderboard winner and freezes the final standings — the same end path the admin uses.</p>
           {ownerTournaments === null ? <p>Loading tournaments…</p> : ownerTournaments.length === 0 ? (
             <p>No tournaments yet.</p>
           ) : (
@@ -2912,7 +2997,6 @@ export default function OwnerPage() {
             </div>
           )}
           <h4>Jackpots</h4>
-          <p className="rg48-sub">The pot is house-funded: a % of each cash stake in the jackpot&apos;s game(s) feeds the pot — a reporting number, tracked in a pot row, never taken from any payout. Coins never feed a jackpot. Paying the pot credits the picked player as a bonus and resets the pot to the seed amount.</p>
           <form className="owner-add" onSubmit={createJackpot}>
             <div className="pd-adjust-row">
               <label>Name
@@ -2963,7 +3047,6 @@ export default function OwnerPage() {
         {owTab === "settings" && (
           <section className="admin-sec">
           <h3>CMS &amp; localisation</h3>
-          <p className="rg48-sub">The site pages. Edit the title + body and toggle active — an inactive page 404s on its public URL. English only — more languages need translated copy, which does not exist yet. GH₵ only — the platform is Ghana-only for money.</p>
           {cmsPages === null ? <p>Loading pages…</p> : cmsPages.map((p) => (
             <div key={p.slug}>
               <h4>/{p.slug}{p.active ? "" : " (inactive)"}</h4>
@@ -2982,7 +3065,6 @@ export default function OwnerPage() {
         {owTab === "settings" && (
           <section className="admin-sec">
           <h3>Risk rules</h3>
-          <p className="rg48-sub">Automated actions on top of the 4 fraud signals (a/b/c/e — failed-logins does not exist, there is no login-attempt data). A rule fires when its event happens: a withdrawal request is created, or a deposit lands. &ldquo;Flag only&rdquo; adds the alert to the fraud console and nothing more. &ldquo;Block player&rdquo; and &ldquo;Hold withdrawal&rdquo; are REAL actions — the player is blocked at once, or the withdrawal is set to &ldquo;held&rdquo; for admin review.</p>
           <form className="owner-add" onSubmit={createRiskRule}>
             <div className="pd-adjust-row">
               <label>Name
@@ -3003,8 +3085,6 @@ export default function OwnerPage() {
               </label>
               <button className="btn btn-gold" type="submit" disabled={rrBusy}>{rrBusy ? "Creating…" : "Create rule"}</button>
             </div>
-            {riskSignals.find((s) => s.key === rrSignal) && <p className="rg48-mini">{riskSignals.find((s) => s.key === rrSignal)!.thresholdHint}</p>}
-            {riskActions.find((a) => a.key === rrAction) && <p className="rg48-mini">{riskActions.find((a) => a.key === rrAction)!.note}</p>}
           </form>
           {riskRules === null ? <p>Loading rules…</p> : riskRules.length === 0 ? (
             <p>No risk rules yet — the fraud console still flags, but nothing is blocked or held automatically.</p>
@@ -3072,7 +3152,6 @@ export default function OwnerPage() {
         {owTab === "manage" && (
           <section className="admin-sec">
           <h3>Brands</h3>
-          <p className="rg48-sub">Brands are config records for now — switching the live site to a brand needs per-brand routing + theming, which is not built. Creating or toggling a brand changes nothing on any page, game or URL.</p>
           <form className="owner-add" onSubmit={createBrand}>
             <div className="pd-adjust-row">
               <label>Name
