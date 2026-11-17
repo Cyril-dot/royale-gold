@@ -279,7 +279,7 @@ function JackpotPayForm({ jackpot, busy, onPay }: {
     }
   };
   return (
-    <div className="pd-adjust-row">
+    <div className="pd-adjust-row ow-stack">
       {picked ? (
         <span>Pay to: <b>{picked.name}</b> <button className="btn btn-ghost btn-sm" type="button" onClick={() => { setPicked(null); setQ(""); setResults([]); }}>Change</button></span>
       ) : (
@@ -2178,7 +2178,7 @@ export default function OwnerPage() {
         {owTab === "finance" && (
           <section className="admin-sec">
           <h3>Commission rules</h3>
-          <form className="owner-add" onSubmit={saveRule}>
+          <form className="owner-add ow-form" onSubmit={saveRule}>
             <select value={ruleAdmin} onChange={(e) => setRuleAdmin(e.target.value)} aria-label="Admin (blank = global default)">
               <option value="">Global default (every admin)</option>
               {admins.map((a) => (
@@ -2229,7 +2229,7 @@ export default function OwnerPage() {
               <label className="date-pick">Pick a day <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} /></label>
               {dayTotals && (
                 <>
-                  <div className="sum-cards">
+                  <div className="sum-cards ow-sum">
                     <div className="sum-card"><span>Deposits</span><b>{dayTotals.deposits}</b></div>
                     <div className="sum-card"><span>Total deposited</span><b>{fmtMoney(dayTotals.totalAmount, fiat)}</b></div>
                     <div className="sum-card"><span>Commission</span><b>{fmtMoney(dayTotals.totalCommission, fiat)}</b></div>
@@ -2276,13 +2276,13 @@ export default function OwnerPage() {
         {owTab === "finance" && (
           <section className="admin-sec">
           <h3>Settlement</h3>
-          <div className="money-dates">
+          <div className="money-dates ow-dates">
             <label>From <input type="date" value={settleFrom} max={todayStr()} onChange={(e) => setSettleFrom(e.target.value)} /></label>
             <label>To <input type="date" value={settleTo} max={todayStr()} onChange={(e) => setSettleTo(e.target.value)} /></label>
           </div>
           {settlement === null ? <p>Loading settlement…</p> : (
             <>
-              <div className="sum-cards">
+              <div className="sum-cards ow-sum">
                 <div className="sum-card"><span>Owed</span><b>{fmtMoney(settlement.totals.owed, fiat)}</b></div>
                 <div className="sum-card"><span>Paid</span><b>{fmtMoney(settlement.totals.paid, fiat)}</b></div>
                 <div className="sum-card"><span>Balance</span><b>{fmtMoney(settlement.totals.balance, fiat)}</b></div>
@@ -2308,7 +2308,7 @@ export default function OwnerPage() {
               )}
             </>
           )}
-          <form className="owner-add" onSubmit={recordPayout}>
+          <form className="owner-add ow-form" onSubmit={recordPayout}>
             <select value={payAdmin} onChange={(e) => setPayAdmin(e.target.value)} aria-label="Admin to pay" required>
               <option value="">Pay admin…</option>
               {admins.map((a) => (
@@ -2387,7 +2387,7 @@ export default function OwnerPage() {
                 <button key={t} type="button" className={ownerLedType === t ? "on" : ""} onClick={() => setOwnerLedType(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
               ))}
             </div>
-            <div className="money-dates">
+            <div className="money-dates ow-dates">
               <label>From <input type="date" value={ownerLedFrom} max={todayStr()} onChange={(e) => setOwnerLedFrom(e.target.value)} /></label>
               <label>To <input type="date" value={ownerLedTo} max={todayStr()} onChange={(e) => setOwnerLedTo(e.target.value)} /></label>
               <label>Admin
@@ -2401,7 +2401,7 @@ export default function OwnerPage() {
             </div>
           </div>
           {ownerLedTotals && (
-            <div className="sum-cards">
+            <div className="sum-cards ow-sum">
               <div className="sum-card"><span>Rows</span><b>{ownerLedTotals.rows}</b></div>
               <div className="sum-card"><span>Cash in</span><b>{fmtMoney(ownerLedTotals.cashIn, fiat)}</b></div>
               <div className="sum-card"><span>Cash out</span><b>{fmtMoney(ownerLedTotals.cashOut, fiat)}</b></div>
@@ -2442,14 +2442,14 @@ export default function OwnerPage() {
             ))}
           </div>
           {pnlPreset === "custom" && (
-            <div className="money-dates">
+            <div className="money-dates ow-dates">
               <label>From <input type="date" value={pnlFrom} max={todayStr()} onChange={(e) => setPnlFrom(e.target.value)} /></label>
               <label>To <input type="date" value={pnlTo} max={todayStr()} onChange={(e) => setPnlTo(e.target.value)} /></label>
             </div>
           )}
           {pnl === null ? <p>Loading P&amp;L…</p> : (
             <>
-              <div className="sum-cards">
+              <div className="sum-cards ow-sum">
                 <div className="sum-card"><span>GGR (cash)</span><b>{fmtMoney(pnl.ggrCash, fiat)}</b></div>
                 <div className="sum-card"><span>Deposits</span><b>{fmtMoney(pnl.deposits, fiat)}</b></div>
                 <div className="sum-card"><span>Withdrawals (approved)</span><b>{fmtMoney(pnl.withdrawals, fiat)}</b></div>
@@ -2728,7 +2728,7 @@ export default function OwnerPage() {
         {owTab === "engage" && (
           <section className="admin-sec">
           <h3>Promotions</h3>
-          <form className="owner-add" onSubmit={createPromo}>
+          <form className="owner-add ow-form" onSubmit={createPromo}>
             <input type="text" placeholder="Promotion name" value={promoName} onChange={(e) => setPromoName(e.target.value)} required minLength={3} />
             <select value={promoType} onChange={(e) => setPromoType(e.target.value as "deposit_match" | "free_coins" | "cashback")} aria-label="Promotion type">
               <option value="deposit_match">Deposit match — % of a deposit</option>
@@ -2815,7 +2815,7 @@ export default function OwnerPage() {
         {owTab === "engage" && (
           <section className="admin-sec">
           <h3>Announcements</h3>
-          <form className="owner-add ann-form" onSubmit={createAnnouncement}>
+          <form className="owner-add ann-form ow-form" onSubmit={createAnnouncement}>
             <input type="text" placeholder="Title" value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} required minLength={1} maxLength={120} />
             <input type="text" placeholder="Message" value={annBody} onChange={(e) => setAnnBody(e.target.value)} required minLength={1} maxLength={1000} />
             <select value={annAudience} onChange={(e) => setAnnAudience(e.target.value as "all" | "players" | "admins")} aria-label="Audience">
@@ -3009,7 +3009,7 @@ export default function OwnerPage() {
                 </table>
               </div>
               <h4>Reconciliation</h4>
-              <div className="sum-cards">
+              <div className="sum-cards ow-sum">
                 <div className="sum-card"><span>Expected cash on hand</span><b>{fmtMoney(cashier.reconciliation.expectedCashOnHand, fiat)}</b></div>
                 <div className="sum-card"><span>Actual wallet balances</span><b>{fmtMoney(cashier.reconciliation.actualWalletBalances, fiat)}</b></div>
                 <div className="sum-card"><span>Difference</span><b>{fmtMoney(cashier.reconciliation.difference, fiat)}</b></div>
@@ -3089,9 +3089,9 @@ export default function OwnerPage() {
         {owTab === "engage" && (
           <section className="admin-sec">
           <h3>VIP tiers</h3>
-          <form className="owner-add" onSubmit={saveVipTiers}>
+          <form className="owner-add ow-form-rows" onSubmit={saveVipTiers}>
             {vipTiers.map((t, i) => (
-              <div key={t.id} className="pd-adjust-row">
+              <div key={t.id} className="pd-adjust-row ow-stack">
                 <label>Name
                   <input type="text" value={t.name} onChange={(e) => setVipTier(i, { name: e.target.value })} aria-label={`Tier ${i + 1} name`} maxLength={40} />
                 </label>
@@ -3104,7 +3104,7 @@ export default function OwnerPage() {
                 <button className="btn btn-ghost" type="button" onClick={() => setVipTiers((cur) => cur.filter((_, j) => j !== i))}>Remove</button>
               </div>
             ))}
-            <div className="pd-adjust-row">
+            <div className="pd-adjust-row ow-stack">
               <button className="btn btn-ghost" type="button" onClick={() => setVipTiers((cur) => [...cur, { id: `new-${Date.now()}`, name: "", minDeposited: 0, perks: [], sortOrder: cur.length }])}>Add tier</button>
               <button className="btn btn-gold" type="submit" disabled={vipBusy}>{vipBusy ? "Saving…" : "Save tiers"}</button>
             </div>
@@ -3232,8 +3232,8 @@ export default function OwnerPage() {
           <h3>Loyalty</h3>
           {loyalty === null ? <p>Loading loyalty…</p> : (
             <>
-              <form className="owner-add" onSubmit={saveLoyalty}>
-                <div className="pd-adjust-row">
+              <form className="owner-add ow-form-rows" onSubmit={saveLoyalty}>
+                <div className="pd-adjust-row ow-stack">
                   <label>Points per GH₵ staked
                     <input type="number" min={0} max={100} step="0.01" inputMode="decimal" value={loyPoints} onChange={(e) => setLoyPoints(e.target.value)} aria-label="Points per GH₵ staked" />
                   </label>
@@ -3274,7 +3274,7 @@ export default function OwnerPage() {
                   </table>
                 </div>
               )}
-              <div className="pd-adjust-row">
+              <div className="pd-adjust-row ow-stack">
                 <button className="btn btn-gold" type="button" disabled={bdayPayBusy || loyalty.settings.birthdayBonus <= 0} onClick={() => void payBirthdays()}>{bdayPayBusy ? "Paying…" : `Pay birthday bonuses for today (${fmtMoney(loyalty.settings.birthdayBonus, "GHS")} each)`}</button>
               </div>
               {loyalty.settings.birthdayBonus <= 0 && <p className="rg48-mini">The birthday bonus is GH₵ 0 — set an amount above to pay anything.</p>}
@@ -3334,8 +3334,8 @@ export default function OwnerPage() {
             </div>
           )}
           <h4>Jackpots</h4>
-          <form className="owner-add" onSubmit={createJackpot}>
-            <div className="pd-adjust-row">
+          <form className="owner-add ow-form-rows" onSubmit={createJackpot}>
+            <div className="pd-adjust-row ow-stack">
               <label>Name
                 <input type="text" value={jkName} onChange={(e) => setJkName(e.target.value)} maxLength={60} aria-label="Jackpot name" placeholder="e.g. Golden Hour Jackpot" />
               </label>
@@ -3368,7 +3368,7 @@ export default function OwnerPage() {
                   </div>
                   <p className="ow-game-note">Seed {fmtMoney(j.seedAmount, "GHS")} · {j.contributionPct}% of each cash stake feeds the pot · {j.active ? "growing" : "paused — not growing"}.</p>
                   <JackpotPayForm jackpot={j} busy={jkPayBusy === j.id} onPay={payJackpot} />
-                  <div className="pd-adjust-row">
+                  <div className="pd-adjust-row ow-stack">
                     <button className="btn btn-ghost btn-sm" type="button" disabled={jkToggleBusy === j.id} onClick={() => void toggleJackpot(j)}>{jkToggleBusy === j.id ? "…" : j.active ? "Pause" : "Resume"}</button>
                   </div>
                 </div>

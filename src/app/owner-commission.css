@@ -189,3 +189,49 @@ button.ow-tile-btn:focus-visible{outline:2px solid var(--gold,#F2C230);outline-o
   .ow-fin-toggle:hover{border-color:rgba(242,194,48,.6);color:#FFF6D8}
   .ow-fin-on:hover{color:#231600}
 }
+
+/* --- Owner panel partition fix (Nov 2026, his order: the partition
+   is bad) — Finance + Engage sections only. One consistent form
+   pattern: stacked full-width rows on phone (label above its input),
+   a clean 2-column grid on desktop; stat tiles in an even grid with
+   capped width so they cluster instead of stretching across the page
+   with empty gaps. Flat still stands: no card backgrounds, no borders
+   except the hairline separators. Overview / Manage / Payouts /
+   Reports / Settings keep .owner-add as-is — only the Finance +
+   Engage forms carry .ow-form / .ow-form-rows, only their date rows
+   carry .ow-dates, only their stat tiles carry .ow-sum. */
+.ow-page .owner-add.ow-form{display:grid;grid-template-columns:1fr;gap:10px;margin:0 0 12px}
+.ow-page .owner-add.ow-form > select,
+.ow-page .owner-add.ow-form > input{width:100%;min-width:0;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
+.ow-page .owner-add.ow-form > label{display:flex;flex-direction:column;align-items:stretch;gap:4px;font-size:12px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
+.ow-page .owner-add.ow-form > label input{width:100%;min-width:0;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
+.ow-page .owner-add.ow-form > select:focus,
+.ow-page .owner-add.ow-form > input:focus,
+.ow-page .owner-add.ow-form > label input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+.ow-page .owner-add.ow-form > .btn{justify-self:stretch;min-height:44px}
+.ow-page .owner-add.ow-form-rows{display:grid;grid-template-columns:1fr;gap:10px;margin:0 0 12px}
+.ow-page .money-dates.ow-dates{display:grid;grid-template-columns:1fr;gap:10px;margin:0 0 12px}
+.ow-page .money-dates.ow-dates label{display:flex;flex-direction:column;align-items:stretch;gap:4px;font-size:12px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
+.ow-page .money-dates.ow-dates input,
+.ow-page .money-dates.ow-dates select{width:100%;min-width:0;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
+.ow-page .money-dates.ow-dates input:focus,
+.ow-page .money-dates.ow-dates select:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
+.ow-page .sum-cards.ow-sum{grid-template-columns:repeat(2,1fr);gap:10px}
+.ow-page .sum-cards.ow-sum .sum-card b{white-space:nowrap}
+.ow-page .pd-adjust-row.ow-stack{flex-direction:column;align-items:stretch;gap:10px}
+.ow-page .pd-adjust-row.ow-stack > label{flex:none;width:100%;align-items:stretch}
+.ow-page .pd-adjust-row.ow-stack > label input,
+.ow-page .pd-adjust-row.ow-stack > label select,
+.ow-page .pd-adjust-row.ow-stack > label textarea{width:100%;min-width:0}
+.ow-page .pd-adjust-row.ow-stack > span{flex:none}
+.ow-page .pd-adjust-row.ow-stack > .btn{align-self:stretch;justify-content:center}
+@media (min-width:768px){
+  .ow-page .owner-add.ow-form{grid-template-columns:repeat(2,1fr)}
+  .ow-page .owner-add.ow-form > .btn{justify-self:start}
+  .ow-page .money-dates.ow-dates{grid-template-columns:repeat(2,1fr)}
+  .ow-page .sum-cards.ow-sum{grid-template-columns:repeat(auto-fit,minmax(170px,220px))}
+  .ow-page .pd-adjust-row.ow-stack{flex-direction:row;align-items:end}
+  .ow-page .pd-adjust-row.ow-stack > label{flex:1 1 120px;width:auto}
+  .ow-page .pd-adjust-row.ow-stack > .btn{align-self:end}
+  .ow-page .ow-game-econ .btn{justify-self:end}
+}
