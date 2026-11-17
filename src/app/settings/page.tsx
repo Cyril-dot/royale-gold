@@ -7,7 +7,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, fmtCash, fmtCoins } from "../../lib/api";
+import { api, fmtMoney, fmtCoins } from "../../lib/api";
+import { symbolFor } from "../../lib/country";
 import { useStore } from "../../lib/store";
 
 // P0 Batch 3 (A13) — TOTP two-factor auth, opt-in per admin/owner.
@@ -99,14 +100,14 @@ export default function SettingsPage() {
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [passBusy, setPassBusy] = useState(false);
-  const [economy, setEconomy] = useState<{ lifetimeDeposited: number; liveFactor: number } | null>(null);
+  const [economy, setEconomy] = useState<{ lifetimeDeposited: number; liveFactor: number; decayStep?: number } | null>(null);
 
   // Seed the form from the signed-in user whenever it changes.
   useEffect(() => {
     if (user) {
       setName(user.name);
       setContact(user.email ?? user.phone ?? "");
-      api<{ lifetimeDeposited: number; liveFactor: number }>("/api/games/economy")
+      api<{ lifetimeDeposited: number; liveFactor: number; decayStep?: number }>("/api/games/economy")
         .then(setEconomy)
         .catch(() => setEconomy(null));
     }
@@ -212,9 +213,9 @@ export default function SettingsPage() {
         <section className="admin-sec">
           <h3>How winning works</h3>
           <p>SIM is play-money mode — winning comes easier so you can test the games.</p>
-          <p>LIVE win chance falls 5% for every GH₵100 you have deposited, never below half the normal rate.</p>
+          <p>LIVE win chance falls 5% for every {fmtMoney(economy?.decayStep ?? 100, user.currency ?? "GHS")} you have deposited, never below half the normal rate.</p>
           {economy && (
-            <p>Your total deposits: <b>{fmtCash(economy.lifetimeDeposited)}</b> — your LIVE win chance right now is <b>{Math.round(economy.liveFactor * 100)}%</b> of normal.</p>
+            <p>Your total deposits: <b>{fmtMoney(economy.lifetimeDeposited, user.currency ?? "GHS")}</b> — your LIVE win chance right now is <b>{Math.round(economy.liveFactor * 100)}%</b> of normal.</p>
           )}
           <p className="rg48-mini">Crash games are provably fair and never adjusted. Coin games are not affected.</p>
         </section>
@@ -222,15 +223,16 @@ export default function SettingsPage() {
         <section className="admin-sec">
           <h3>Your account</h3>
           <div className="sum-cards">
-            <div className="sum-card"><span>CASH</span><b>{fmtCash(cash)}</b></div>
+            <div className="sum-card"><span>CASH</span><b>{fmtMoney(cash, user.currency ?? "GHS")}</b></div>
             <div className="sum-card"><span>COINS</span><b>{fmtCoins(coins)}</b></div>
             <div className="sum-card"><span>SIM</span><b>{fmtCoins(sim)}</b></div>
             <div className="sum-card"><span>LEVEL</span><b>{user.level} · {user.xp} XP</b></div>
           </div>
           <p>Role: <b>{user.role}</b></p>
+          <p>Country: <b>{user.country === "NG" ? "Nigeria" : "Ghana"}</b> · Currency: <b>{user.currency ?? "GHS"} ({symbolFor(user.currency)})</b></p>
           <p>Joined: <b>{new Date(user.createdAt).toLocaleDateString("en-GB")}</b></p>
           <p>Referral code used: <b>{user.referralCodeUsed ?? "—"}</b></p>
-          <p className="rg48-mini">Currency is Ghana cedi (GH₵) for everyone.</p>
+          <p className="rg48-mini">Your country and currency were set when you registered and can&apos;t be changed here.</p>
           <p><Link className="linklike" href="/account">Back to my account →</Link></p>
         </section>
       </div>

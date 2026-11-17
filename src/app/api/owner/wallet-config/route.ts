@@ -22,7 +22,7 @@ export async function GET() {
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
-import { getPlatformSettings, PLATFORM_DEFAULTS } from "@/lib/game-config";
+import { getPlatformSettings, PLATFORM_DEFAULTS, upsertCurrencyConfig } from "@/lib/game-config";
 import { round2 } from "@/lib/money";
 
 type Body = {
@@ -114,6 +114,17 @@ export async function POST(req: Request) {
       });
       return row;
     });
+    // Phase 1 country-based (Nov 2026): the legacy PlatformSettings
+    // fields ARE the GHS row's values — keep the GHS CurrencyConfig
+    // row in sync so the two can never disagree. (Per-currency edits
+    // go through the CurrencyConfig editor instead.)
+    if ("cashMinDeposit" in data || "cashMinStake" in data || "conversionRate" in data) {
+      await upsertCurrencyConfig("GHS", {
+        ...(data.cashMinDeposit !== undefined ? { minDeposit: data.cashMinDeposit } : {}),
+        ...(data.cashMinStake !== undefined ? { minStake: data.cashMinStake } : {}),
+        ...(data.conversionRate !== undefined ? { conversionRate: data.conversionRate } : {}),
+      });
+    }
 
     return ok({
       globalKill: updated.globalKill,

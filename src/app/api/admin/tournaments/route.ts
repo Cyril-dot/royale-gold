@@ -1,6 +1,7 @@
 // P2 Batch 1 (A27): tournaments & leaderboards. A tournament is a
 // named contest over one game (or all games) in a time window, with a
-// GH₵ prize pool paid as a bonus credit to the winner. The leaderboard
+// prize pool (in the creating admin's currency) paid as a bonus credit
+// to the winner. The leaderboard
 // is computed LIVE from GameResult during the tournament — points =
 // total staked in the window — never stored per bet. Ending freezes
 // the final standings into TournamentEntry rows and pays the winner
@@ -12,6 +13,7 @@ import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { AuthError } from "@/lib/errors";
 import { ALL_GAMES } from "@/lib/games";
 import { displayStatus, gameNameFor } from "@/lib/tournaments";
+import { symbolFor } from "@/lib/country";
 import { round2 } from "@/lib/money";
 
 const GAME_SLUGS = new Set([...ALL_GAMES.map((g) => g.slug), "all"]);
@@ -78,7 +80,7 @@ export async function POST(req: Request) {
     }
     if (endAt.getTime() <= startAt.getTime()) return fail("The end must be after the start");
     const prizePool = Number(body.prizePool);
-    if (!Number.isFinite(prizePool) || prizePool <= 0) return fail("Prize pool must be above GH₵ 0");
+    if (!Number.isFinite(prizePool) || prizePool <= 0) return fail(`Prize pool must be above ${symbolFor(admin.currency ?? "GHS")} 0`);
     const row = await prisma.$transaction(async (tx) => {
       const created = await tx.tournament.create({
         data: {
@@ -91,7 +93,7 @@ export async function POST(req: Request) {
       await tx.auditLog.create({
         data: {
           actorId: admin.id, action: "tournament.create", targetId: created.id,
-          detail: `Tournament: created "${name}" (${gameNameFor(gameSlug)}, ${startAt.toISOString().slice(0, 10)} – ${endAt.toISOString().slice(0, 10)}, prize GH₵ ${round2(prizePool).toFixed(2)})`,
+          detail: `Tournament: created "${name}" (${gameNameFor(gameSlug)}, ${startAt.toISOString().slice(0, 10)} – ${endAt.toISOString().slice(0, 10)}, prize ${symbolFor(admin.currency ?? "GHS")} ${round2(prizePool).toFixed(2)})`,
         },
       });
       return created;

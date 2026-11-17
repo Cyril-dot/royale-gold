@@ -3,6 +3,7 @@ import { AuthError } from "./errors";
 import { prisma } from "./prisma";
 import { getGame } from "./games";
 import { dec, round2, toDecimal } from "./money";
+import { symbolFor } from "./country";
 import { getCrashRound } from "./crash";
 import { PLAY_GATED_GAMES } from "./play";
 // P0 Batch 2 (O9/O10/O11): per-game owner control — visibility, kill
@@ -11,7 +12,8 @@ import {
   getGameConfig,
   getPlatformSettings,
   isGameBlocked,
-  platformMinStake,
+  platformMinStakeFiat,
+  scaleGhsAmount,
 } from "./game-config";
 // P1 Batch 1 (A20): per-player limits (max stake, daily loss, cool-off).
 import { checkPlayLimits } from "./limits";
@@ -60,6 +62,14 @@ export async function settleGame(
   }
   if (!Number.isFinite(stake) || stake <= 0) throw new Error("Stake must be > 0");
   if (!Number.isFinite(payout) || payout < 0) throw new Error("Payout must be >= 0");
+  // Phase 1 country-based (Nov 2026): the round is played in the
+  // PLAYER'S fiat. Min/max stakes come from CurrencyConfig for that
+  // fiat; per-game minBet/maxBet/maxPayout overrides are stored in GHS
+  // terms and scaled (×100 for NGN). The GameResult row is stamped
+  // with the fiat so no aggregate ever blends currencies.
+  const player = await prisma.user.findUnique({ where: { id: userId }, select: { currency: true } });
+  const fiatCurrency = player?.currency ?? "GHS";
+  const sym = symbolFor(fiatCurrency);
   // P0 Batch 2 (O9/O10/O11): owner control. A killed, hidden, or
   // globally-paused game cannot settle at all — the stake was never
   // deducted (it moves only inside the transaction below), so blocking
@@ -71,16 +81,19 @@ export async function settleGame(
   if (cfg) {
     const blocked = isGameBlocked(cfg, settings);
     if (blocked) throw new Error(blocked);
-    const minBet = cfg.minBet ?? platformMinStake(currency, settings);
+    const minBet = cfg.minBet != null ? await scaleGhsAmount(cfg.minBet, fiatCurrency) : await platformMinStakeFiat(currency, settings, fiatCurrency);
     if (stake < minBet) {
       throw new Error(
-        `Minimum stake for ${game.name} is ${currency === "coins" ? `${minBet} coins` : `GH₵ ${minBet.toFixed(2)}`}`,
+        `Minimum stake for ${game.name} is ${currency === "coins" ? `${minBet} coins` : `${sym} ${minBet.toFixed(2)}`}`,
       );
     }
-    if (cfg.maxBet != null && stake > cfg.maxBet) {
-      throw new Error(
-        `Maximum stake for ${game.name} is ${currency === "coins" ? `${cfg.maxBet} coins` : `GH₵ ${cfg.maxBet.toFixed(2)}`}`,
-      );
+    if (cfg.maxBet != null) {
+      const maxBet = await scaleGhsAmount(cfg.maxBet, fiatCurrency);
+      if (stake > maxBet) {
+        throw new Error(
+          `Maximum stake for ${game.name} is ${currency === "coins" ? `${maxBet} coins` : `${sym} ${maxBet.toFixed(2)}`}`,
+        );
+      }
     }
   }
   if (payout > round2(stake * (cfg?.maxMultiplier ?? game.maxMultiplier)) + 1e-9) {
@@ -91,11 +104,14 @@ export async function settleGame(
   // the max blocks further play. Every game settles through here, so
   // this is the single enforcement point; the play route re-checks
   // before the draw so a limited player never draws.
-  const limitErr = await checkPlayLimits(userId, stake, currency);
+  const limitErr = await checkPlayLimits(userId, stake, currency, fiatCurrency);
   if (limitErr) throw new AuthError(403, limitErr);
   let effPayout = payout;
-  if (cfg?.maxPayout != null && effPayout > cfg.maxPayout) {
-    effPayout = currency === "coins" ? Math.floor(cfg.maxPayout) : round2(cfg.maxPayout);
+  if (cfg?.maxPayout != null) {
+    const maxPayout = await scaleGhsAmount(cfg.maxPayout, fiatCurrency);
+    if (effPayout > maxPayout) {
+      effPayout = currency === "coins" ? Math.floor(maxPayout) : round2(maxPayout);
+    }
   }
   if (opts?.roundId) {
     if (!CRASH_GAME_SLUGS.has(gameSlug)) {
@@ -155,6 +171,7 @@ export async function settleGame(
         userId,
         game: gameSlug,
         currency,
+        fiatCurrency,
         stake: currency === "cash" ? (stakeD as never) : stake,
         payout: currency === "cash" ? (payoutD as never) : effPayout,
         result: (result ?? undefined) as Prisma.InputJsonValue | undefined,
@@ -164,7 +181,8 @@ export async function settleGame(
     // P2 Batch 2 (O29): the jackpot pot grows by contributionPct% of
     // this cash stake (house-funded — the payout above is already
     // final and is never touched). Coins never feed a jackpot.
-    await contributeToJackpots(tx, gameSlug, currency, stake);
+    // Phase 1 (Nov 2026): GHS-only — NGN stakes do not feed the pot.
+    await contributeToJackpots(tx, gameSlug, currency, stake, fiatCurrency);
 
     return {
       gameResult,

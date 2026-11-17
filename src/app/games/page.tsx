@@ -11,7 +11,7 @@ import { useSearchParams } from "next/navigation";
 import GameTile from "../../components/GameTile";
 import { GAMES_PAGE_GAMES, TILE_GAMES, type TileGame } from "../../lib/tiles";
 import { useStore } from "../../lib/store";
-import { fmtCash, fmtCoins } from "../../lib/api";
+import { fmtMoney, fmtCoins } from "../../lib/api";
 
 type Filter = "all" | "cash" | "coins" | "crash" | "table" | "arcade" | "live" | "beginner" | "slots";
 
@@ -109,7 +109,7 @@ function GamesInner() {
           <div className="wrap gp-bar-in">
             <Link className="gp-back" href="/" aria-label="Back to homepage"><span className="gp-back-coin">←</span></Link>
             <div className="gp-title"><h2>All <em>games</em></h2></div>
-            <Link href="/wallet" className="gp-bal" aria-label="Open wallet">{fmtCash(cash)} · {fmtCoins(coins)} coins</Link>
+            <Link href="/wallet" className="gp-bal" aria-label="Open wallet">{fmtMoney(cash, user?.currency ?? "GHS")} · {fmtCoins(coins)} coins</Link>
           </div>
           <span className="xg-ver" aria-hidden="true">v48</span>
         </div>

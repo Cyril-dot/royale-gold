@@ -7,7 +7,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api, fmtCash } from "../../lib/api";
+import { api, fmtMoney } from "../../lib/api";
+import { COUNTRIES, symbolFor } from "../../lib/country";
+import CurrencyChips from "../../components/CurrencyChips";
+import type { CurrencyConfigShape } from "../../lib/game-config";
 import { useStore } from "../../lib/store";
 import { copyText, todayStr } from "../../lib/admin-client";
 import { ALL_GAMES } from "../../lib/games";
@@ -18,6 +21,9 @@ interface AdminRow {
   permissions: string[] | null; totpEnabled: boolean;
   codes: { id: string; code: string; active: boolean }[];
   referralCount: number; coinsGiven: number; commissionAllTime: number; createdAt: string;
+  // Phase 1 country-based (Nov 2026): the admin's country + fiat;
+  // commissionAllTime is in commissionCurrency (their own fiat).
+  country?: string | null; currency?: string; commissionCurrency?: string;
   // P1 Batch 4 (O24): the admin's parent admin (a senior agent), if any.
   parentAdminId: string | null; parentName: string | null;
 }
@@ -80,10 +86,10 @@ function OwnerAdminPerms({ a, onSaved }: {
     </div>
   );
 }
-interface RollupDay { date: string; adminId: string; adminName: string; deposits: number; totalAmount: number; totalCommission: number }
-interface OwnerDayAdmin { admin: { id: string; name: string }; deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; pctInForce: number; commission: number; time: string }[]; totalAmount: number; totalCommission: number }
+interface RollupDay { date: string; adminId: string; adminName: string; deposits: number; totalAmount: number; totalCommission: number; fiatCurrency: string }
+interface OwnerDayAdmin { admin: { id: string; name: string }; deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; fiatCurrency: string; pctInForce: number; commission: number; time: string }[]; totalAmount: number; totalCommission: number }
 // P0 Batch 4 (O6): one row of the global player search.
-interface OwnerSearchPlayer { id: string; name: string; email: string | null; phone: string | null; role: string; referringAdmin: { id: string; name: string } | null; totalDeposited: number; deposits: number; cash: number; coins: number; joinedAt: string }
+interface OwnerSearchPlayer { id: string; name: string; email: string | null; phone: string | null; role: string; country: string | null; currency: string; referringAdmin: { id: string; name: string } | null; totalDeposited: number; deposits: number; cash: number; coins: number; joinedAt: string }
 
 // P0 Batch 2 — one game row: visibility + kill toggles and the four
 // economics fields, saved per row. Number inputs hold text locally so
@@ -161,7 +167,7 @@ function OwnerGameRow({ g, onSave }: {
 }
 
 function OwnerPayRow({ m, onSave }: {
-  m: { method: string; enabled: boolean; minDeposit: number | null; maxDeposit: number | null };
+  m: { method: string; enabled: boolean; minDeposit: number | null; maxDeposit: number | null; fiatCurrency: string; gateway?: string | null };
   onSave: (method: string, patch: Record<string, unknown>) => Promise<void>;
 }) {
   const [minDep, setMinDep] = useState(m.minDeposit == null ? "" : String(m.minDeposit));
@@ -193,8 +199,8 @@ function OwnerPayRow({ m, onSave }: {
         >{m.enabled ? "Enabled" : "Disabled"}</button>
       </div>
       <div className="ow-game-econ">
-        <label>Min deposit (GH₵) <input type="number" min={0} step={0.01} value={minDep} onChange={(e) => setMinDep(e.target.value)} placeholder="Platform min" aria-label={`${m.method} minimum deposit`} /></label>
-        <label>Max deposit (GH₵) <input type="number" min={0} step={0.01} value={maxDep} onChange={(e) => setMaxDep(e.target.value)} placeholder="No cap" aria-label={`${m.method} maximum deposit`} /></label>
+        <label>Min deposit ({symbolFor(m.fiatCurrency ?? "GHS")}) <input type="number" min={0} step={0.01} value={minDep} onChange={(e) => setMinDep(e.target.value)} placeholder="Platform min" aria-label={`${m.method} minimum deposit`} /></label>
+        <label>Max deposit ({symbolFor(m.fiatCurrency ?? "GHS")}) <input type="number" min={0} step={0.01} value={maxDep} onChange={(e) => setMaxDep(e.target.value)} placeholder="No cap" aria-label={`${m.method} maximum deposit`} /></label>
         <button className="btn btn-gold btn-sm" type="button" disabled={busy} onClick={() => void save()}>Save</button>
       </div>
     </div>
@@ -293,7 +299,7 @@ function JackpotPayForm({ jackpot, busy, onPay }: {
       <label>Reason (optional)
         <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Why this player" aria-label={`Reason for paying the ${jackpot.name} jackpot`} />
       </label>
-      <button className="btn btn-gold" type="button" disabled={busy || !picked || jackpot.currentPot <= 0} onClick={() => picked && void onPay(jackpot.id, picked.id, reason.trim())}>{busy ? "Paying…" : `Pay ${fmtCash(jackpot.currentPot)}`}</button>
+      <button className="btn btn-gold" type="button" disabled={busy || !picked || jackpot.currentPot <= 0} onClick={() => picked && void onPay(jackpot.id, picked.id, reason.trim())}>{busy ? "Paying…" : `Pay ${fmtMoney(jackpot.currentPot, "GHS")}`}</button>
     </div>
   );
 }
@@ -344,6 +350,75 @@ function CmsPageEditor({ page, onSaved }: {
   );
 }
 
+// Phase 1 country-based (Nov 2026): the CurrencyConfig editor —
+// per-currency min deposit / min stake / conversion rate (fiat per
+// 1 coin) / LIVE decay step / owner-approval threshold / enabled.
+// The owner sets his own NGN numbers here without a code change;
+// GHS rows stay in sync with Wallet config (the server syncs them).
+function OwnerCurrencyConfig() {
+  const { toast } = useStore();
+  const [rows, setRows] = useState<CurrencyConfigShape[] | null>(null);
+  const [draft, setDraft] = useState<Record<string, Partial<CurrencyConfigShape>>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      setRows((await api<{ currencies: CurrencyConfigShape[] }>("/api/owner/currency-config")).currencies);
+      setDraft({});
+    } catch { setRows([]); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const set = (code: string, patch: Partial<CurrencyConfigShape>) => {
+    setDraft((d) => ({ ...d, [code]: { ...(d[code] ?? {}), ...patch } }));
+  };
+  const save = async (row: CurrencyConfigShape) => {
+    const d = draft[row.currency] ?? {};
+    const body = {
+      currency: row.currency,
+      symbol: row.symbol,
+      minDeposit: d.minDeposit ?? row.minDeposit,
+      minStake: d.minStake ?? row.minStake,
+      conversionRate: d.conversionRate ?? row.conversionRate,
+      decayStep: d.decayStep ?? row.decayStep,
+      withdrawalOwnerThreshold: d.withdrawalOwnerThreshold ?? row.withdrawalOwnerThreshold,
+      enabled: d.enabled ?? row.enabled,
+    };
+    setBusy(row.currency);
+    try {
+      await api("/api/owner/currency-config", { method: "POST", body: JSON.stringify(body) });
+      toast(`${row.currency} currency settings saved`, "win");
+      await load();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Save failed", "lose");
+    } finally { setBusy(null); }
+  };
+  if (rows === null) return <p>Loading currency settings…</p>;
+  if (rows.length === 0) return <p>No currency settings yet.</p>;
+  const val = (row: CurrencyConfigShape, key: keyof CurrencyConfigShape) =>
+    String((draft[row.currency] as Record<string, unknown> | undefined)?.[key as string] ?? row[key]);
+  return (
+    <div className="ow-games">
+      {rows.map((row) => (
+        <div key={row.currency} className="ow-game-row">
+          <div className="ow-game-head">
+            <b>{row.currency} ({row.symbol})</b>
+            {!row.enabled && <span className="ow-game-flag bad">DISABLED</span>}
+          </div>
+          <p className="ow-game-note">1 coin = {symbolFor(row.currency)} {val(row, "conversionRate")} · LIVE decay step {val(row, "decayStep")} · owner approval above {symbolFor(row.currency)} {val(row, "withdrawalOwnerThreshold")}.</p>
+          <div className="ow-game-econ">
+            <label>Min deposit ({row.symbol}) <input type="number" min={0} step={0.01} value={val(row, "minDeposit")} onChange={(e) => set(row.currency, { minDeposit: Number(e.target.value) })} aria-label={`${row.currency} minimum deposit`} /></label>
+            <label>Min stake ({row.symbol}) <input type="number" min={0} step={0.01} value={val(row, "minStake")} onChange={(e) => set(row.currency, { minStake: Number(e.target.value) })} aria-label={`${row.currency} minimum stake`} /></label>
+            <label>Conversion rate ({row.symbol} per coin) <input type="number" min={0} step={0.01} value={val(row, "conversionRate")} onChange={(e) => set(row.currency, { conversionRate: Number(e.target.value) })} aria-label={`${row.currency} conversion rate`} /></label>
+            <label>LIVE decay step <input type="number" min={1} step={1} value={val(row, "decayStep")} onChange={(e) => set(row.currency, { decayStep: Number(e.target.value) })} aria-label={`${row.currency} LIVE decay step`} /></label>
+            <label>Owner-approval threshold ({row.symbol}) <input type="number" min={0} step={1} value={val(row, "withdrawalOwnerThreshold")} onChange={(e) => set(row.currency, { withdrawalOwnerThreshold: Number(e.target.value) })} aria-label={`${row.currency} owner approval threshold`} /></label>
+            <label className="ow-game-toggle">Enabled <input type="checkbox" checked={draft[row.currency]?.enabled ?? row.enabled} onChange={(e) => set(row.currency, { enabled: e.target.checked })} aria-label={`${row.currency} enabled`} /></label>
+            <button className="btn btn-gold btn-sm" type="button" disabled={busy === row.currency} onClick={() => void save(row)}>{busy === row.currency ? "Saving…" : "Save"}</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function OwnerPage() {
   const { user, openAuth, toast } = useStore();
   const [admins, setAdmins] = useState<AdminRow[]>([]);
@@ -351,6 +426,18 @@ export default function OwnerPage() {
   const [err, setErr] = useState("");
   const [date, setDate] = useState("");
   useEffect(() => { setDate(todayStr()); }, []);
+  // Phase 1 country-based (Nov 2026): the currency filter — P&L,
+  // revenue, cashier, BI, commission, settlement, withdrawals and the
+  // ledger are each in ONE fiat only. Defaults to GHS.
+  const [fiatSel, setFiatSel] = useState<string | null>(null);
+  const fiat = fiatSel ?? user?.currency ?? "GHS";
+  // Phase 1 country-based (Nov 2026): a run that pays players in
+  // more than one fiat has no honest single total — show the per-fiat
+  // split instead ("GH₵ 12.00 + ₦500.00").
+  const fmtSplit = (totals: Record<string, number> | undefined, fallback: number) => {
+    if (!totals || Object.keys(totals).length === 0) return fmtMoney(fallback, fiat);
+    return Object.entries(totals).map(([c, v]) => fmtMoney(v, c)).join(" + ");
+  };
   const [tab, setTab] = useState<"per-day" | "rollup">("per-day");
   const [dayAdmins, setDayAdmins] = useState<OwnerDayAdmin[] | null>(null);
   const [dayTotals, setDayTotals] = useState<{ deposits: number; totalAmount: number; totalCommission: number } | null>(null);
@@ -360,7 +447,7 @@ export default function OwnerPage() {
   // P0 Batch 1 (O8): withdrawal oversight — every pending withdrawal
   // platform-wide. Large ones an admin approved sit as "admin_approved"
   // until the owner approves them second (maker-checker, GH₵ 500).
-  interface OwnerWdRow { id: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; method: string; status: string; reason: string | null; createdAt: string; decidedAt: string | null }
+  interface OwnerWdRow { id: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; method: string; fiatCurrency: string; status: string; reason: string | null; createdAt: string; decidedAt: string | null }
   const [ownerWd, setOwnerWd] = useState<OwnerWdRow[] | null>(null);
   const [ownerWdPending, setOwnerWdPending] = useState(0);
   const [ownerWdStatus, setOwnerWdStatus] = useState("");
@@ -369,11 +456,15 @@ export default function OwnerPage() {
   const [ownerWdBusy, setOwnerWdBusy] = useState<string | null>(null);
   const loadOwnerWd = useCallback(async () => {
     try {
-      const r = await api<{ withdrawals: OwnerWdRow[]; pending: number }>(`/api/owner/withdrawals${ownerWdStatus ? `?status=${ownerWdStatus}` : ""}`);
+      const p = new URLSearchParams();
+      if (ownerWdStatus) p.set("status", ownerWdStatus);
+      p.set("currency", fiat);
+      const qs = p.toString();
+      const r = await api<{ withdrawals: OwnerWdRow[]; pending: number }>(`/api/owner/withdrawals${qs ? `?${qs}` : ""}`);
       setOwnerWd(r.withdrawals);
       setOwnerWdPending(r.pending);
     } catch { setOwnerWd([]); }
-  }, [ownerWdStatus]);
+  }, [ownerWdStatus, fiat]);
   useEffect(() => { void loadOwnerWd(); }, [loadOwnerWd]);
   const decideOwnerWd = async (w: OwnerWdRow, decision: "approve" | "reject") => {
     if (decision === "reject" && ownerRejectId !== w.id) { setOwnerRejectId(w.id); setOwnerRejectReason(""); return; }
@@ -395,7 +486,7 @@ export default function OwnerPage() {
 
   // P0 Batch 1 (O7): global transaction ledger — every money movement,
   // platform-wide, searchable by type, period, amount, method and admin.
-  interface OwnerLedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; detail: string; status?: string; reason?: string; createdAt: string }
+  interface OwnerLedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; fiatCurrency: string; detail: string; status?: string; reason?: string; createdAt: string }
   const [ownerLedger, setOwnerLedger] = useState<OwnerLedgerRow[] | null>(null);
   const [ownerLedTotals, setOwnerLedTotals] = useState<{ rows: number; cashIn: number; cashOut: number } | null>(null);
   const [ownerLedType, setOwnerLedType] = useState("");
@@ -411,12 +502,13 @@ export default function OwnerPage() {
       if (ownerLedFrom) p.set("from", ownerLedFrom);
       if (ownerLedTo) p.set("to", ownerLedTo);
       if (ownerLedAdmin) p.set("adminId", ownerLedAdmin);
+      p.set("currency", fiat);
       const qs = p.toString();
       const r = await api<{ rows: OwnerLedgerRow[]; totals: { rows: number; cashIn: number; cashOut: number } }>(`/api/owner/ledger${qs ? `?${qs}` : ""}`);
       setOwnerLedger(r.rows);
       setOwnerLedTotals(r.totals);
     } catch { setOwnerLedger([]); }
-  }, [ownerLedType, ownerLedQ, ownerLedFrom, ownerLedTo, ownerLedAdmin]);
+  }, [ownerLedType, ownerLedQ, ownerLedFrom, ownerLedTo, ownerLedAdmin, fiat]);
   useEffect(() => { void loadOwnerLedger(); }, [loadOwnerLedger]);
 
   // P0 Batch 2 (O1): global P&L — GGR, deposits, approved withdrawals,
@@ -441,9 +533,9 @@ export default function OwnerPage() {
       to = pnlTo || today;
     }
     try {
-      setPnl(await api<Pnl>(`/api/owner/pnl?from=${from}&to=${to}`));
+      setPnl(await api<Pnl>(`/api/owner/pnl?from=${from}&to=${to}&currency=${fiat}`));
     } catch { setPnl(null); }
-  }, [pnlPreset, pnlFrom, pnlTo]);
+  }, [pnlPreset, pnlFrom, pnlTo, fiat]);
   useEffect(() => { void loadPnl(); }, [loadPnl]);
 
   // P0 Batch 3 (O4): commission rules — the rules engine. A rule is a
@@ -501,10 +593,10 @@ export default function OwnerPage() {
   const loadSettlement = useCallback(async () => {
     if (!settleFrom || !settleTo) return;
     try {
-      const r = await api<{ from: string; to: string; rows: SettlementRow[]; totals: { owed: number; paid: number; balance: number; parentShare: number } }>(`/api/owner/commission/settlement?from=${settleFrom}&to=${settleTo}`);
+      const r = await api<{ from: string; to: string; rows: SettlementRow[]; totals: { owed: number; paid: number; balance: number; parentShare: number } }>(`/api/owner/commission/settlement?from=${settleFrom}&to=${settleTo}&currency=${fiat}`);
       setSettlement(r);
     } catch { setSettlement(null); }
-  }, [settleFrom, settleTo]);
+  }, [settleFrom, settleTo, fiat]);
   useEffect(() => { void loadSettlement(); }, [loadSettlement]);
   const [payAdmin, setPayAdmin] = useState("");
   const [payAmount, setPayAmount] = useState("");
@@ -525,6 +617,9 @@ export default function OwnerPage() {
           reference: payRef.trim() || undefined,
           periodFrom: settleFrom,
           periodTo: settleTo,
+          // Phase 1 country-based (Nov 2026): the payout is in the
+          // fiat of the settlement view.
+          currency: fiat,
         }),
       });
       toast("Payout recorded — ledger and audit log updated", "win");
@@ -599,17 +694,19 @@ export default function OwnerPage() {
   };
 
   // P0 Batch 2 (O12): payment methods — enable/disable + per-method min/max.
-  interface OwnerPayMethod { method: string; enabled: boolean; minDeposit: number | null; maxDeposit: number | null }
+  // Phase 1 country-based (Nov 2026): one row per (method × currency) —
+  // the list below shows the selected fiat's methods only.
+  interface OwnerPayMethod { method: string; enabled: boolean; minDeposit: number | null; maxDeposit: number | null; fiatCurrency: string; gateway?: string | null }
   const [ownerPay, setOwnerPay] = useState<OwnerPayMethod[] | null>(null);
   const loadOwnerPay = useCallback(async () => {
     try {
-      setOwnerPay((await api<{ methods: OwnerPayMethod[] }>("/api/owner/payment-methods")).methods);
+      setOwnerPay((await api<{ methods: OwnerPayMethod[] }>(`/api/owner/payment-methods?currency=${fiat}`)).methods);
     } catch { setOwnerPay([]); }
-  }, []);
+  }, [fiat]);
   useEffect(() => { void loadOwnerPay(); }, [loadOwnerPay]);
   const saveOwnerPay = async (method: string, patch: Partial<OwnerPayMethod>) => {
     try {
-      await api(`/api/owner/payment-methods/${method}`, { method: "POST", body: JSON.stringify(patch) });
+      await api(`/api/owner/payment-methods/${method}`, { method: "POST", body: JSON.stringify({ ...patch, currency: fiat }) });
       toast(`${method} updated`, "win");
       await loadOwnerPay();
     } catch (ex) {
@@ -654,6 +751,9 @@ export default function OwnerPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pct, setPct] = useState(10);
+  // Phase 1 country-based (Nov 2026): the new admin's country — the
+  // fiat follows it (GH → GHS, NG → NGN).
+  const [adminCountry, setAdminCountry] = useState("GH");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Record<string, number>>({});
 
@@ -661,23 +761,23 @@ export default function OwnerPage() {
     try {
       const a = await api<{ admins: AdminRow[] }>("/api/owner/admins");
       setAdmins(a.admins);
-      setRollup(await api<{ days: RollupDay[]; totals: { deposits: number; totalAmount: number; totalCommission: number } }>("/api/owner/rollup"));
+      setRollup(await api<{ days: RollupDay[]; totals: { deposits: number; totalAmount: number; totalCommission: number } }>(`/api/owner/rollup?currency=${fiat}`));
       setErr("");
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Could not load owner panel.");
     }
-  }, []);
+  }, [fiat]);
 
   const loadDay = useCallback(async (d: string) => {
     try {
-      const r = await api<{ date: string; admins: OwnerDayAdmin[]; totals: { deposits: number; totalAmount: number; totalCommission: number } }>(`/api/owner/commission?date=${d}`);
+      const r = await api<{ date: string; admins: OwnerDayAdmin[]; totals: { deposits: number; totalAmount: number; totalCommission: number } }>(`/api/owner/commission?date=${d}&currency=${fiat}`);
       setDayAdmins(r.admins);
       setDayTotals(r.totals);
     } catch {
       setDayAdmins(null);
       setDayTotals(null);
     }
-  }, []);
+  }, [fiat]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (date) void loadDay(date); }, [date, loadDay]);
@@ -720,13 +820,13 @@ export default function OwnerPage() {
     }
     try {
       const [rev, r] = await Promise.all([
-        api<RevenueData>(`/api/owner/revenue?from=${from}&to=${to}`),
+        api<RevenueData>(`/api/owner/revenue?from=${from}&to=${to}&currency=${fiat}`),
         api<{ from: string; to: string; rows: RtpRow[] }>(`/api/owner/rtp?from=${from}&to=${to}`),
       ]);
       setRevenue(rev);
       setRtp(r);
     } catch { setRevenue(null); setRtp(null); }
-  }, [anPreset, anFrom, anTo]);
+  }, [anPreset, anFrom, anTo, fiat]);
   useEffect(() => { void loadAnalytics(); }, [loadAnalytics]);
 
   // P1 Batch 3 (O18): the global fraud console — same signals as the
@@ -743,7 +843,7 @@ export default function OwnerPage() {
 
   // P1 Batch 3 (O19): the promotion engine — the owner's campaigns.
   interface PromoRow { id: string; name: string; type: string; percent: number; cap: number | null; coinAmount: number | null; trigger: string | null; startAt: string; endAt: string | null; targetAdminId: string | null; targetAdminName: string | null; active: boolean; grants: number; createdAt: string }
-  interface PromoGrantRow { id: string; promotionId: string; promotionName: string; userId: string; userName: string; amount: number; wallet: string; day: string; createdAt: string }
+  interface PromoGrantRow { id: string; promotionId: string; promotionName: string; userId: string; userName: string; amount: number; wallet: string; fiatCurrency: string; day: string; createdAt: string }
   const [promos, setPromos] = useState<PromoRow[] | null>(null);
   const [promoGrants, setPromoGrants] = useState<PromoGrantRow[] | null>(null);
   const loadPromos = useCallback(async () => {
@@ -766,7 +866,7 @@ export default function OwnerPage() {
   const [promoBusy, setPromoBusy] = useState(false);
   const [cbDate, setCbDate] = useState("");
   const [cbBusy, setCbBusy] = useState<string | null>(null);
-  const [cbResult, setCbResult] = useState<{ promotionId: string; date: string; paid: number; total: number } | null>(null);
+  const [cbResult, setCbResult] = useState<{ promotionId: string; date: string; paid: number; total: number; totalsByCurrency: Record<string, number> } | null>(null);
   // Dates start empty and are set on mount (calling new Date() during
   // render breaks the prerender — the same rule as the other pickers).
   useEffect(() => { setPromoStart(todayStr()); setCbDate(todayStr()); }, []);
@@ -859,9 +959,9 @@ export default function OwnerPage() {
   const [cashier, setCashier] = useState<CashierData | null>(null);
   const loadCashier = useCallback(async () => {
     try {
-      setCashier(await api<CashierData>("/api/owner/cashier"));
+      setCashier(await api<CashierData>(`/api/owner/cashier?currency=${fiat}`));
     } catch { setCashier(null); }
-  }, []);
+  }, [fiat]);
   useEffect(() => { void loadCashier(); }, [loadCashier]);
   // P2 Batch 1 (A26): VIP tiers — the OWNER edits the thresholds here
   // (name, min deposited, perks). The tiers are computed live from the
@@ -911,14 +1011,14 @@ export default function OwnerPage() {
   interface CohortRow { cohort: string; players: number; activePct: number; totalDeposited: number; totalStaked: number; ggr: number; avgDeposit: number; retention: { m1: number | null; m2: number | null; m3: number | null } }
   const [bi, setBi] = useState<{ cohorts: CohortRow[]; totalPlayers: number } | null>(null);
   const loadBi = useCallback(async () => {
-    try { setBi(await api<{ cohorts: CohortRow[]; totalPlayers: number }>("/api/owner/bi")); } catch { setBi(null); }
-  }, []);
+    try { setBi(await api<{ cohorts: CohortRow[]; totalPlayers: number }>(`/api/owner/bi?currency=${fiat}`)); } catch { setBi(null); }
+  }, [fiat]);
   useEffect(() => { void loadBi(); }, [loadBi]);
   // O27: game replays — the 50 most recent GameResult rows + a detail
   // view (the round's outcome + the provably-fair verify for crash
   // rounds). No per-bet event log exists, so a replay shows the
   // outcome + the verify result, not a step-by-step animation.
-  interface ReplayRow { id: string; userId: string; userName: string; game: string; gameName: string; currency: string; stake: number; payout: number; net: number; roundId: string | null; createdAt: string }
+  interface ReplayRow { id: string; userId: string; userName: string; game: string; gameName: string; currency: string; fiatCurrency: string; stake: number; payout: number; net: number; roundId: string | null; createdAt: string }
   interface ReplayVerify { roundId: string; hash: string; clientSeed: string; nonce: number; finished: boolean; serverSeed?: string; crashPoint?: number; recomputedPoint?: number; pointMatch?: boolean; hashMatch?: boolean }
   interface ReplayDetail { replay: ReplayRow & { userContact: string | null }; verify: ReplayVerify | null }
   const [replays, setReplays] = useState<ReplayRow[] | null>(null);
@@ -942,14 +1042,14 @@ export default function OwnerPage() {
     settings: { pointsPerGhs: number; birthdayBonus: number };
     tiers: { id: string; name: string; minDeposited: number; perks: string[] }[];
     birthdaysToday: { userId: string; userName: string; userContact: string | null; birthday: string; paidThisYear: boolean }[];
-    players: { id: string; name: string; totalDeposited: number; totalStaked: number; points: number; tier: string | null }[];
+    players: { id: string; name: string; totalDeposited: number; totalStaked: number; fiatCurrency: string; points: number; tier: string | null }[];
   }
   const [loyalty, setLoyalty] = useState<LoyaltyData | null>(null);
   const [loyPoints, setLoyPoints] = useState("1");
   const [loyBonus, setLoyBonus] = useState("0");
   const [loyBusy, setLoyBusy] = useState(false);
   const [bdayPayBusy, setBdayPayBusy] = useState(false);
-  const [payResult, setPayResult] = useState<{ count: number; total: number; alreadyPaid: number } | null>(null);
+  const [payResult, setPayResult] = useState<{ count: number; total: number; totalsByCurrency: Record<string, number>; alreadyPaid: number } | null>(null);
   const loadLoyalty = useCallback(async () => {
     try {
       const r = await api<LoyaltyData>("/api/owner/loyalty-settings");
@@ -973,9 +1073,9 @@ export default function OwnerPage() {
   const payBirthdays = async () => {
     setBdayPayBusy(true);
     try {
-      const r = await api<{ paid: { userId: string; userName: string; amount: number }[]; total: number; count: number; alreadyPaid: number }>("/api/owner/loyalty/pay-birthdays", { method: "POST" });
-      setPayResult({ count: r.count, total: r.total, alreadyPaid: r.alreadyPaid });
-      toast(r.count === 0 ? "Nobody to pay today" : `Paid GH₵ ${r.total.toFixed(2)} to ${r.count} ${r.count === 1 ? "player" : "players"}`, "win");
+      const r = await api<{ paid: { userId: string; userName: string; amount: number }[]; total: number; totalsByCurrency: Record<string, number>; count: number; alreadyPaid: number }>("/api/owner/loyalty/pay-birthdays", { method: "POST" });
+      setPayResult({ count: r.count, total: r.total, totalsByCurrency: r.totalsByCurrency ?? {}, alreadyPaid: r.alreadyPaid });
+      toast(r.count === 0 ? "Nobody to pay today" : `Paid ${fmtSplit(r.totalsByCurrency, r.total)} to ${r.count} ${r.count === 1 ? "player" : "players"}`, "win");
       await loadLoyalty();
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Birthday pay failed", "lose");
@@ -1010,7 +1110,7 @@ export default function OwnerPage() {
     setEndBusy(t.id);
     try {
       const r = await api<{ tournament: { winnerName: string; prizePool: number } }>(`/api/owner/tournaments/${t.id}/end`, { method: "POST", body: JSON.stringify({}) });
-      toast(`Tournament ended — ${r.tournament.winnerName} won GH₵ ${r.tournament.prizePool.toFixed(2)}`, "win");
+      toast(`Tournament ended — ${r.tournament.winnerName} won ${fmtMoney(r.tournament.prizePool, fiat)}`, "win");
       setEndConfirmId(null);
       await loadOwnerTournaments();
     } catch (ex) {
@@ -1033,7 +1133,7 @@ export default function OwnerPage() {
     setJkPayBusy(jackpotId);
     try {
       const r = await api<{ winner: { name: string }; paid: number }>(`/api/owner/jackpots/${jackpotId}/pay`, { method: "POST", body: JSON.stringify({ userId, reason }) });
-      toast(`Paid GH₵ ${r.paid.toFixed(2)} to ${r.winner.name} — pot reset to the seed`, "win");
+      toast(`Paid ${fmtMoney(r.paid, "GHS")} to ${r.winner.name} — pot reset to the seed`, "win");
       await loadJackpots();
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Jackpot pay failed", "lose");
@@ -1211,12 +1311,12 @@ export default function OwnerPage() {
     if (!cbDate) { toast("Pick a date to pay cashback for", "lose"); return; }
     setCbBusy(p.id);
     try {
-      const r = await api<{ promotionId: string; date: string; paid: number; total: number }>(`/api/owner/promotions/${p.id}/pay-cashback`, {
+      const r = await api<{ promotionId: string; date: string; paid: number; total: number; totalsByCurrency: Record<string, number> }>(`/api/owner/promotions/${p.id}/pay-cashback`, {
         method: "POST",
         body: JSON.stringify({ date: cbDate }),
       });
       setCbResult(r);
-      toast(`Cashback paid — ${r.paid} ${r.paid === 1 ? "player" : "players"}, ${fmtCash(r.total)}`, "win");
+      toast(`Cashback paid — ${r.paid} ${r.paid === 1 ? "player" : "players"}, ${fmtSplit(r.totalsByCurrency, r.total)}`, "win");
       await loadPromos();
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Cashback payment failed", "lose");
@@ -1323,8 +1423,8 @@ export default function OwnerPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      await api("/api/owner/admins", { method: "POST", body: JSON.stringify({ name: name.trim(), email: email.trim(), password, commissionPct: pct }) });
-      setName(""); setEmail(""); setPassword(""); setPct(10);
+      await api("/api/owner/admins", { method: "POST", body: JSON.stringify({ name: name.trim(), email: email.trim(), password, commissionPct: pct, country: adminCountry }) });
+      setName(""); setEmail(""); setPassword(""); setPct(10); setAdminCountry("GH");
       toast("Admin added", "win");
       await load();
     } catch (ex) {
@@ -1393,6 +1493,10 @@ export default function OwnerPage() {
           <Link className="gp-back" href="/" aria-label="Back"><span className="gp-back-coin">←</span></Link>
           <h2>Owner <em>panel</em></h2>
         </div>
+        {/* Phase 1 country-based (Nov 2026): the currency filter — the
+            money sections below (totals, commission, P&L, revenue,
+            cashier, BI, withdrawals, ledger) are each in ONE fiat. */}
+        <CurrencyChips value={fiat} onChange={setFiatSel} label="Owner currency" />
 
         <section className="admin-sec">
           <h3>Overall totals</h3>
@@ -1401,8 +1505,8 @@ export default function OwnerPage() {
           {rollup && (
             <div className="sum-cards">
               <div className="sum-card"><span>Deposits</span><b>{rollup.totals.deposits}</b></div>
-              <div className="sum-card"><span>Total deposited</span><b>{fmtCash(rollup.totals.totalAmount)}</b></div>
-              <div className="sum-card"><span>Commission</span><b>{fmtCash(rollup.totals.totalCommission)}</b></div>
+              <div className="sum-card"><span>Total deposited</span><b>{fmtMoney(rollup.totals.totalAmount, fiat)}</b></div>
+              <div className="sum-card"><span>Commission</span><b>{fmtMoney(rollup.totals.totalCommission, fiat)}</b></div>
             </div>
           )}
         </section>
@@ -1414,6 +1518,11 @@ export default function OwnerPage() {
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
             <label>Commission % <input type="number" min={0} max={100} value={pct} onChange={(e) => setPct(Number(e.target.value))} /></label>
+            <label>Country <select value={adminCountry} onChange={(e) => setAdminCountry(e.target.value)} aria-label="New admin country">
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>{c.name} ({c.currency})</option>
+              ))}
+            </select></label>
             <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Adding…" : "Add admin"}</button>
           </form>
         </section>
@@ -1424,7 +1533,7 @@ export default function OwnerPage() {
             <div key={a.id} className="admin-row">
               <div>
                 <b>{a.name}</b> <span>{a.email}</span> <span className={a.active ? "ok" : "bad"}>{a.active ? "Active" : "Deactivated"}</span>
-                <div className="admin-meta">Codes: {a.codes.map((c) => c.code).join(", ") || "—"} · Referrals: {a.referralCount} · Coins given: {a.coinsGiven} · Commission all-time: {fmtCash(a.commissionAllTime)}{a.parentName ? ` · Parent: ${a.parentName}` : ""}</div>
+                <div className="admin-meta">Codes: {a.codes.map((c) => c.code).join(", ") || "—"} · Referrals: {a.referralCount} · Coins given: {a.coinsGiven} · Commission all-time: {fmtMoney(a.commissionAllTime, a.commissionCurrency ?? a.currency ?? "GHS")}{a.country ? ` · ${COUNTRIES.find((c) => c.code === a.country)?.name ?? a.country}` : ""}{a.parentName ? ` · Parent: ${a.parentName}` : ""}</div>
               </div>
               <div className="admin-edit">
                 <label>% <input type="number" min={0} max={100} defaultValue={a.commissionPct ?? 0} onChange={(e) => setEditing((ed) => ({ ...ed, [a.id]: Number(e.target.value) }))} /></label>
@@ -1474,8 +1583,8 @@ export default function OwnerPage() {
                         <td>{p.email || p.phone || "—"}</td>
                         <td>{p.role}</td>
                         <td>{p.referringAdmin?.name || "—"}</td>
-                        <td>{fmtCash(p.totalDeposited)}</td>
-                        <td>{fmtCash(p.cash)}</td>
+                        <td>{fmtMoney(p.totalDeposited, p.currency ?? fiat)}</td>
+                        <td>{fmtMoney(p.cash, p.currency ?? fiat)}</td>
                         <td>{p.coins}</td>
                       </tr>
                     ))}
@@ -1503,7 +1612,7 @@ export default function OwnerPage() {
                 <div key={w.id} className="wd-row">
                   <div className="wd-main">
                     <b>{w.userName}</b><span>{w.userContact || ""}</span>
-                    <span className="wd-amt">{fmtCash(w.amount)} · {w.method}</span>
+                    <span className="wd-amt">{fmtMoney(w.amount, w.fiatCurrency ?? fiat)} · {w.method}</span>
                     <span className="wd-date">{w.adminName ? `via ${w.adminName} · ` : ""}{new Date(w.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
                   <span className={`wd-status wd-${w.status}`}>{w.status === "admin_approved" ? "Awaiting owner" : w.status}</span>
@@ -1542,8 +1651,8 @@ export default function OwnerPage() {
                 <>
                   <div className="sum-cards">
                     <div className="sum-card"><span>Deposits</span><b>{dayTotals.deposits}</b></div>
-                    <div className="sum-card"><span>Total deposited</span><b>{fmtCash(dayTotals.totalAmount)}</b></div>
-                    <div className="sum-card"><span>Commission</span><b>{fmtCash(dayTotals.totalCommission)}</b></div>
+                    <div className="sum-card"><span>Total deposited</span><b>{fmtMoney(dayTotals.totalAmount, fiat)}</b></div>
+                    <div className="sum-card"><span>Commission</span><b>{fmtMoney(dayTotals.totalCommission, fiat)}</b></div>
                   </div>
                   <p className="ow-day-cap">Commission on {date}</p>
                 </>
@@ -1551,13 +1660,13 @@ export default function OwnerPage() {
               {dayAdmins && dayAdmins.length === 0 && <p className="bh-empty">No deposits that day.</p>}
               {dayAdmins?.map((da) => (
                 <div key={da.admin.id} className="day-admin">
-                  <h4>{da.admin.name} — {fmtCash(da.totalAmount)} · {fmtCash(da.totalCommission)} commission</h4>
+                  <h4>{da.admin.name} — {fmtMoney(da.totalAmount, fiat)} · {fmtMoney(da.totalCommission, fiat)} commission</h4>
                   <div className="rg48-twrap">
                     <table className="dep-table">
                       <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th></tr></thead>
                       <tbody>
                         {da.deposits.map((d) => (
-                          <tr key={d.id}><td>{d.userName}</td><td>{d.userContact}</td><td>{fmtCash(d.amount)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtCash(d.commission)} ({d.pctInForce}%)</td></tr>
+                          <tr key={d.id}><td>{d.userName}</td><td>{d.userContact}</td><td>{fmtMoney(d.amount, d.fiatCurrency ?? fiat)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtMoney(d.commission, d.fiatCurrency ?? fiat)} ({d.pctInForce}%)</td></tr>
                         ))}
                       </tbody>
                     </table>
@@ -1573,7 +1682,7 @@ export default function OwnerPage() {
                     <thead><tr><th>Date</th><th>Admin</th><th>Deposits</th><th>Total deposited</th><th>Commission</th></tr></thead>
                     <tbody>
                       {rollup.days.map((d, i) => (
-                        <tr key={`${d.date}-${d.adminId}-${i}`}><td>{d.date}</td><td>{d.adminName}</td><td>{d.deposits}</td><td>{fmtCash(d.totalAmount)}</td><td>{fmtCash(d.totalCommission)}</td></tr>
+                        <tr key={`${d.date}-${d.adminId}-${i}`}><td>{d.date}</td><td>{d.adminName}</td><td>{d.deposits}</td><td>{fmtMoney(d.totalAmount, d.fiatCurrency ?? fiat)}</td><td>{fmtMoney(d.totalCommission, d.fiatCurrency ?? fiat)}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -1635,10 +1744,10 @@ export default function OwnerPage() {
           {settlement === null ? <p>Loading settlement…</p> : (
             <>
               <div className="sum-cards">
-                <div className="sum-card"><span>Owed</span><b>{fmtCash(settlement.totals.owed)}</b></div>
-                <div className="sum-card"><span>Paid</span><b>{fmtCash(settlement.totals.paid)}</b></div>
-                <div className="sum-card"><span>Balance</span><b>{fmtCash(settlement.totals.balance)}</b></div>
-                <div className="sum-card"><span>Parent shares</span><b>{fmtCash(settlement.totals.parentShare)}</b></div>
+                <div className="sum-card"><span>Owed</span><b>{fmtMoney(settlement.totals.owed, fiat)}</b></div>
+                <div className="sum-card"><span>Paid</span><b>{fmtMoney(settlement.totals.paid, fiat)}</b></div>
+                <div className="sum-card"><span>Balance</span><b>{fmtMoney(settlement.totals.balance, fiat)}</b></div>
+                <div className="sum-card"><span>Parent shares</span><b>{fmtMoney(settlement.totals.parentShare, fiat)}</b></div>
               </div>
               <p className="rg48-mini">Parent shares are a reporting line — they are NOT deducted from any admin&apos;s payout.</p>
               {settlement.rows.length === 0 ? <p>No admins yet.</p> : (
@@ -1649,10 +1758,10 @@ export default function OwnerPage() {
                       {settlement.rows.map((r) => (
                         <tr key={r.adminId}>
                           <td>{r.adminName}{r.active ? "" : " (deactivated)"}{r.parentName ? ` · parent: ${r.parentName}` : ""}</td>
-                          <td>{fmtCash(r.owed)}</td>
-                          <td>{fmtCash(r.paid)}</td>
-                          <td>{fmtCash(r.balance)}</td>
-                          <td>{r.parentShare > 0 ? fmtCash(r.parentShare) : "—"}</td>
+                          <td>{fmtMoney(r.owed, fiat)}</td>
+                          <td>{fmtMoney(r.paid, fiat)}</td>
+                          <td>{fmtMoney(r.balance, fiat)}</td>
+                          <td>{r.parentShare > 0 ? fmtMoney(r.parentShare, fiat) : "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1754,8 +1863,8 @@ export default function OwnerPage() {
           {ownerLedTotals && (
             <div className="sum-cards">
               <div className="sum-card"><span>Rows</span><b>{ownerLedTotals.rows}</b></div>
-              <div className="sum-card"><span>Cash in</span><b>{fmtCash(ownerLedTotals.cashIn)}</b></div>
-              <div className="sum-card"><span>Cash out</span><b>{fmtCash(ownerLedTotals.cashOut)}</b></div>
+              <div className="sum-card"><span>Cash in</span><b>{fmtMoney(ownerLedTotals.cashIn, fiat)}</b></div>
+              <div className="sum-card"><span>Cash out</span><b>{fmtMoney(ownerLedTotals.cashOut, fiat)}</b></div>
             </div>
           )}
           {ownerLedger === null ? <p>Loading ledger…</p> : ownerLedger.length === 0 ? (
@@ -1765,7 +1874,7 @@ export default function OwnerPage() {
               {ownerLedger.map((r) => {
                 const sign = r.amount > 0 ? "+" : r.amount < 0 ? "−" : "";
                 const abs = Math.abs(r.amount);
-                const amt = r.wallet === "coins" ? `${sign}${Math.round(abs)} coins` : `${sign}${fmtCash(abs)}`;
+                const amt = r.wallet === "coins" ? `${sign}${Math.round(abs)} coins` : `${sign}${fmtMoney(abs, r.fiatCurrency ?? fiat)}`;
                 return (
                   <div key={r.id} className="ledger-row">
                     <span className="ledger-txt">
@@ -1800,14 +1909,14 @@ export default function OwnerPage() {
           {pnl === null ? <p>Loading P&amp;L…</p> : (
             <>
               <div className="sum-cards">
-                <div className="sum-card"><span>GGR (cash)</span><b>{fmtCash(pnl.ggrCash)}</b></div>
-                <div className="sum-card"><span>Deposits</span><b>{fmtCash(pnl.deposits)}</b></div>
-                <div className="sum-card"><span>Withdrawals (approved)</span><b>{fmtCash(pnl.withdrawals)}</b></div>
-                <div className="sum-card"><span>Commissions owed</span><b>{fmtCash(pnl.commissions)}</b></div>
-                <div className="sum-card"><span>Net profit</span><b>{fmtCash(pnl.netProfit)}</b></div>
+                <div className="sum-card"><span>GGR (cash)</span><b>{fmtMoney(pnl.ggrCash, fiat)}</b></div>
+                <div className="sum-card"><span>Deposits</span><b>{fmtMoney(pnl.deposits, fiat)}</b></div>
+                <div className="sum-card"><span>Withdrawals (approved)</span><b>{fmtMoney(pnl.withdrawals, fiat)}</b></div>
+                <div className="sum-card"><span>Commissions owed</span><b>{fmtMoney(pnl.commissions, fiat)}</b></div>
+                <div className="sum-card"><span>Net profit</span><b>{fmtMoney(pnl.netProfit, fiat)}</b></div>
               </div>
               <p className="ow-day-cap">
-                {pnl.roundsCash} cash rounds ({fmtCash(pnl.stakesCash)} staked − {fmtCash(pnl.payoutsCash)} paid out) · {pnl.roundsCoins} coin rounds ({pnl.stakesCoins} staked − {pnl.payoutsCoins} paid out, GGR {pnl.ggrCoins} coins) · {pnl.depositsCount} deposits · {pnl.withdrawalsCount} approved withdrawals.
+                {pnl.roundsCash} cash rounds ({fmtMoney(pnl.stakesCash, fiat)} staked − {fmtMoney(pnl.payoutsCash, fiat)} paid out) · {pnl.roundsCoins} coin rounds ({pnl.stakesCoins} staked − {pnl.payoutsCoins} paid out, GGR {pnl.ggrCoins} coins) · {pnl.depositsCount} deposits · {pnl.withdrawalsCount} approved withdrawals.
               </p>
               <p className="ow-day-cap">{pnl.formula}</p>
             </>
@@ -1845,7 +1954,7 @@ export default function OwnerPage() {
 
         <section className="admin-sec">
           <h3>Payment methods</h3>
-          <p className="rg48-sub">Which deposit methods are live, and their per-method limits. Demo cashier only — this connects no gateway.</p>
+          <p className="rg48-sub">Which deposit methods are live for {fiat}, and their per-method limits. Demo cashier only — this connects no gateway. Switch the currency above to edit another fiat&apos;s methods.</p>
           {ownerPay === null ? <p>Loading payment methods…</p> : (
             <div className="ow-games">
               {ownerPay.map((m) => (
@@ -1861,6 +1970,12 @@ export default function OwnerPage() {
           {ownerWallet === null ? <p>Loading wallet config…</p> : (
             <OwnerWalletForm key={JSON.stringify(ownerWallet)} w={ownerWallet} onSave={saveOwnerWallet} />
           )}
+        </section>
+
+        <section className="admin-sec">
+          <h3>Currency settings</h3>
+          <p className="rg48-sub">Per-currency money rules — min deposit, min stake, coins conversion rate, LIVE decay step, and the withdrawal amount that also needs the owner&apos;s approval. Change the NGN numbers here; no code change needed. The GHS row stays in sync with Wallet config above.</p>
+          <OwnerCurrencyConfig />
         </section>
 
         {/* P1 Batch 3 (O16): revenue breakdowns — by game, by admin, by
@@ -1886,10 +2001,10 @@ export default function OwnerPage() {
           {revenue === null ? <p>Loading revenue…</p> : (
             <>
               <div className="sum-cards">
-                <div className="sum-card"><span>GGR (cash)</span><b>{fmtCash(revenue.totals.ggrCash)}</b></div>
+                <div className="sum-card"><span>GGR (cash)</span><b>{fmtMoney(revenue.totals.ggrCash, fiat)}</b></div>
                 <div className="sum-card"><span>GGR (coins)</span><b>{revenue.totals.ggrCoins} coins</b></div>
-                <div className="sum-card"><span>Deposits</span><b>{fmtCash(revenue.totals.totalDeposited)}</b></div>
-                <div className="sum-card"><span>Commission</span><b>{fmtCash(revenue.totals.commission)}</b></div>
+                <div className="sum-card"><span>Deposits</span><b>{fmtMoney(revenue.totals.totalDeposited, fiat)}</b></div>
+                <div className="sum-card"><span>Commission</span><b>{fmtMoney(revenue.totals.commission, fiat)}</b></div>
               </div>
               <h4>By game — cash (top 5 by GGR are the first five rows)</h4>
               {revenue.byGameCash.length === 0 ? <p>No cash rounds in this period.</p> : (
@@ -1898,7 +2013,7 @@ export default function OwnerPage() {
                     <thead><tr><th>Game</th><th>Rounds</th><th>Stakes</th><th>Payouts</th><th>GGR</th></tr></thead>
                     <tbody>
                       {revenue.byGameCash.map((g) => (
-                        <tr key={g.game}><td>{g.name}</td><td>{g.rounds}</td><td>{fmtCash(g.stakes)}</td><td>{fmtCash(g.payouts)}</td><td>{fmtCash(g.ggr)}</td></tr>
+                        <tr key={g.game}><td>{g.name}</td><td>{g.rounds}</td><td>{fmtMoney(g.stakes, fiat)}</td><td>{fmtMoney(g.payouts, fiat)}</td><td>{fmtMoney(g.ggr, fiat)}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -1923,7 +2038,7 @@ export default function OwnerPage() {
                   <thead><tr><th>Admin</th><th>Deposits</th><th>Deposited</th><th>Commission</th><th>GGR</th></tr></thead>
                   <tbody>
                     {revenue.byAdmin.map((a) => (
-                      <tr key={a.adminId ?? "none"}><td>{a.adminName}</td><td>{a.deposits}</td><td>{fmtCash(a.totalDeposited)}</td><td>{fmtCash(a.commission)}</td><td>{fmtCash(a.ggr)}</td></tr>
+                      <tr key={a.adminId ?? "none"}><td>{a.adminName}</td><td>{a.deposits}</td><td>{fmtMoney(a.totalDeposited, fiat)}</td><td>{fmtMoney(a.commission, fiat)}</td><td>{fmtMoney(a.ggr, fiat)}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -1939,7 +2054,7 @@ export default function OwnerPage() {
                         <div key={d.date} className="p1b3-bar-row">
                           <span className="p1b3-bar-label">{d.date.slice(5)}</span>
                           <span className="p1b3-bar-track"><span className="p1b3-bar-fill" style={{ width: `${w}%` }} /></span>
-                          <b className="p1b3-bar-val">{fmtCash(d.ggr)}</b>
+                          <b className="p1b3-bar-val">{fmtMoney(d.ggr, fiat)}</b>
                         </div>
                       );
                     })}
@@ -1949,7 +2064,7 @@ export default function OwnerPage() {
                       <thead><tr><th>Date</th><th>GGR</th><th>Deposits</th><th>Deposited</th><th>Commission</th></tr></thead>
                       <tbody>
                         {revenue.byDay.map((d) => (
-                          <tr key={d.date}><td>{d.date}</td><td>{fmtCash(d.ggr)}</td><td>{d.deposits}</td><td>{fmtCash(d.totalDeposited)}</td><td>{fmtCash(d.commission)}</td></tr>
+                          <tr key={d.date}><td>{d.date}</td><td>{fmtMoney(d.ggr, fiat)}</td><td>{d.deposits}</td><td>{fmtMoney(d.totalDeposited, fiat)}</td><td>{fmtMoney(d.commission, fiat)}</td></tr>
                         ))}
                       </tbody>
                     </table>
@@ -1963,7 +2078,7 @@ export default function OwnerPage() {
                     <thead><tr><th>Method</th><th>Deposits</th><th>Total</th></tr></thead>
                     <tbody>
                       {revenue.byMethod.map((m) => (
-                        <tr key={m.method}><td>{m.method}</td><td>{m.deposits}</td><td>{fmtCash(m.total)}</td></tr>
+                        <tr key={m.method}><td>{m.method}</td><td>{m.deposits}</td><td>{fmtMoney(m.total, fiat)}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -1988,8 +2103,8 @@ export default function OwnerPage() {
                     <tr key={r.slug}>
                       <td>{r.name} <span className="ow-game-cur">{r.currency === "coins" ? "Coins" : "Cash"}</span></td>
                       <td>{r.rounds}</td>
-                      <td>{r.currency === "coins" ? `${Math.round(r.stakes)} coins` : fmtCash(r.stakes)}</td>
-                      <td>{r.currency === "coins" ? `${Math.round(r.payouts)} coins` : fmtCash(r.payouts)}</td>
+                      <td>{r.currency === "coins" ? `${Math.round(r.stakes)} coins` : fmtMoney(r.stakes, fiat)}</td>
+                      <td>{r.currency === "coins" ? `${Math.round(r.payouts)} coins` : fmtMoney(r.payouts, fiat)}</td>
                       <td>{r.actualRtp === null ? "—" : `${r.actualRtp.toFixed(1)}%`}</td>
                       <td>{r.baseRtp === null ? "Skill" : `${r.baseRtp}%`}</td>
                       <td><span className={`p1b3-flag${r.status === "flagged-over" ? " p1b3-flag-over" : r.status === "flagged-under" ? " p1b3-flag-under" : r.status === "ok" ? " p1b3-flag-ok" : ""}`}>{rtpStatusLabel(r.status)}</span></td>
@@ -2092,7 +2207,7 @@ export default function OwnerPage() {
                   <div className="ow-game-head">
                     <b>{p.name}</b>
                     <span className="ow-game-cur">{p.type === "deposit_match" ? `Match ${p.percent}%` : p.type === "free_coins" ? `${p.coinAmount} coins` : `Cashback ${p.percent}%`}</span>
-                    {p.cap !== null && <span className="ow-game-mult">cap {fmtCash(p.cap)}</span>}
+                    {p.cap !== null && <span className="ow-game-mult">cap {fmtMoney(p.cap, fiat)}</span>}
                     {!p.active && <span className="ow-game-flag">PAUSED</span>}
                   </div>
                   <p className="ow-game-note">
@@ -2108,7 +2223,7 @@ export default function OwnerPage() {
                     )}
                   </div>
                   {cbResult && cbResult.promotionId === p.id && (
-                    <p className="ow-day-cap">Paid {cbResult.paid} {cbResult.paid === 1 ? "player" : "players"} {fmtCash(cbResult.total)} cashback for {cbResult.date}.</p>
+                    <p className="ow-day-cap">Paid {cbResult.paid} {cbResult.paid === 1 ? "player" : "players"} {fmtSplit(cbResult.totalsByCurrency, cbResult.total)} cashback for {cbResult.date}.</p>
                   )}
                 </div>
               ))}
@@ -2125,7 +2240,7 @@ export default function OwnerPage() {
                       <tr key={g.id}>
                         <td>{g.promotionName}</td>
                         <td>{g.userName}</td>
-                        <td>{g.wallet === "coins" ? `${Math.round(g.amount)} coins` : fmtCash(g.amount)}</td>
+                        <td>{g.wallet === "coins" ? `${Math.round(g.amount)} coins` : fmtMoney(g.amount, g.fiatCurrency ?? fiat)}</td>
                         <td>{g.day || "—"}</td>
                         <td>{new Date(g.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
                       </tr>
@@ -2316,27 +2431,27 @@ export default function OwnerPage() {
                     {cashier.perMethod.map((m) => (
                       <tr key={m.method}>
                         <td>{m.method}</td>
-                        <td>{fmtCash(m.deposited)}</td>
-                        <td>{fmtCash(m.withdrawn)}</td>
-                        <td>{fmtCash(m.net)}</td>
+                        <td>{fmtMoney(m.deposited, fiat)}</td>
+                        <td>{fmtMoney(m.withdrawn, fiat)}</td>
+                        <td>{fmtMoney(m.net, fiat)}</td>
                       </tr>
                     ))}
                     <tr>
                       <td><b>Total</b></td>
-                      <td><b>{fmtCash(cashier.totals.deposited)}</b></td>
-                      <td><b>{fmtCash(cashier.totals.withdrawn)}</b></td>
-                      <td><b>{fmtCash(cashier.totals.net)}</b></td>
+                      <td><b>{fmtMoney(cashier.totals.deposited, fiat)}</b></td>
+                      <td><b>{fmtMoney(cashier.totals.withdrawn, fiat)}</b></td>
+                      <td><b>{fmtMoney(cashier.totals.net, fiat)}</b></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
               <h4>Reconciliation</h4>
               <div className="sum-cards">
-                <div className="sum-card"><span>Expected cash on hand</span><b>{fmtCash(cashier.reconciliation.expectedCashOnHand)}</b></div>
-                <div className="sum-card"><span>Actual wallet balances</span><b>{fmtCash(cashier.reconciliation.actualWalletBalances)}</b></div>
-                <div className="sum-card"><span>Difference</span><b>{fmtCash(cashier.reconciliation.difference)}</b></div>
+                <div className="sum-card"><span>Expected cash on hand</span><b>{fmtMoney(cashier.reconciliation.expectedCashOnHand, fiat)}</b></div>
+                <div className="sum-card"><span>Actual wallet balances</span><b>{fmtMoney(cashier.reconciliation.actualWalletBalances, fiat)}</b></div>
+                <div className="sum-card"><span>Difference</span><b>{fmtMoney(cashier.reconciliation.difference, fiat)}</b></div>
               </div>
-              <p className="rg48-mini">Expected = total deposits − total approved withdrawals − total commission paid out ({fmtCash(cashier.reconciliation.totalDeposited)} − {fmtCash(cashier.reconciliation.totalWithdrawn)} − {fmtCash(cashier.reconciliation.totalCommissionPaid)}). Actual = the sum of every player&apos;s cash balance. The difference is the house&apos;s net position — game winnings come from the house, so the two will differ; it is not an error.</p>
+              <p className="rg48-mini">Expected = total deposits − total approved withdrawals − total commission paid out ({fmtMoney(cashier.reconciliation.totalDeposited, fiat)} − {fmtMoney(cashier.reconciliation.totalWithdrawn, fiat)} − {fmtMoney(cashier.reconciliation.totalCommissionPaid, fiat)}). Actual = the sum of every player&apos;s cash balance. The difference is the house&apos;s net position — game winnings come from the house, so the two will differ; it is not an error.</p>
             </>
           )}
         </section>
@@ -2394,10 +2509,10 @@ export default function OwnerPage() {
                         <td>{c.cohort}</td>
                         <td>{c.players}</td>
                         <td>{c.activePct}%</td>
-                        <td>{fmtCash(c.totalDeposited)}</td>
-                        <td>{fmtCash(c.totalStaked)}</td>
-                        <td>{fmtCash(c.ggr)}</td>
-                        <td>{fmtCash(c.avgDeposit)}</td>
+                        <td>{fmtMoney(c.totalDeposited, fiat)}</td>
+                        <td>{fmtMoney(c.totalStaked, fiat)}</td>
+                        <td>{fmtMoney(c.ggr, fiat)}</td>
+                        <td>{fmtMoney(c.avgDeposit, fiat)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2445,9 +2560,9 @@ export default function OwnerPage() {
                         <td>{new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
                         <td>{r.userName}</td>
                         <td>{r.gameName}</td>
-                        <td>{r.currency === "coins" ? `${r.stake} coins` : fmtCash(r.stake)}</td>
-                        <td>{r.currency === "coins" ? `${r.payout} coins` : fmtCash(r.payout)}</td>
-                        <td>{r.currency === "coins" ? `${r.net > 0 ? "+" : ""}${r.net} coins` : `${r.net > 0 ? "+" : ""}${fmtCash(r.net)}`}</td>
+                        <td>{r.currency === "coins" ? `${r.stake} coins` : fmtMoney(r.stake, r.fiatCurrency ?? fiat)}</td>
+                        <td>{r.currency === "coins" ? `${r.payout} coins` : fmtMoney(r.payout, r.fiatCurrency ?? fiat)}</td>
+                        <td>{r.currency === "coins" ? `${r.net > 0 ? "+" : ""}${r.net} coins` : `${r.net > 0 ? "+" : ""}${fmtMoney(r.net, r.fiatCurrency ?? fiat)}`}</td>
                         <td><button className="btn btn-ghost btn-sm" type="button" disabled={replayBusy === r.id} onClick={() => void openReplay(r.id)}>{replayBusy === r.id ? "Opening…" : "View"}</button></td>
                       </tr>
                     ))}
@@ -2461,7 +2576,7 @@ export default function OwnerPage() {
                     <span className="ow-game-cur">{replayDetail.replay.userName}{replayDetail.replay.userContact ? ` · ${replayDetail.replay.userContact}` : ""}</span>
                     <span className="ow-game-mult">{new Date(replayDetail.replay.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
-                  <p className="ow-game-note">Stake {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.stake} coins` : fmtCash(replayDetail.replay.stake)} · Payout {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.payout} coins` : fmtCash(replayDetail.replay.payout)} · Net {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.net} coins` : fmtCash(replayDetail.replay.net)}{replayDetail.replay.roundId ? ` · Round ${replayDetail.replay.roundId.slice(0, 8)}…` : ""}</p>
+                  <p className="ow-game-note">Stake {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.stake} coins` : fmtMoney(replayDetail.replay.stake, replayDetail.replay.fiatCurrency ?? fiat)} · Payout {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.payout} coins` : fmtMoney(replayDetail.replay.payout, replayDetail.replay.fiatCurrency ?? fiat)} · Net {replayDetail.replay.currency === "coins" ? `${replayDetail.replay.net} coins` : fmtMoney(replayDetail.replay.net, replayDetail.replay.fiatCurrency ?? fiat)}{replayDetail.replay.roundId ? ` · Round ${replayDetail.replay.roundId.slice(0, 8)}…` : ""}</p>
                   {replayDetail.verify ? (
                     <p className="ow-game-note">
                       Provably-fair verify: crash point ×{replayDetail.verify.crashPoint} · recomputed ×{replayDetail.verify.recomputedPoint} · point {replayDetail.verify.pointMatch ? "MATCHES ✓" : "DOES NOT MATCH ✗"} · hash {replayDetail.verify.hashMatch ? "MATCHES ✓" : "DOES NOT MATCH ✗"}
@@ -2505,7 +2620,7 @@ export default function OwnerPage() {
                   <thead><tr><th>Tier</th><th>Min deposited</th><th>Perks</th></tr></thead>
                   <tbody>
                     {loyalty.tiers.map((t) => (
-                      <tr key={t.id}><td>{t.name}</td><td>{fmtCash(t.minDeposited)}</td><td>{t.perks.length === 0 ? "—" : t.perks.join(", ")}</td></tr>
+                      <tr key={t.id}><td>{t.name}</td><td>{fmtMoney(t.minDeposited, "GHS")}</td><td>{t.perks.length === 0 ? "—" : t.perks.join(", ")}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -2531,17 +2646,17 @@ export default function OwnerPage() {
                 </div>
               )}
               <div className="pd-adjust-row">
-                <button className="btn btn-gold" type="button" disabled={bdayPayBusy || loyalty.settings.birthdayBonus <= 0} onClick={() => void payBirthdays()}>{bdayPayBusy ? "Paying…" : `Pay birthday bonuses for today (${fmtCash(loyalty.settings.birthdayBonus)} each)`}</button>
+                <button className="btn btn-gold" type="button" disabled={bdayPayBusy || loyalty.settings.birthdayBonus <= 0} onClick={() => void payBirthdays()}>{bdayPayBusy ? "Paying…" : `Pay birthday bonuses for today (${fmtMoney(loyalty.settings.birthdayBonus, "GHS")} each)`}</button>
               </div>
               {loyalty.settings.birthdayBonus <= 0 && <p className="rg48-mini">The birthday bonus is GH₵ 0 — set an amount above to pay anything.</p>}
-              {payResult && <p className="rg48-mini">Last run: paid {payResult.count} {payResult.count === 1 ? "player" : "players"} ({fmtCash(payResult.total)}){payResult.alreadyPaid > 0 ? ` · ${payResult.alreadyPaid} already paid this year, skipped` : ""}. A second run today pays nobody.</p>}
+              {payResult && <p className="rg48-mini">Last run: paid {payResult.count} {payResult.count === 1 ? "player" : "players"} ({fmtSplit(payResult.totalsByCurrency, payResult.total)}){payResult.alreadyPaid > 0 ? ` · ${payResult.alreadyPaid} already paid this year, skipped` : ""}. A second run today pays nobody.</p>}
               <h4>Players (latest 10) — live points</h4>
               <div className="rg48-twrap">
                 <table className="dep-table">
                   <thead><tr><th>Player</th><th>Tier</th><th>Total staked</th><th>Points</th></tr></thead>
                   <tbody>
                     {loyalty.players.map((p) => (
-                      <tr key={p.id}><td>{p.name}</td><td>{p.tier ?? "—"}</td><td>{fmtCash(p.totalStaked)}</td><td>{p.points}</td></tr>
+                      <tr key={p.id}><td>{p.name}</td><td>{p.tier ?? "—"}</td><td>{fmtMoney(p.totalStaked, p.fiatCurrency ?? fiat)}</td><td>{p.points}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -2571,12 +2686,12 @@ export default function OwnerPage() {
                       <td>{t.gameName}</td>
                       <td>{t.adminName}</td>
                       <td>{t.status}</td>
-                      <td>{fmtCash(t.prizePool)}</td>
+                      <td>{fmtMoney(t.prizePool, fiat)}</td>
                       <td>{t.winnerName ?? "—"}</td>
                       <td>
                         {t.status !== "ended" && (
                           endConfirmId === t.id ? (
-                            <button className="btn btn-gold btn-sm" type="button" disabled={endBusy === t.id} onClick={() => void endOwnerTournament(t)}>{endBusy === t.id ? "Ending…" : `Confirm end — pay ${fmtCash(t.prizePool)}`}</button>
+                            <button className="btn btn-gold btn-sm" type="button" disabled={endBusy === t.id} onClick={() => void endOwnerTournament(t)}>{endBusy === t.id ? "Ending…" : `Confirm end — pay ${fmtMoney(t.prizePool, fiat)}`}</button>
                           ) : (
                             <button className="btn btn-ghost btn-sm" type="button" onClick={() => setEndConfirmId(t.id)}>End</button>
                           )
@@ -2619,10 +2734,10 @@ export default function OwnerPage() {
                   <div className="ow-game-head">
                     <b>{j.name}</b>
                     <span className="ow-game-cur">{j.gameName}</span>
-                    <span className="ow-game-mult">Pot {fmtCash(j.currentPot)}</span>
+                    <span className="ow-game-mult">Pot {fmtMoney(j.currentPot, "GHS")}</span>
                     {j.active ? <span className="ow-game-flag">ACTIVE</span> : <span className="ow-game-flag">PAUSED</span>}
                   </div>
-                  <p className="ow-game-note">Seed {fmtCash(j.seedAmount)} · {j.contributionPct}% of each cash stake feeds the pot · {j.active ? "growing" : "paused — not growing"}.</p>
+                  <p className="ow-game-note">Seed {fmtMoney(j.seedAmount, "GHS")} · {j.contributionPct}% of each cash stake feeds the pot · {j.active ? "growing" : "paused — not growing"}.</p>
                   <JackpotPayForm jackpot={j} busy={jkPayBusy === j.id} onPay={payJackpot} />
                   <div className="pd-adjust-row">
                     <button className="btn btn-ghost btn-sm" type="button" disabled={jkToggleBusy === j.id} onClick={() => void toggleJackpot(j)}>{jkToggleBusy === j.id ? "…" : j.active ? "Pause" : "Resume"}</button>

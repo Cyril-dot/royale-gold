@@ -93,7 +93,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const commissionAdminId = user.referredByAdminId;
     const commission = commissionAdminId
       ? await playerCommission(commissionAdminId, id)
-      : { total: 0, model: "none" as const, rate: 0 };
+      : { total: 0, model: "none" as const, rate: 0, fiatCurrency: user.currency ?? "GHS" };
     // P2 Batch 1 (A26): VIP status — the tier this player has reached
     // from their total deposited, plus progress to the next tier.
     const vip = await vipStatusFor(id, me.id);
@@ -109,6 +109,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         role: user.role,
         cash: dec(user.cashBalance),
         coins: user.coins,
+        // Phase 1 country-based (Nov 2026): the player's country + fiat.
+        country: user.country ?? "GH",
+        currency: user.currency ?? "GHS",
         joinedAt: user.createdAt.toISOString(),
         referralCodeUsed: user.referralCodeUsed,
         referringAdmin: user.referredByAdmin,
@@ -120,6 +123,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         id: d.id,
         amount: dec(d.amount),
         method: d.method,
+        fiatCurrency: d.fiatCurrency ?? "GHS",
         pctInForce: dec(d.pctInForce),
         commission: dec(d.commission),
         createdAt: d.createdAt.toISOString(),
@@ -139,6 +143,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         game: r.game,
         gameName: getGame(r.game)?.name ?? r.game,
         currency: r.currency,
+        fiatCurrency: r.fiatCurrency ?? "GHS",
         stake: dec(r.stake),
         payout: dec(r.payout),
         net: dec(r.payout) - dec(r.stake),

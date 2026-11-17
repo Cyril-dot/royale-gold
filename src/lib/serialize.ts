@@ -20,6 +20,10 @@ export interface PublicUser {
   // P2 Batch 2 (O28): the player's birthday (YYYY-MM-DD) or null — the
   // loyalty birthday bonus pays on it, once per year.
   birthday: string | null;
+  // Phase 1 country-based (Nov 2026): the country chosen at register
+  // + the fiat the account always uses.
+  country: string | null;
+  currency: string;
   // P0 Batch 3 (O2/O3): the admin's allowed sections, or null = all.
   permissions: string[] | null;
   // P0 Batch 3 (A13): whether TOTP 2FA is enabled (the secret is never exposed).
@@ -45,6 +49,9 @@ export function publicUser(u: {
   permissions?: string | null;
   totpEnabled?: boolean;
   birthday?: Date | null;
+  // Phase 1 country-based (Nov 2026).
+  country?: string | null;
+  currency?: string | null;
 }): PublicUser {
   return {
     id: u.id,
@@ -65,6 +72,11 @@ export function publicUser(u: {
     permissions: parsePermissions(u.permissions ?? null),
     totpEnabled: u.totpEnabled ?? false,
     birthday: u.birthday ? u.birthday.toISOString().slice(0, 10) : null,
+    // Phase 1 country-based (Nov 2026): existing (pre-Phase-1) rows
+    // carry null/"GHS" — the register path + the prod SQL default
+    // every account to GH/GHS, so the client can always rely on these.
+    country: u.country ?? "GH",
+    currency: u.currency ?? "GHS",
   };
 }
 

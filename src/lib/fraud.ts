@@ -9,20 +9,22 @@
 //       carrying 2+ risk flags (A15) → HIGH.
 //   (b) rapid-withdrawals — a player with 3+ withdrawal requests in
 //       the last 24 hours → HIGH.
-//   (c) deposit-no-play — a player who deposited GH₵ 1,000+ in the
+//   (c) deposit-no-play — a player who deposited 1,000+ (in their
+//       fiat — the GHS threshold scaled by conversionRate/5) in the
 //       last 24 hours and played 0 rounds in the last 24 hours
 //       (deposit-then-withdraw pattern) → MEDIUM.
 //   (e) deposit-then-withdraw — a withdrawal requested within 1 hour
 //       of a deposit by the same player (last 7 days) → MEDIUM.
 //
-// Signal (d) — 5+ failed login attempts in 24h — is NOT built: the
-// login route writes no audit row on a failed attempt, so there is no
-// real data to count from, and no login-attempt log is invented. The
-// fraud page says so plainly instead of showing a fake signal.
+// Phase 1 country-based (Nov 2026): amounts in the alert reasons use
+// the player's own symbol; the 1,000 deposit-no-play threshold is
+// stored in GHS terms and scaled per player (NGN: ₦100,000).
 
 import { prisma } from "./prisma";
 import { dec } from "./money";
 import { annotateWithdrawalFlags, WITHDRAWAL_RISK_LABELS } from "./withdrawals";
+import { symbolFor } from "./country";
+import { getAllCurrencyConfigs } from "./game-config";
 
 export type FraudSeverity = "high" | "medium";
 export type FraudSignal = "withdrawal-flags" | "rapid-withdrawals" | "deposit-no-play" | "deposit-then-withdraw";
@@ -47,11 +49,11 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
   const weekAgo = new Date(now - 7 * DAY);
   const monthAgo = new Date(now - 30 * DAY);
 
-  const [openWithdrawals, recentWithdrawals, recentDeposits, recentRounds, weekDeposits, weekWithdrawals, users] = await Promise.all([
+  const [openWithdrawals, recentWithdrawals, recentDeposits, recentRounds, weekDeposits, weekWithdrawals, users, configs] = await Promise.all([
     // (a) open withdrawals (last 30 days) with their players.
     prisma.withdrawal.findMany({
       where: { userId: { in: userIds }, status: { in: ["pending", "admin_approved"] }, createdAt: { gte: monthAgo } },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } } },
+      include: { user: { select: { id: true, name: true, email: true, phone: true, createdAt: true, currency: true } } },
       orderBy: { createdAt: "desc" },
     }),
     // (b) every withdrawal request in the last 24 hours.
@@ -78,16 +80,23 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
     // (e) withdrawals in the last 7 days.
     prisma.withdrawal.findMany({
       where: { userId: { in: userIds }, createdAt: { gte: weekAgo } },
-      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      include: { user: { select: { id: true, name: true, email: true, phone: true, currency: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, name: true, email: true, phone: true },
+      select: { id: true, name: true, email: true, phone: true, currency: true },
     }),
+    getAllCurrencyConfigs(),
   ]);
 
   const userById = new Map(users.map((u) => [u.id, u]));
+  // Phase 1 country-based (Nov 2026): per-player threshold factor.
+  const factorOf = (userId: string): number => {
+    const fiat = userById.get(userId)?.currency ?? "GHS";
+    const cfg = configs.find((c) => c.currency === fiat);
+    return (cfg?.conversionRate ?? 5) / 5;
+  };
   const alerts: FraudAlert[] = [];
 
   // (a) A withdrawal with 2+ risk flags is HIGH — the flags are the
@@ -105,7 +114,7 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
         userId: w.userId,
         userName: w.user.name,
         userContact: w.user.email ?? w.user.phone ?? null,
-        reason: `Withdrawal of GH₵ ${dec(w.amount).toFixed(2)} (${w.method}) carries ${f.length} risk flags: ${f.map((x) => WITHDRAWAL_RISK_LABELS[x]).join(", ")}.`,
+        reason: `Withdrawal of ${symbolFor(w.user.currency)} ${dec(w.amount).toFixed(2)} (${w.method}) carries ${f.length} risk flags: ${f.map((x) => WITHDRAWAL_RISK_LABELS[x]).join(", ")}.`,
         createdAt: w.createdAt.toISOString(),
       });
     }
@@ -131,12 +140,12 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
     }
   }
 
-  // (c) GH₵ 1,000+ deposited in 24h with 0 rounds played in 24h.
+  // (c) 1,000+ (in the player's fiat) deposited in 24h with 0 rounds played in 24h.
   const dep24 = new Map<string, number>();
   for (const d of recentDeposits) dep24.set(d.userId, (dep24.get(d.userId) ?? 0) + dec(d.amount));
   const played24 = new Set(recentRounds.map((r) => r.userId));
   for (const [userId, total] of dep24) {
-    if (total >= 1000 && !played24.has(userId)) {
+    if (total >= 1000 * factorOf(userId) && !played24.has(userId)) {
       const u = userById.get(userId);
       if (!u) continue;
       alerts.push({
@@ -146,7 +155,7 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
         userId,
         userName: u.name,
         userContact: u.email ?? u.phone ?? null,
-        reason: `Deposited GH₵ ${total.toFixed(2)} in the last 24 hours and played no rounds in the last 24 hours.`,
+        reason: `Deposited ${symbolFor(u.currency)} ${total.toFixed(2)} in the last 24 hours and played no rounds in the last 24 hours.`,
         createdAt: new Date(now).toISOString(),
       });
     }
@@ -173,7 +182,7 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
         userId: w.userId,
         userName: w.user.name,
         userContact: w.user.email ?? w.user.phone ?? null,
-        reason: `Requested a GH₵ ${dec(w.amount).toFixed(2)} withdrawal ${Math.max(0, Math.round((w.createdAt.getTime() - hit.createdAt.getTime()) / 60000))} minutes after depositing GH₵ ${hit.amount.toFixed(2)}.`,
+        reason: `Requested a ${symbolFor(w.user.currency)} ${dec(w.amount).toFixed(2)} withdrawal ${Math.max(0, Math.round((w.createdAt.getTime() - hit.createdAt.getTime()) / 60000))} minutes after depositing ${symbolFor(w.user.currency)} ${hit.amount.toFixed(2)}.`,
         createdAt: w.createdAt.toISOString(),
       });
     }

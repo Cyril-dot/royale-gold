@@ -6,7 +6,7 @@
 
 import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
-import { api, fmtCash } from "../../lib/api";
+import { api, fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx, useStore } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
@@ -133,7 +133,7 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
       setHideHole(false);
       setPlaying(false);
       const payout = Math.round(stake * 2.5 * 100) / 100;
-      setMsg(`Blackjack! 3:2 pays ${fmtCash(payout)}.`);
+      setMsg(`Blackjack! 3:2 pays ${fmtMoney(payout, room.user?.currency ?? "GHS")}.`);
       void room.settle(stake, payout, { blackjack: true });
     } else setMsg(`You have ${bjValue(y)}. Hit or stand?`);
   };
@@ -156,8 +156,8 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
     while (bjValue(dl) < 17) dl.push(d.pop()!);
     setDeck(d); setDealer(dl); setHideHole(false); setPlaying(false); setDealId((n) => n + 1);
     const yv = bjValue(you), dv = bjValue(dl);
-    if (dv > 21) { setMsg(`Dealer busts on ${dv} — you win ×2, ${fmtCash(stake * 2)}!`); await room.settle(stake, stake * 2, { you: yv, dealer: dv }); }
-    else if (yv > dv) { setMsg(`${yv} beats ${dv} — you win ×2, ${fmtCash(stake * 2)}!`); await room.settle(stake, stake * 2, { you: yv, dealer: dv }); }
+    if (dv > 21) { setMsg(`Dealer busts on ${dv} — you win ×2, ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}!`); await room.settle(stake, stake * 2, { you: yv, dealer: dv }); }
+    else if (yv > dv) { setMsg(`${yv} beats ${dv} — you win ×2, ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}!`); await room.settle(stake, stake * 2, { you: yv, dealer: dv }); }
     else if (yv < dv) { setMsg(`${dv} beats ${yv} — stake gone.`); await room.settle(stake, 0, { you: yv, dealer: dv }); }
     else { setMsg(`Push on ${yv} — stake back.`); await room.settle(stake, stake, { you: yv, dealer: dv, push: true }); }
   };
@@ -169,7 +169,7 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
           <div className="bj-row"><span>DEALER {dealer.length ? `· ${hideHole ? bjValue([dealer[0]]) : bjValue(dealer)}` : ""}</span><div className="qg-cardrow">{dealer.map((c, i) => <PlayingCard key={`${dealId}-${i}-${hideHole && i === 1 ? "back" : "face"}`} c={i === 1 && hideHole ? null : c} back={i === 1 && hideHole} flip />)}{dealer.length === 0 && <><PlayingCard /><PlayingCard /></>}</div></div>
           <div className="bj-row"><span>YOU {you.length ? `· ${bjValue(you)}` : ""}</span><div className="qg-cardrow">{you.map((c, i) => <PlayingCard key={`${dealId}-${i}`} c={c} flip />)}{you.length === 0 && <><PlayingCard /><PlayingCard /></>}</div></div>
         </div>
-        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={deal}>Deal · {fmtCash(stake)}</button>}
+        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={deal}>Deal · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
         {playing && (
           <div className="bj-btns">
             <button className="btn btn-gold" type="button" onClick={hit}>Hit</button>
@@ -207,7 +207,7 @@ export function PokerRoom({ game }: { game: GameDef }) {
     setStage(1); setYouHand(""); setDealerHand(""); setWinner(null);
     playSfx("deal", room.muted);
     // The artifact names the hand in the deal message.
-    setMsg(`Your hand: ${y.map(cardName).join(" ")} — flop is up. The pot is ${fmtCash(stake * 2)}. Reveal the turn and river when you're ready.`);
+    setMsg(`Your hand: ${y.map(cardName).join(" ")} — flop is up. The pot is ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}. Reveal the turn and river when you're ready.`);
   };
   const reveal = async () => {
     const ys = eval7([...you, ...board]);
@@ -216,7 +216,7 @@ export function PokerRoom({ game }: { game: GameDef }) {
     setDealerHand(handName(ds));
     setStage(2);
     const cmp = cmpScore(ys, ds);
-    if (cmp > 0) { setWinner("you"); setMsg(`You win with ${handName(ys)} over ${handName(ds)} — ×2, ${fmtCash(stake * 2)}!`); await room.settle(stake, stake * 2, { you: handName(ys), dealer: handName(ds) }); }
+    if (cmp > 0) { setWinner("you"); setMsg(`You win with ${handName(ys)} over ${handName(ds)} — ×2, ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}!`); await room.settle(stake, stake * 2, { you: handName(ys), dealer: handName(ds) }); }
     else if (cmp < 0) { setWinner("dealer"); setMsg(`Dealer wins with ${handName(ds)} over ${handName(ys)} — stake gone.`); await room.settle(stake, 0, { you: handName(ys), dealer: handName(ds) }); }
     else { setWinner("split"); setMsg(`Split pot — both ${handName(ys)}. Stake back.`); await room.settle(stake, stake, { you: handName(ys), dealer: handName(ds), push: true }); }
   };
@@ -227,7 +227,7 @@ export function PokerRoom({ game }: { game: GameDef }) {
         <div className="qg-stage pk-stage">
           <div className="pk-rowlab">DEALER <span className="pk-handname">{dealerHand ? `— ${dealerHand.toUpperCase()}` : ""}</span></div>
           <div className="qg-cardrow pk-cards">{stage === 0 ? <><PlayingCard small /><PlayingCard small /></> : stage === 1 ? <><PlayingCard small back /><PlayingCard small back /></> : dealer.map((c, i) => <PlayingCard key={i} c={c} small flip glow={winner === "dealer" || winner === "split"} />)}</div>
-          <div className="pk-rowlab">THE BOARD <span className="pk-pot">Pot {fmtCash(stake * 2)}</span></div>
+          <div className="pk-rowlab">THE BOARD <span className="pk-pot">Pot {fmtMoney(stake * 2, room.user?.currency ?? "GHS")}</span></div>
           {/* The artifact deals the FLOP at stage 1 — turn and river stay
               face-down until the reveal. The port showed all five board
               cards face-up at deal, giving the showdown away. */}
@@ -235,7 +235,7 @@ export function PokerRoom({ game }: { game: GameDef }) {
           <div className="pk-rowlab">YOU <span className="pk-handname">{youHand ? `— ${youHand.toUpperCase()}` : ""}</span></div>
           <div className="qg-cardrow pk-cards">{stage === 0 ? <><PlayingCard small /><PlayingCard small /></> : you.map((c, i) => <PlayingCard key={i} c={c} small flip glow={winner === "you" || winner === "split"} />)}</div>
         </div>
-        {stage === 0 && <button className="btn btn-gold xg-action" type="button" onClick={deal}>Deal a hand · {fmtCash(stake)}</button>}
+        {stage === 0 && <button className="btn btn-gold xg-action" type="button" onClick={deal}>Deal a hand · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
         {stage === 1 && <button className="btn btn-gold xg-action" type="button" onClick={() => void reveal()}>Turn, river &amp; showdown</button>}
         {stage === 2 && <button className="btn btn-ghost xg-action" type="button" onClick={() => setStage(0)}>Deal again</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
@@ -298,15 +298,15 @@ export function RouletteRoom({ game }: { game: GameDef }) {
         setSpun(out);
         setSpinning(false);
         const colour = out === 0 ? "green" : RED_NUMS.has(out) ? "red" : "black";
-        setMsg(res.mult > 0 ? `Landed ${out} ${colour} — ×${res.mult}! ${fmtCash(res.payout)}` : `Landed ${out} ${colour} — no win.`);
+        setMsg(res.mult > 0 ? `Landed ${out} ${colour} — ×${res.mult}! ${fmtMoney(res.payout, room.user?.currency ?? "GHS")}` : `Landed ${out} ${colour} — no win.`);
         setResult(res.mult > 0
-          ? { text: `${out} ${colour.toUpperCase()} — ×${res.mult} · ${fmtCash(res.payout)}`, cls: "win" }
+          ? { text: `${out} ${colour.toUpperCase()} — ×${res.mult} · ${fmtMoney(res.payout, room.user?.currency ?? "GHS")}`, cls: "win" }
           : { text: `${out} ${colour.toUpperCase()} — no payout`, cls: "lose" });
         if (room.simMode) {
           setSimSession((simSession ?? 0) - stake + res.payout);
-          room.pushHistory({ id: `sim-${Date.now()}`, game: game.slug, currency: "cash", stake, payout: res.payout, result: { bet: betKind, pick, out }, createdAt: new Date().toISOString() });
+          room.pushHistory({ id: `sim-${Date.now()}`, game: game.slug, currency: "cash", fiatCurrency: room.user?.currency ?? "GHS", stake, payout: res.payout, result: { bet: betKind, pick, out }, createdAt: new Date().toISOString() });
         } else if (res.cash !== undefined && res.coins !== undefined && res.sim !== undefined) {
-          setWallet({ cash: res.cash, coins: res.coins, sim: res.sim });
+          setWallet({ cash: res.cash, coins: res.coins, sim: res.sim, currency: room.user?.currency ?? "GHS", country: room.user?.country ?? "GH" });
           // Server history/stats only exist for REAL rounds. Refreshing here
           // in SIM mode would fetch the (empty) server history and wipe the
           // local SIM row just added above.
@@ -314,7 +314,7 @@ export function RouletteRoom({ game }: { game: GameDef }) {
         }
         const won = res.payout > stake;
         const simTag = room.simMode ? " (SIM)" : "";
-        toast(won ? `You won ${fmtCash(res.payout)}${simTag}` : res.payout > 0 ? `${fmtCash(res.payout)} back${simTag}` : `You lost ${fmtCash(stake)}${simTag}`, won ? "win" : "lose");
+        toast(won ? `You won ${fmtMoney(res.payout, room.user?.currency ?? "GHS")}${simTag}` : res.payout > 0 ? `${fmtMoney(res.payout, room.user?.currency ?? "GHS")} back${simTag}` : `You lost ${fmtMoney(stake, room.user?.currency ?? "GHS")}${simTag}`, won ? "win" : "lose");
         if (won) playSfx("cheer", room.muted); else if (res.payout === 0) playSfx("groan", room.muted);
       };
       // Canvas: the wheel spins 4400ms and lands on the server's pocket,
@@ -357,7 +357,7 @@ export function RouletteRoom({ game }: { game: GameDef }) {
           )))}
         </div>
         <p className="rr-pickline">{betKind === "straight" ? `Straight-up on ${pick} — pays ×36` : betKind === "red" ? "Red — 18 pockets, pays ×2" : betKind === "black" ? "Black — 18 pockets, pays ×2" : betKind === "even" ? "Even — pays ×2" : "Odd — pays ×2"}{spun !== null ? ` · Last spin: ${spun} ${landedColour}` : ""}</p>
-        <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin · ${fmtCash(stake)}`}</button>
+        <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>

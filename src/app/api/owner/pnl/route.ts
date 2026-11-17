@@ -30,26 +30,30 @@ export async function GET(req: Request) {
     const from = parseDay(sp.get("from"));
     const toRaw = parseDay(sp.get("to"));
     const to = toRaw ? new Date(toRaw.getTime() + 24 * 60 * 60 * 1000 - 1) : undefined;
+    // Phase 1 country-based (Nov 2026): P&L is per-fiat — ?currency=
+    // (default GHS). Cash figures are filtered to that fiat; coin
+    // figures are the coin play of players of that fiat.
+    const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
     const where = { createdAt: { gte: from, lte: to } };
 
     const [cashRounds, coinRounds, deposits, withdrawals] = await Promise.all([
       prisma.gameResult.aggregate({
-        where: { ...where, currency: "cash" },
+        where: { ...where, currency: "cash", fiatCurrency },
         _sum: { stake: true, payout: true },
         _count: true,
       }),
       prisma.gameResult.aggregate({
-        where: { ...where, currency: "coins" },
+        where: { ...where, currency: "coins", fiatCurrency },
         _sum: { stake: true, payout: true },
         _count: true,
       }),
       prisma.depositEvent.aggregate({
-        where,
+        where: { ...where, fiatCurrency },
         _sum: { amount: true, commission: true },
         _count: true,
       }),
       prisma.withdrawal.aggregate({
-        where: { ...where, status: "approved" },
+        where: { ...where, status: "approved", fiatCurrency },
         _sum: { amount: true },
         _count: true,
       }),
@@ -67,6 +71,7 @@ export async function GET(req: Request) {
     const commissionTotal = await totalCommissionOwed(
       sp.get("from") ?? "2020-01-01",
       sp.get("to") ?? todayStr(),
+      fiatCurrency,
     );
     const withdrawalTotal = dec(withdrawals._sum.amount);
     const netProfit = round2(ggrCash - commissionTotal);
@@ -74,6 +79,7 @@ export async function GET(req: Request) {
     return ok({
       from: sp.get("from") ?? null,
       to: sp.get("to") ?? null,
+      currency: fiatCurrency,
       roundsCash: cashRounds._count,
       stakesCash: round2(stakesCash),
       payoutsCash: round2(payoutsCash),

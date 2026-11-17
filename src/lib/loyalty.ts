@@ -14,6 +14,8 @@
 // not automatic, and the page says so. 0 = no birthday bonus.
 import { prisma } from "./prisma";
 import { dec, round2, todayStr } from "./money";
+import { getCurrencyConfig } from "./game-config";
+import { symbolFor } from "./country";
 
 export interface LoyaltySettingsRow {
   pointsPerGhs: number;
@@ -28,14 +30,23 @@ export async function getLoyaltySettings(): Promise<LoyaltySettingsRow> {
   return { pointsPerGhs: dec(row.pointsPerGhs), birthdayBonus: dec(row.birthdayBonus) };
 }
 
-/** A player's loyalty points, live from their total staked. */
-export async function pointsFor(userId: string, pointsPerGhs: number): Promise<{ points: number; totalStaked: number }> {
+/** A player's loyalty points, live from their total staked.
+ * Phase 1 country-based (Nov 2026): points are per GH₵ staked, so an
+ * NGN player's stakes are scaled to their GHS-equivalent first
+ * (÷ conversionRate/5 — the same scaling as game min/max stakes);
+ * `totalStaked` is returned in the player's own fiat for display. */
+export async function pointsFor(userId: string, pointsPerGhs: number): Promise<{ points: number; totalStaked: number; fiatCurrency: string }> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { currency: true } });
+  const fiatCurrency = user?.currency ?? "GHS";
   const agg = await prisma.gameResult.aggregate({
-    where: { userId },
+    where: { userId, fiatCurrency },
     _sum: { stake: true },
   });
   const totalStaked = dec(agg._sum.stake);
-  return { points: Math.floor(totalStaked * pointsPerGhs), totalStaked: round2(totalStaked) };
+  const cfg = await getCurrencyConfig(fiatCurrency).catch(() => null);
+  const factor = cfg ? dec(cfg.conversionRate) / 5 : 1;
+  const ghsEquivalent = totalStaked / factor;
+  return { points: Math.floor(ghsEquivalent * pointsPerGhs), totalStaked: round2(totalStaked), fiatCurrency };
 }
 
 /** Players whose birthday is today (month + day match), with whether
@@ -77,21 +88,29 @@ export async function birthdaysToday(): Promise<{ userId: string; userName: stri
  * all in one transaction. Returns who was paid and the total.
  * A birthday bonus of 0 pays nobody.
  */
-export async function payBirthdayBonuses(ownerId: string): Promise<{ paid: { userId: string; userName: string; amount: number }[]; total: number; skippedPaid: number }> {
+export async function payBirthdayBonuses(ownerId: string): Promise<{ paid: { userId: string; userName: string; amount: number; fiatCurrency: string }[]; total: number; totalsByCurrency: Record<string, number>; skippedPaid: number }> {
   const settings = await getLoyaltySettings();
   const year = Number(todayStr().slice(0, 4));
   if (settings.birthdayBonus <= 0) {
     const todays = await birthdaysToday();
-    return { paid: [], total: 0, skippedPaid: todays.filter((t) => t.paidThisYear).length };
+    return { paid: [], total: 0, totalsByCurrency: {}, skippedPaid: todays.filter((t) => t.paidThisYear).length };
   }
   const todays = await birthdaysToday();
   const due = todays.filter((t) => !t.paidThisYear);
-  const amount = round2(settings.birthdayBonus);
-  const paid: { userId: string; userName: string; amount: number }[] = [];
+  // Phase 1 country-based (Nov 2026): the configured bonus is a GHS
+  // amount — each player is paid its scaled value in THEIR fiat
+  // (× conversionRate/5, the same scaling as game min/max stakes),
+  // and the adjustment is stamped with that fiat.
+  const ghsAmount = round2(settings.birthdayBonus);
+  const paid: { userId: string; userName: string; amount: number; fiatCurrency: string }[] = [];
   await prisma.$transaction(async (tx) => {
     for (const t of due) {
       const user = await tx.user.findUnique({ where: { id: t.userId } });
       if (!user) continue;
+      const fiatCurrency = user.currency ?? "GHS";
+      const cfg = await getCurrencyConfig(fiatCurrency).catch(() => null);
+      const factor = cfg ? dec(cfg.conversionRate) / 5 : 1;
+      const amount = round2(ghsAmount * factor);
       await tx.user.update({
         where: { id: t.userId },
         data: { cashBalance: round2(dec(user.cashBalance) + amount) },
@@ -100,25 +119,29 @@ export async function payBirthdayBonuses(ownerId: string): Promise<{ paid: { use
         data: {
           userId: t.userId, adminId: ownerId, wallet: "cash", direction: "credit",
           amount, reason: `Birthday bonus ${year}`, kind: "bonus",
+          fiatCurrency,
         },
       });
       await tx.auditLog.create({
         data: {
           actorId: ownerId, action: "bonus.grant", targetId: t.userId,
-          detail: `Birthday bonus: paid GH₵ ${amount.toFixed(2)} to ${t.userName} (${year})`,
+          detail: `Birthday bonus: paid ${symbolFor(fiatCurrency)} ${amount.toFixed(2)} to ${t.userName} (${year})`,
         },
       });
       await tx.auditLog.create({
         data: {
           actorId: ownerId, action: "loyalty.birthday", targetId: t.userId,
-          detail: `Birthday bonus: GH₵ ${amount.toFixed(2)} to ${t.userName} for ${year}`,
+          detail: `Birthday bonus: ${symbolFor(fiatCurrency)} ${amount.toFixed(2)} to ${t.userName} for ${year}`,
         },
       });
       await tx.birthdayBonusGrant.create({
         data: { userId: t.userId, year, amount },
       });
-      paid.push({ userId: t.userId, userName: t.userName, amount });
+      paid.push({ userId: t.userId, userName: t.userName, amount, fiatCurrency });
     }
   });
-  return { paid, total: round2(paid.reduce((s, p) => s + p.amount, 0)), skippedPaid: todays.filter((t) => t.paidThisYear).length };
+  // The total is per-fiat in the same run — callers show the split.
+  const totalsByCurrency: Record<string, number> = {};
+  for (const p of paid) totalsByCurrency[p.fiatCurrency] = round2((totalsByCurrency[p.fiatCurrency] ?? 0) + p.amount);
+  return { paid, total: round2(paid.reduce((s, p) => s + p.amount, 0)), totalsByCurrency, skippedPaid: todays.filter((t) => t.paidThisYear).length };
 }

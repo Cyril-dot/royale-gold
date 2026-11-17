@@ -5,11 +5,15 @@ import { requireRole } from "@/lib/auth";
 import { ok, toErrorResponse } from "@/lib/http";
 import { getAllPaymentMethodConfigs } from "@/lib/game-config";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await requireRole("owner");
-    const methods = await getAllPaymentMethodConfigs();
-    return ok({ methods });
+    // Phase 1 country-based (Nov 2026): ?currency= (default GHS) —
+    // one row per (method, fiat).
+    const sp = new URL(req.url).searchParams;
+    const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
+    const methods = await getAllPaymentMethodConfigs(fiatCurrency);
+    return ok({ currency: fiatCurrency, methods });
   } catch (err) {
     return toErrorResponse(err);
   }

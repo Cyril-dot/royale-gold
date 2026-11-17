@@ -11,7 +11,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, fmtCash } from "../../lib/api";
+import { api, fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
@@ -226,7 +226,7 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
     setPlaying(false);
     const payout = Math.round(stake * odds * 100) / 100;
     playSfx("blip", room.muted);
-    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtCash(payout)}! The balloon floats away.`);
+    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}! The balloon floats away.`);
     await room.settle(stake, payout, { odds }, roundIdRef.current || undefined);
     void revealAfterEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -360,12 +360,12 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="cash" disabled={playing} />
         <div className="v18-stage">
-          <div className="v18-hud"><span>ODDS <b>×{odds.toFixed(2)}</b></span><span>PUMPS <b>{pumps}</b></span><span>CASH OUT <b>{fmtCash(Math.round(stake * odds * 100) / 100)}</b></span></div>
+          <div className="v18-hud"><span>ODDS <b>×{odds.toFixed(2)}</b></span><span>PUMPS <b>{pumps}</b></span><span>CASH OUT <b>{fmtMoney(Math.round(stake * odds * 100) / 100, room.user?.currency ?? "GHS")}</b></span></div>
           <canvas ref={canvasRef} width={300} height={420} className="v18-canvas" aria-label="Balloon Burst sky" onPointerDown={pump} />
           <p className="v18-aim">Tap the balloon to pump it · cash out before it pops</p>
         </div>
-        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Launch the balloon · {fmtCash(stake)}</button>}
-        {playing && <button className="btn btn-gold xg-action" type="button" onClick={() => void cashOut()} disabled={countdown > 0}>{countdown > 0 ? `Launching in ${countdown}s…` : `CASH OUT · ${fmtCash(Math.round(stake * odds * 100) / 100)}`}</button>}
+        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Launch the balloon · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
+        {playing && <button className="btn btn-gold xg-action" type="button" onClick={() => void cashOut()} disabled={countdown > 0}>{countdown > 0 ? `Launching in ${countdown}s…` : `CASH OUT · ${fmtMoney(Math.round(stake * odds * 100) / 100, room.user?.currency ?? "GHS")}`}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
         {reveal && (
           <div className="cr-reveal" aria-label="Provably fair reveal">

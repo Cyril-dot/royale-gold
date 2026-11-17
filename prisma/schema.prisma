@@ -26,9 +26,19 @@ model User {
   phone            String?
   passwordHash     String
   role             Role     @default(user)
-  // REAL cash wallet (GH₵). Demo accounts start at 250.00.
+  // Phase 1 country-based (Nov 2026): ISO country code chosen at
+  // register ("GH" | "NG"), and the fiat currency derived from it.
+  // Stored on the row so money code never re-derives it. Existing
+  // users default GH / GHS. Currency is IMMUTABLE after register
+  // (no self-serve switch — a switch would strand balances and
+  // break the decay / commission math).
+  country          String?
+  currency         String   @default("GHS")
+  // REAL cash wallet (in the user's currency — see User.currency).
+  // Demo accounts start at 250.00.
   cashBalance      Decimal  @default(250.00) @db.Decimal(12, 2)
-  // SIM / demo-play balance (GH₵). Separate from cash; daily SIM claim tops this up.
+  // SIM / demo-play balance (in the user's currency). Separate from
+  // cash; daily SIM claim tops this up.
   simBalance       Decimal  @default(1000.00) @db.Decimal(12, 2)
   coins            Int      @default(10)
   commissionPct    Decimal? @db.Decimal(5, 2)
@@ -166,6 +176,9 @@ model DepositEvent {
   admin      User?    @relation("CommissionAdmin", fields: [adminId], references: [id])
   amount     Decimal  @db.Decimal(12, 2)
   method     String
+  // Phase 1 country-based (Nov 2026): the fiat this deposit was made
+  // in. Aggregates MUST filter/group by this — never sum across fiats.
+  fiatCurrency String @default("GHS")
   // Commission % in force at deposit time — frozen forever, never recomputed.
   pctInForce Decimal  @db.Decimal(5, 2)
   commission Decimal  @db.Decimal(12, 2)
@@ -179,8 +192,11 @@ model ConversionEvent {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // REAL cash debited (GH₵) — SIM is never involved in conversions.
+  // REAL cash debited — in the user's fiat (see User.currency).
+  // SIM is never involved in conversions.
   cashDebited Decimal  @db.Decimal(12, 2)
+  // Phase 1 country-based (Nov 2026): the fiat the cash was debited in.
+  fiatCurrency String @default("GHS")
   // Coins credited at the fixed rate GH₵5 = 1 coin. One-way only:
   // coins are never withdrawable or convertible back to cash.
   coinsGained Int
@@ -195,6 +211,10 @@ model GameResult {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   game      String
   currency  String
+  // Phase 1 country-based (Nov 2026): the FIAT this round was played
+  // in ("GHS" | "NGN" | ...). `currency` above stays "cash" | "coins"
+  // (wallet type) — NEVER reuse it for fiat.
+  fiatCurrency String @default("GHS")
   stake     Decimal  @db.Decimal(12, 2)
   payout    Decimal  @db.Decimal(12, 2)
   result    Json?
@@ -255,6 +275,9 @@ model Withdrawal {
   admin           User?     @relation("WithdrawalAdmin", fields: [adminId], references: [id])
   amount          Decimal   @db.Decimal(12, 2)
   method          String
+  // Phase 1 country-based (Nov 2026): the fiat requested, in the
+  // player's currency.
+  fiatCurrency    String    @default("GHS")
   status          String    @default("pending")
   adminApprovedAt DateTime?
   decidedBy       String?
@@ -284,6 +307,10 @@ model BalanceAdjustment {
   direction String   // "credit" | "debit"
   amount    Decimal  @db.Decimal(12, 2)
   reason    String
+  // Phase 1 country-based (Nov 2026): the fiat of a cash adjustment
+  // (the target player's currency; coin adjustments carry the
+  // player's fiat too, for the ledger).
+  fiatCurrency String @default("GHS")
   kind      String   @default("adjustment") // "adjustment" | "bonus" | "promo"
   createdAt DateTime @default(now())
 
@@ -352,6 +379,8 @@ model CommissionPayout {
   admin      User     @relation("PayoutAdmin", fields: [adminId], references: [id])
   amount     Decimal  @db.Decimal(12, 2)
   method     String   // e.g. "MTN", "Telecel", "AirtelTigo", "bank", "cash"
+  // Phase 1 country-based (Nov 2026): the fiat this payout was made in.
+  fiatCurrency String @default("GHS")
   reference  String?
   periodFrom String?  // "YYYY-MM-DD" — the period this payout covers
   periodTo   String?
@@ -415,11 +444,56 @@ model GameConfig {
 // (a method with no row is enabled with no min/max). Deposits stay demo
 // cashier only — this toggles/limits the methods, it connects no gateway.
 model PaymentMethodConfig {
-  method     String   @id // "MTN" | "Telecel" | "AirtelTigo" | "card"
-  enabled    Boolean  @default(true)
-  minDeposit Decimal? @db.Decimal(12, 2)
-  maxDeposit Decimal? @db.Decimal(12, 2)
-  updatedAt  DateTime @updatedAt
+  method       String // "MTN" | "Telecel" | "AirtelTigo" | "card"
+  // Phase 1 country-based (Nov 2026): one row per (method, fiat).
+  // The demo cashier reads the row for the player's currency; a
+  // gateway row (Phase 2) carries the gateway name here.
+  fiatCurrency String @default("GHS")
+  gateway      String? // null = demo cashier; "payteller" in Phase 2
+  enabled      Boolean  @default(true)
+  minDeposit   Decimal? @db.Decimal(12, 2)
+  maxDeposit   Decimal? @db.Decimal(12, 2)
+  updatedAt    DateTime @updatedAt
+
+  @@id([method, fiatCurrency])
+}
+
+// Phase 1 country-based (Nov 2026): per-currency platform rules —
+// one row per fiat (GHS, NGN, ...). The owner's CurrencyConfig editor
+// (owner panel) edits these, so Chuks sets NGN limits without a code
+// change. This is the source of truth for min deposit / min stake /
+// the cash→coins rate; PlatformSettings keeps the GHS row's values as
+// its legacy fields and the two are kept in sync on write.
+//   decayStep — the LIVE win-chance decay step for this fiat:
+//     GHS 100, NGN 10,000 (same "effort", 100x scale).
+//   withdrawalOwnerThreshold — withdrawals above this need the
+//     owner's second approval: GHS 500, NGN 50,000.
+// Seed values are defaults Chuks can change in the owner panel.
+model CurrencyConfig {
+  currency                 String   @id // "GHS" | "NGN" | ...
+  symbol                   String // "GH₵" | "₦" | ...
+  minDeposit               Decimal  @db.Decimal(12, 2)
+  minStake                 Decimal  @db.Decimal(12, 2)
+  conversionRate           Decimal  @db.Decimal(12, 2) // fiat per 1 coin
+  decayStep                Decimal  @default(100) @db.Decimal(12, 2)
+  withdrawalOwnerThreshold Decimal  @default(500) @db.Decimal(12, 2)
+  enabled                  Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+}
+
+// Phase 1 country-based (Nov 2026): gateway credentials + the Ghana
+// MoMo gateway toggle. Created NOW so Phase 2 (PayTeller) has
+// somewhere to write — the PayTeller fields stay EMPTY this phase.
+// Phase 2 stores the values AES-256-GCM encrypted (same pattern as
+// BetWins payment_settings) — never plain text, never logged.
+model GatewaySettings {
+  id                     String   @id @default("global")
+  paytellerApiKey        String?
+  paytellerMerchantId    String?
+  paytellerUsername      String?
+  paytellerWebhookSecret String?
+  ghMomoGateway          String   @default("demo") // "demo" | "payteller"
+  updatedAt              DateTime @updatedAt
 }
 
 // P0 Batch 2 (O11 global kill + O13 wallet config): the platform's

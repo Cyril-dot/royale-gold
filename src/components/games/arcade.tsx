@@ -7,7 +7,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, fmtCash } from "../../lib/api";
+import { api, fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 import { playSfx } from "../../lib/store";
@@ -336,7 +336,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
     const payout = Math.round(stake * odds * 100) / 100;
-    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtCash(payout)}!`);
+    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}!`);
     playSfx("blip", mutedRef.current);
     await room.settle(stake, payout, { odds, coins, dist: Math.round(st.dist) }, roundIdRef.current || undefined);
     void revealAfterEnd();
@@ -624,7 +624,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="cash" disabled={playing} />
         <div className="cc-stage">
-          <div className="cc-hud"><span>ODDS <b>×{odds.toFixed(2)}</b></span><span>COINS <b>{coins}</b></span><span>CASH OUT <b>{fmtCash(Math.round(stake * odds * 100) / 100)}</b></span><span>TIME <b>{drive.t.toFixed(1)}s</b></span><span>DIST <b>{drive.d}m</b></span><span>SPEED <b>{drive.v} km/h</b></span></div>
+          <div className="cc-hud"><span>ODDS <b>×{odds.toFixed(2)}</b></span><span>COINS <b>{coins}</b></span><span>CASH OUT <b>{fmtMoney(Math.round(stake * odds * 100) / 100, room.user?.currency ?? "GHS")}</b></span><span>TIME <b>{drive.t.toFixed(1)}s</b></span><span>DIST <b>{drive.d}m</b></span><span>SPEED <b>{drive.v} km/h</b></span></div>
           <div style={{ position: "relative" }}>
             <canvas ref={canvasRef} width={300} height={420} className={playing ? "cc-canvas live" : "cc-canvas"} onPointerDown={onCarDown} onPointerMove={onCarMove} onPointerUp={onCarUp} onPointerCancel={onCarUp} aria-label="Car Crash road — drag to steer" />
             {flash && <div className="cc-flash pop" key={flash.n}>{flash.txt}</div>}
@@ -637,8 +637,8 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
             <button type="button" aria-label="Steer right" onClick={() => steer(1)} disabled={!playing}>→</button>
           </div>
         </div>
-        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Start driving · {fmtCash(stake)}</button>}
-        {playing && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()}>CASH OUT · {fmtCash(Math.round(stake * odds * 100) / 100)}</button>}
+        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Start driving · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
+        {playing && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()}>CASH OUT · {fmtMoney(Math.round(stake * odds * 100) / 100, room.user?.currency ?? "GHS")}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
         {reveal && (
           <div className="cr-reveal" aria-label="Provably fair reveal">
@@ -844,7 +844,7 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
     const payout = won ? Math.round(stake * goal.mult * 100) / 100 : 0;
-    setMsg(won ? `Goal reached — ${k} kills! ×${goal.mult} = ${fmtCash(payout)}` : `Ship down — ${k}/${goal.kills} kills. Goal not reached.`);
+    setMsg(won ? `Goal reached — ${k} kills! ×${goal.mult} = ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : `Ship down — ${k}/${goal.kills} kills. Goal not reached.`);
     await room.settle(stake, payout, { kills: k, diff, goal: goal.kills });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stake, goal, diff, room]);
@@ -1148,7 +1148,7 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
         <div className="rs-hud"><span>KILLS <b>{kills}/{goal.kills}</b></span><span>SPEED <b>×{Math.min(3, Math.pow(1.02, kills)).toFixed(1)}</b></span><span>LIVES <b>{"♥".repeat(Math.max(0, lives))}</b></span><span>COINS <b>{coins}</b></span><span>PAYS <b>×{goal.mult.toFixed(2)}</b></span><span className="rs-pow">{power}</span></div>
         <canvas ref={canvasRef} width={400} height={420} className={playing ? "rs-canvas live" : "rs-canvas"} onPointerDown={onShipDown} onPointerMove={onShipMove} onPointerUp={onShipUp} onPointerCancel={onShipUp} aria-label="Rocket Shooter — drag to steer and fire" />
         <button className="rs-fire" type="button" onPointerDown={onFireDown} onPointerUp={onFireUp} onPointerLeave={onFireUp} onPointerCancel={onFireUp} disabled={!playing} aria-label="Hold to fire">HOLD TO FIRE</button>
-        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Launch · {fmtCash(stake)}</button>}
+        {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Launch · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>

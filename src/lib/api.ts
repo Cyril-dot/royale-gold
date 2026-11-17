@@ -1,5 +1,6 @@
 // API client for the Royale Gold contract (API_CONTRACT.md).
 // All balances come from the server — never trust client-side balances.
+import { symbolFor } from "./country";
 
 export interface User {
   id: string;
@@ -24,12 +25,20 @@ export interface User {
   // P2 Batch 2 (O28): the player's birthday (YYYY-MM-DD) or null — the
   // loyalty birthday bonus pays on it, once per year.
   birthday: string | null;
+  // Phase 1 country-based (Nov 2026): ISO country code chosen at
+  // register + the fiat derived from it. This user's cash amounts are
+  // always in this currency.
+  country: string | null;
+  currency: string;
 }
 
 export interface Wallet {
   cash: number;
   coins: number;
   sim: number;
+  // Phase 1 country-based (Nov 2026): the wallet's fiat + country.
+  currency: string;
+  country: string | null;
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -44,6 +53,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+// Phase 1 country-based (Nov 2026): the fiat-aware money formatter.
+// Pass the user's currency — a ₦ amount must never print as GH₵.
+// `fmtCash` below stays as the GHS alias for the rare call site that
+// genuinely cannot know the currency (a system-wide total with no
+// owner, etc.) — prefer fmtMoney everywhere else.
+export const fmtMoney = (n: number, currency: string = "GHS") =>
+  symbolFor(currency) + " " + Number(n || 0).toFixed(2);
+
+/** GHS alias of fmtMoney — only for call sites that cannot know the currency. */
 export const fmtCash = (n: number) => "GH₵ " + Number(n || 0).toFixed(2);
 export const fmtCoins = (n: number) => `${Math.round(n || 0)}`;
 export const money = (n: number) => Math.round(Number(n || 0) * 100) / 100;
@@ -60,6 +78,8 @@ export interface GameHistoryRow {
   id: string;
   game: string;
   currency: string;
+  // Phase 1 country-based (Nov 2026): the fiat this round was played in.
+  fiatCurrency: string;
   stake: number;
   payout: number;
   result: Record<string, unknown>;

@@ -6,11 +6,14 @@ import { requirePermission } from "@/lib/rbac";
 import { ok, toErrorResponse } from "@/lib/http";
 import { adminDashboard } from "@/lib/admin";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const admin = await requireRole("admin");
     requirePermission(admin, "overview");
-    return ok(await adminDashboard(admin.id));
+    // Phase 1 country-based (Nov 2026): ?currency= (default the
+    // admin's own currency).
+    const fiatCurrency = new URL(req.url).searchParams.get("currency") || undefined;
+    return ok(await adminDashboard(admin.id, fiatCurrency));
   } catch (err) {
     return toErrorResponse(err);
   }

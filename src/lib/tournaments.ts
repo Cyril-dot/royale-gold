@@ -8,6 +8,7 @@ import { prisma } from "./prisma";
 import { getGame } from "./games";
 import { dec, round2 } from "./money";
 import { scopedReferredUserIds } from "./hierarchy";
+import { symbolFor } from "./country";
 
 export type TournamentStatus = "upcoming" | "active" | "closed" | "ended";
 
@@ -28,6 +29,9 @@ export interface LeaderboardRow {
   userName: string;
   userContact: string | null;
   points: number;
+  // Phase 1 country-based (Nov 2026): the fiat this player's points
+  // are in — points are that player's stakes, never a blended sum.
+  fiatCurrency: string;
 }
 
 /** The leaderboard for a tournament. While it runs: live from
@@ -45,7 +49,7 @@ export async function tournamentLeaderboard(t: {
     const entries = await prisma.tournamentEntry.findMany({
       where: { tournamentId: t.id },
       orderBy: { rank: "asc" },
-      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      include: { user: { select: { id: true, name: true, email: true, phone: true, currency: true } } },
     });
     return entries.map((e) => ({
       rank: e.rank,
@@ -53,6 +57,7 @@ export async function tournamentLeaderboard(t: {
       userName: e.user.name,
       userContact: e.user.email ?? e.user.phone ?? null,
       points: dec(e.points),
+      fiatCurrency: e.user.currency ?? "GHS",
     }));
   }
   const userIds = await scopedReferredUserIds(t.createdBy);
@@ -69,7 +74,7 @@ export async function tournamentLeaderboard(t: {
   for (const r of rows) points.set(r.userId, round2((points.get(r.userId) ?? 0) + dec(r.stake)));
   const users = await prisma.user.findMany({
     where: { id: { in: [...points.keys()] } },
-    select: { id: true, name: true, email: true, phone: true },
+    select: { id: true, name: true, email: true, phone: true, currency: true },
   });
   const byId = new Map(users.map((u) => [u.id, u]));
   return [...points.entries()]
@@ -81,6 +86,7 @@ export async function tournamentLeaderboard(t: {
       userName: byId.get(userId)?.name ?? "—",
       userContact: byId.get(userId)?.email ?? byId.get(userId)?.phone ?? null,
       points: p,
+      fiatCurrency: byId.get(userId)?.currency ?? "GHS",
     }));
 }
 
@@ -132,18 +138,21 @@ export async function endTournament(
       data: {
         userId: winnerRow.userId, adminId: actorId, wallet: "cash", direction: "credit",
         amount: prize, reason: `Tournament prize: ${t.name}`, kind: "bonus",
+        // Phase 1 country-based (Nov 2026): the prize pool is read in
+        // the winner's fiat and stamped as such.
+        fiatCurrency: winner.currency ?? "GHS",
       },
     });
     await tx.auditLog.create({
       data: {
         actorId, action: "bonus.grant", targetId: winnerRow.userId,
-        detail: `Tournament prize: paid GH₵ ${prize.toFixed(2)} to ${winner.name} for winning "${t.name}" (rank ${winnerRow.rank}, staked GH₵ ${winnerRow.points.toFixed(2)})`,
+        detail: `Tournament prize: paid ${symbolFor(winner.currency)} ${prize.toFixed(2)} to ${winner.name} for winning "${t.name}" (rank ${winnerRow.rank}, staked ${symbolFor(winner.currency)} ${winnerRow.points.toFixed(2)})`,
       },
     });
     await tx.auditLog.create({
       data: {
         actorId, action: "tournament.end", targetId: t.id,
-        detail: `Tournament: ended "${t.name}" — winner ${winner.name}, prize GH₵ ${prize.toFixed(2)}`,
+        detail: `Tournament: ended "${t.name}" — winner ${winner.name}, prize ${symbolFor(winner.currency)} ${prize.toFixed(2)}`,
       },
     });
     // Freeze the final standings — the leaderboard reads these rows

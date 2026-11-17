@@ -28,6 +28,9 @@ export async function GET(req: Request) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
       return fail("from and to must be YYYY-MM-DD");
     }
+    // Phase 1 country-based (Nov 2026): ?currency= (default GHS) —
+    // owed/paid/balance are all in that one fiat.
+    const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
     const admins = await prisma.user.findMany({
       where: { role: "admin" },
       orderBy: { name: "asc" },
@@ -35,11 +38,11 @@ export async function GET(req: Request) {
     });
     const rows = [];
     for (const a of admins) {
-      const s = await settlementForAdmin(a.id, from, to);
+      const s = await settlementForAdmin(a.id, from, to, fiatCurrency);
       // P1 Batch 4 (O24): the parent's share of this admin's commission
       // over the period — a REPORTING line only, never deducted from the
       // child's payout. 0 when the admin has no parent or no split.
-      const parentShare = await parentShareOwed(a.id, from, to);
+      const parentShare = await parentShareOwed(a.id, from, to, fiatCurrency);
       const parent = a.parentAdminId
         ? await prisma.user.findUnique({ where: { id: a.parentAdminId }, select: { name: true } })
         : null;
@@ -60,7 +63,7 @@ export async function GET(req: Request) {
       balance: round2(rows.reduce((s, r) => s + r.balance, 0)),
       parentShare: round2(rows.reduce((s, r) => s + r.parentShare, 0)),
     };
-    return ok({ from, to, rows, totals });
+    return ok({ from, to, currency: fiatCurrency, rows, totals });
   } catch (err) {
     return toErrorResponse(err);
   }
@@ -93,6 +96,10 @@ export async function POST(req: Request) {
     if (periodTo && !/^\d{4}-\d{2}-\d{2}$/.test(periodTo)) return fail("periodTo must be YYYY-MM-DD");
     const admin = await prisma.user.findUnique({ where: { id: adminId } });
     if (!admin || admin.role !== "admin") return fail("Admin not found", 404);
+    // Phase 1 country-based (Nov 2026): the payout is in one fiat —
+    // the body may name it (the owner panel sends the currency of the
+    // settlement view); otherwise the admin's own currency.
+    const fiatCurrency = ((body as { currency?: string }).currency || admin.currency || "GHS").toUpperCase();
 
     const created = await prisma.$transaction(async (tx) => {
       const payout = await tx.commissionPayout.create({
@@ -100,6 +107,7 @@ export async function POST(req: Request) {
           adminId,
           amount: round2(amount),
           method,
+          fiatCurrency,
           reference,
           periodFrom,
           periodTo,
@@ -111,7 +119,7 @@ export async function POST(req: Request) {
           actorId: owner.id,
           action: "commission.payout",
           targetId: adminId,
-          detail: `Paid ${admin.name} GH₵ ${round2(amount).toFixed(2)} via ${method}${reference ? ` (${reference})` : ""}`,
+          detail: `Paid ${admin.name} ${round2(amount).toFixed(2)} ${fiatCurrency} via ${method}${reference ? ` (${reference})` : ""}`,
         },
       });
       return payout;
@@ -124,6 +132,7 @@ export async function POST(req: Request) {
           adminName: admin.name,
           amount: dec(created.amount),
           method: created.method,
+          fiatCurrency: created.fiatCurrency,
           reference: created.reference,
           periodFrom: created.periodFrom,
           periodTo: created.periodTo,

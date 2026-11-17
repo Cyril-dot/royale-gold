@@ -27,6 +27,9 @@ export async function GET(req: Request) {
         maxAmount: maxAmount !== null ? Number(maxAmount) : undefined,
         userId: sp.get("userId") || undefined,
         limit: Number(sp.get("limit") ?? 50) || 50,
+        // Phase 1 country-based (Nov 2026): ?currency= (default the
+        // admin's own currency) — rows + totals in one fiat only.
+        fiatCurrency: (sp.get("currency") || admin.currency || "GHS").toUpperCase(),
       },
     });
     return ok(result);

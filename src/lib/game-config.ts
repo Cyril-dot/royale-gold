@@ -13,6 +13,7 @@
 import { prisma } from "./prisma";
 import { getGame, ALL_GAMES, type GameDef } from "./games";
 import { dec, round2 } from "./money";
+import { symbolFor } from "./country";
 import type { Prisma } from "@prisma/client";
 
 /** Deposit methods the demo cashier accepts (same list as the deposit route). */
@@ -50,9 +51,151 @@ export interface PlatformSettingsShape {
 
 export interface PaymentMethodShape {
   method: string;
+  // Phase 1 country-based (Nov 2026): which fiat this row is for.
+  fiatCurrency: string;
+  gateway: string | null;
   enabled: boolean;
   minDeposit: number | null;
   maxDeposit: number | null;
+}
+
+// Phase 1 country-based (Nov 2026): per-currency platform rules.
+// The owner's CurrencyConfig editor edits these — no code change
+// needed to set NGN limits. This is the source of truth for min
+// deposit / min stake / the cash→coins rate; PlatformSettings keeps
+// the GHS row's values as its legacy fields and the two are kept in
+// sync on write (see the owner wallet-config route).
+export interface CurrencyConfigShape {
+  currency: string;
+  symbol: string;
+  minDeposit: number;
+  minStake: number;
+  conversionRate: number; // fiat per 1 coin
+  decayStep: number; // LIVE win-chance decay step for this fiat
+  withdrawalOwnerThreshold: number; // withdrawals above this need the owner too
+  enabled: boolean;
+}
+
+/** Seed defaults — the owner panel can change every one of these. */
+export const CURRENCY_DEFAULTS: Record<string, CurrencyConfigShape> = {
+  GHS: { currency: "GHS", symbol: "GH₵", minDeposit: 1, minStake: 1, conversionRate: 5, decayStep: 100, withdrawalOwnerThreshold: 500, enabled: true },
+  // NGN seed values are 100x the GHS ones (same "effort") — Chuks sets
+  // his own numbers in the owner panel; these are NOT the 7UP limits.
+  NGN: { currency: "NGN", symbol: "₦", minDeposit: 100, minStake: 100, conversionRate: 500, decayStep: 10000, withdrawalOwnerThreshold: 50000, enabled: true },
+};
+
+function currencyRowToShape(row: {
+  currency: string;
+  symbol: string;
+  minDeposit: Prisma.Decimal | number;
+  minStake: Prisma.Decimal | number;
+  conversionRate: Prisma.Decimal | number;
+  decayStep: Prisma.Decimal | number;
+  withdrawalOwnerThreshold: Prisma.Decimal | number;
+  enabled: boolean;
+}): CurrencyConfigShape {
+  return {
+    currency: row.currency,
+    symbol: row.symbol,
+    minDeposit: dec(row.minDeposit),
+    minStake: dec(row.minStake),
+    conversionRate: dec(row.conversionRate),
+    decayStep: dec(row.decayStep),
+    withdrawalOwnerThreshold: dec(row.withdrawalOwnerThreshold),
+    enabled: row.enabled,
+  };
+}
+
+/**
+ * Per-currency rules, falling back to the seed defaults when no row
+ * exists yet (a fresh DB, or a currency added before its row is
+ * seeded). For GHS the PlatformSettings legacy fields are the fallback
+ * when a settings object is passed, so the old wallet-config editor
+ * and the new CurrencyConfig editor can never disagree.
+ */
+export async function getCurrencyConfig(
+  currency: string,
+  settings?: PlatformSettingsShape,
+): Promise<CurrencyConfigShape> {
+  const code = (currency || "GHS").toUpperCase();
+  const row = await prisma.currencyConfig.findUnique({ where: { currency: code } });
+  if (row) return currencyRowToShape(row);
+  const def = CURRENCY_DEFAULTS[code];
+  if (def) {
+    if (code === "GHS" && settings) {
+      return { ...def, minDeposit: settings.cashMinDeposit, minStake: settings.cashMinStake, conversionRate: settings.conversionRate };
+    }
+    return { ...def };
+  }
+  return {
+    currency: code,
+    symbol: symbolFor(code),
+    minDeposit: 1,
+    minStake: 1,
+    conversionRate: 5,
+    decayStep: 100,
+    withdrawalOwnerThreshold: 500,
+    enabled: true,
+  };
+}
+
+/** Every known currency row (seed rows included), for the owner editor. */
+export async function getAllCurrencyConfigs(): Promise<CurrencyConfigShape[]> {
+  const rows = await prisma.currencyConfig.findMany({ orderBy: { currency: "asc" } });
+  const byCode = new Map(rows.map((r) => [r.currency, currencyRowToShape(r)]));
+  const out: CurrencyConfigShape[] = [];
+  for (const code of Object.keys(CURRENCY_DEFAULTS)) {
+    out.push(byCode.get(code) ?? { ...CURRENCY_DEFAULTS[code] });
+  }
+  for (const [code, shape] of byCode) {
+    if (!CURRENCY_DEFAULTS[code]) out.push(shape);
+  }
+  return out;
+}
+
+/** Upsert one currency row (owner CurrencyConfig editor). */
+export async function upsertCurrencyConfig(
+  currency: string,
+  patch: Partial<Omit<CurrencyConfigShape, "currency">>,
+): Promise<CurrencyConfigShape> {
+  const code = (currency || "GHS").toUpperCase();
+  const current = await getCurrencyConfig(code);
+  const next = { ...current, ...patch, currency: code };
+  const row = await prisma.currencyConfig.upsert({
+    where: { currency: code },
+    update: {
+      symbol: next.symbol,
+      minDeposit: next.minDeposit,
+      minStake: next.minStake,
+      conversionRate: next.conversionRate,
+      decayStep: next.decayStep,
+      withdrawalOwnerThreshold: next.withdrawalOwnerThreshold,
+      enabled: next.enabled,
+    },
+    create: {
+      currency: code,
+      symbol: next.symbol,
+      minDeposit: next.minDeposit,
+      minStake: next.minStake,
+      conversionRate: next.conversionRate,
+      decayStep: next.decayStep,
+      withdrawalOwnerThreshold: next.withdrawalOwnerThreshold,
+      enabled: next.enabled,
+    },
+  });
+  return currencyRowToShape(row);
+}
+
+/**
+ * Scale a GHS-denominated config amount into a player's fiat. Per-game
+ * minBet / maxBet / maxPayout overrides are stored in GHS terms (the
+ * owner sets them once); an NGN player sees them at the 100x scale
+ * (conversionRate / 5). GHS players are unaffected (×1).
+ */
+export async function scaleGhsAmount(amount: number, fiatCurrency: string): Promise<number> {
+  if ((fiatCurrency || "GHS").toUpperCase() === "GHS") return amount;
+  const cfg = await getCurrencyConfig(fiatCurrency);
+  return round2(amount * (cfg.conversionRate / 5));
 }
 
 /** Platform defaults — what the code enforced before any owner row exists. */
@@ -132,23 +275,43 @@ export function platformMinStake(currency: "cash" | "coins", settings: PlatformS
   return currency === "cash" ? settings.cashMinStake : settings.coinMinStake;
 }
 
-export async function getPaymentMethodConfig(method: string): Promise<PaymentMethodShape> {
-  const row = await prisma.paymentMethodConfig.findUnique({ where: { method } });
+/**
+ * Phase 1 country-based (Nov 2026): the platform floor for the
+ * minimum stake in the PLAYER'S fiat — CurrencyConfig.minStake for
+ * cash (GHS 1 / NGN 100 seed), coinMinStake for coins.
+ */
+export async function platformMinStakeFiat(
+  currency: "cash" | "coins",
+  settings: PlatformSettingsShape,
+  fiatCurrency: string = "GHS",
+): Promise<number> {
+  if (currency === "coins") return settings.coinMinStake;
+  const cfg = await getCurrencyConfig(fiatCurrency, settings);
+  return cfg.minStake;
+}
+
+export async function getPaymentMethodConfig(method: string, fiatCurrency: string = "GHS"): Promise<PaymentMethodShape> {
+  const row = await prisma.paymentMethodConfig.findUnique({ where: { method_fiatCurrency: { method, fiatCurrency: fiatCurrency.toUpperCase() } } });
   return {
     method,
+    fiatCurrency: fiatCurrency.toUpperCase(),
+    gateway: row?.gateway ?? null,
     enabled: row?.enabled ?? true,
     minDeposit: row?.minDeposit == null ? null : dec(row.minDeposit),
     maxDeposit: row?.maxDeposit == null ? null : dec(row.maxDeposit),
   };
 }
 
-export async function getAllPaymentMethodConfigs(): Promise<PaymentMethodShape[]> {
-  const rows = await prisma.paymentMethodConfig.findMany();
+export async function getAllPaymentMethodConfigs(fiatCurrency: string = "GHS"): Promise<PaymentMethodShape[]> {
+  const code = fiatCurrency.toUpperCase();
+  const rows = await prisma.paymentMethodConfig.findMany({ where: { fiatCurrency: code } });
   const byMethod = new Map(rows.map((r) => [r.method, r]));
   return PAYMENT_METHODS.map((m) => {
     const row = byMethod.get(m);
     return {
       method: m,
+      fiatCurrency: code,
+      gateway: row?.gateway ?? null,
       enabled: row?.enabled ?? true,
       minDeposit: row?.minDeposit == null ? null : dec(row.minDeposit),
       maxDeposit: row?.maxDeposit == null ? null : dec(row.maxDeposit),

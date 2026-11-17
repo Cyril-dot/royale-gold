@@ -63,10 +63,15 @@ export async function referredUsers(adminId: string) {
   }));
 }
 
-/** The admin panel payload — used by /api/admin/overview and by the owner's preview. */
-export async function adminOverview(adminId: string) {
+/** The admin panel payload — used by /api/admin/overview and by the owner's preview.
+ * Phase 1 country-based (Nov 2026): the commission figures are in one
+ * fiat — the admin's own currency by default (?currency= on the route).
+ * The downline spans countries (players pick their own at register),
+ * so the per-fiat filter is the honest view. */
+export async function adminOverview(adminId: string, fiatCurrency?: string) {
   const admin = await prisma.user.findUnique({ where: { id: adminId } });
   if (!admin) return null;
+  const fiat = (fiatCurrency || admin.currency || "GHS").toUpperCase();
 
   const scopeIds = await adminScopeAdminIds(adminId);
   const scope = await adminScopeInfo(adminId);
@@ -87,15 +92,15 @@ export async function adminOverview(adminId: string) {
     prisma.user.findMany({
       where: { referredByAdminId: { in: scopeIds } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, email: true, phone: true, referralCodeUsed: true, referredByAdminId: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, referralCodeUsed: true, referredByAdminId: true, createdAt: true, country: true, currency: true },
     }),
     prisma.redemption.aggregate({
       where: { code: { adminId: { in: scopeIds } } },
       _sum: { coins: true },
       _count: true,
     }),
-    scopedCommissionSummary(adminId),
-    scopedDayCommissions(adminId),
+    scopedCommissionSummary(adminId, fiat),
+    scopedDayCommissions(adminId, undefined, undefined, fiat),
   ]);
 
   return {
@@ -106,7 +111,10 @@ export async function adminOverview(adminId: string) {
       commissionPct: dec(admin.commissionPct),
       active: admin.active,
       permissions: parsePermissions(admin.permissions),
+      country: admin.country ?? "GH",
+      currency: admin.currency ?? "GHS",
     },
+    currency: fiat,
     codes: codes.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
     referredUsers: referredUsers.map((u) => ({
       ...u,
@@ -124,6 +132,8 @@ export async function adminOverview(adminId: string) {
 }
 
 export interface AdminDashboardData {
+  // Phase 1 country-based (Nov 2026): the fiat these figures are in.
+  currency: string;
   today: { deposits: number; depositsTotal: number; newPlayers: number; activePlayers: number; commission: number };
   week: { date: string; deposits: number; total: number }[];
   topPlayers: { id: string; name: string; contact: string | null; deposits: number; totalDeposited: number }[];
@@ -136,16 +146,20 @@ export interface AdminDashboardData {
  * figure comes from the real tables (DepositEvent / User / GameResult /
  * the commission rules engine); nothing is invented.
  * P1 Batch 4 (O24): scoped — a parent admin's figures roll their child
- * admins' downlines in, labelled via `scope`. */
-export async function adminDashboard(adminId: string): Promise<AdminDashboardData> {
+ * admins' downlines in, labelled via `scope`.
+ * Phase 1 country-based (Nov 2026): the figures are in one fiat — the
+ * admin's own currency by default (?currency= on the route). */
+export async function adminDashboard(adminId: string, fiatCurrency?: string): Promise<AdminDashboardData> {
   const today = todayStr();
   const fromDate = dayStart(addDays(today, -6));
   const toDate = dayStart(addDays(today, 1));
+  const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { currency: true } });
+  const fiat = (fiatCurrency || admin?.currency || "GHS").toUpperCase();
   const scopeIds = await adminScopeAdminIds(adminId);
   const userIds = await scopedReferredUserIds(adminId);
   const [deposits, newPlayers, activeRounds, summary] = await Promise.all([
     prisma.depositEvent.findMany({
-      where: { adminId: { in: scopeIds }, createdAt: { gte: fromDate, lt: toDate } },
+      where: { adminId: { in: scopeIds }, fiatCurrency: fiat, createdAt: { gte: fromDate, lt: toDate } },
       select: { userId: true, amount: true, createdAt: true },
     }),
     prisma.user.count({
@@ -154,10 +168,10 @@ export async function adminDashboard(adminId: string): Promise<AdminDashboardDat
     userIds.length === 0
       ? []
       : prisma.gameResult.findMany({
-          where: { userId: { in: userIds }, createdAt: { gte: dayStart(today), lt: toDate } },
+          where: { userId: { in: userIds }, fiatCurrency: fiat, createdAt: { gte: dayStart(today), lt: toDate } },
           select: { userId: true },
         }),
-    scopedCommissionSummary(adminId),
+    scopedCommissionSummary(adminId, fiat),
   ]);
   const week: { date: string; deposits: number; total: number }[] = [];
   for (let i = 6; i >= 0; i--) week.push({ date: addDays(today, -i), deposits: 0, total: 0 });
@@ -185,6 +199,7 @@ export async function adminDashboard(adminId: string): Promise<AdminDashboardDat
         });
   const byId = new Map(topUsers.map((u) => [u.id, u]));
   return {
+    currency: fiat,
     today: {
       deposits: todayRow.deposits,
       depositsTotal: todayRow.total,
@@ -209,6 +224,9 @@ export interface DownlineNode {
   name: string;
   contact: string | null;
   role: string;
+  // Phase 1 country-based (Nov 2026): the player's country + fiat.
+  country: string | null;
+  fiatCurrency: string;
   totalDeposited: number;
   commission: number;
   commissionModel: string;
@@ -230,7 +248,7 @@ export async function downlineTree(adminId: string): Promise<{ root: { id: strin
   const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { id: true, name: true } });
   if (!admin) return { root: { id: adminId, name: "—" }, children: [] };
   const users = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, phone: true, role: true, referredByAdminId: true, createdAt: true },
+    select: { id: true, name: true, email: true, phone: true, role: true, referredByAdminId: true, createdAt: true, country: true, currency: true },
     orderBy: { createdAt: "asc" },
   });
   const deposits = await prisma.depositEvent.groupBy({
@@ -256,6 +274,8 @@ export async function downlineTree(adminId: string): Promise<{ root: { id: strin
         name: k.name,
         contact: k.email ?? k.phone ?? null,
         role: k.role,
+        country: k.country ?? "GH",
+        fiatCurrency: k.currency ?? "GHS",
         totalDeposited: depositedBy.get(k.id) ?? 0,
         commission: pc.total,
         commissionModel: pc.model,

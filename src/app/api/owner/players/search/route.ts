@@ -35,33 +35,42 @@ export async function GET(req: Request) {
         cashBalance: true,
         coins: true,
         createdAt: true,
+        country: true,
+        currency: true,
         referredByAdmin: { select: { id: true, name: true } },
       },
     });
     const matched = users
       .filter((u) => [u.name, u.email ?? "", u.phone ?? ""].join(" ").toLowerCase().includes(needle))
       .slice(0, RESULT_CAP);
+    // Phase 1 country-based (Nov 2026): deposits are grouped by
+    // (user, fiat) — a player's total is the sum in THEIR fiat only.
+    // (A deposit is always in the depositing player's fiat, so the
+    // player's own bucket is their total; never sum across fiats.)
     const totals =
       matched.length === 0
         ? []
         : await prisma.depositEvent.groupBy({
-            by: ["userId"],
+            by: ["userId", "fiatCurrency"],
             where: { userId: { in: matched.map((m) => m.id) } },
             _sum: { amount: true },
             _count: true,
           });
-    const byId = new Map(totals.map((t) => [t.userId, t]));
+    const byId = new Map(totals.map((t) => [`${t.userId}:${t.fiatCurrency ?? "GHS"}`, t]));
     return ok({
       q,
       count: matched.length,
       players: matched.map((u) => {
-        const t = byId.get(u.id);
+        const fiat = u.currency ?? "GHS";
+        const t = byId.get(`${u.id}:${fiat}`);
         return {
           id: u.id,
           name: u.name,
           email: u.email,
           phone: u.phone,
           role: u.role,
+          country: u.country ?? "GH",
+          currency: fiat,
           referringAdmin: u.referredByAdmin,
           totalDeposited: dec(t?._sum.amount),
           deposits: t?._count ?? 0,

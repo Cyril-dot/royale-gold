@@ -16,6 +16,7 @@
 
 import { prisma } from "./prisma";
 import { dec } from "./money";
+import { symbolFor } from "./country";
 import { annotateWithdrawalFlags, WITHDRAWAL_RISK_LABELS } from "./withdrawals";
 
 /** The user ids a report may include: the admin's downline, or every
@@ -52,12 +53,14 @@ export interface DepositReportRow {
   method: string;
   referringAdmin: string;
   commission: number;
+  // Phase 1 country-based (Nov 2026): the fiat this row is in.
+  fiatCurrency: string;
 }
 
-export async function depositsReport(userIds: string[], from: Date, to: Date): Promise<DepositReportRow[]> {
+export async function depositsReport(userIds: string[], from: Date, to: Date, fiatCurrency: string = "GHS"): Promise<DepositReportRow[]> {
   if (userIds.length === 0) return [];
   const rows = await prisma.depositEvent.findMany({
-    where: { userId: { in: userIds }, createdAt: { gte: from, lte: to } },
+    where: { userId: { in: userIds }, fiatCurrency, createdAt: { gte: from, lte: to } },
     include: {
       user: { select: { name: true, email: true, phone: true } },
       admin: { select: { name: true } },
@@ -72,6 +75,7 @@ export async function depositsReport(userIds: string[], from: Date, to: Date): P
     method: d.method,
     referringAdmin: d.admin?.name ?? "—",
     commission: dec(d.commission),
+    fiatCurrency: d.fiatCurrency ?? "GHS",
   }));
 }
 
@@ -83,25 +87,27 @@ export interface PlayerReportRow {
   totalStaked: number;
   totalWon: number;
   commission: number;
+  // Phase 1 country-based (Nov 2026): the player's fiat.
+  fiatCurrency: string;
 }
 
-export async function playersReport(userIds: string[]): Promise<PlayerReportRow[]> {
+export async function playersReport(userIds: string[], fiatCurrency: string = "GHS"): Promise<PlayerReportRow[]> {
   if (userIds.length === 0) return [];
   const [users, deposits, rounds] = await Promise.all([
     prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, name: true, email: true, phone: true, createdAt: true },
+      where: { id: { in: userIds }, currency: fiatCurrency },
+      select: { id: true, name: true, email: true, phone: true, createdAt: true, currency: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.depositEvent.groupBy({
       by: ["userId"],
-      where: { userId: { in: userIds } },
+      where: { userId: { in: userIds }, fiatCurrency },
       _sum: { amount: true, commission: true },
     }),
     // Total staked + total won (payouts) per player, all games.
     prisma.gameResult.groupBy({
       by: ["userId"],
-      where: { userId: { in: userIds }, currency: "cash" },
+      where: { userId: { in: userIds }, currency: "cash", fiatCurrency },
       _sum: { stake: true, payout: true },
     }),
   ]);
@@ -121,6 +127,7 @@ export async function playersReport(userIds: string[]): Promise<PlayerReportRow[
       // Totals "Commission" tile (the rules-engine figure lives on the
       // Commission page, which is the source of truth).
       commission: Number(d?._sum.commission ?? 0),
+      fiatCurrency: u.currency ?? "GHS",
     };
   });
 }
@@ -133,12 +140,14 @@ export interface WithdrawalReportRow {
   method: string;
   status: string;
   flags: string;
+  // Phase 1 country-based (Nov 2026): the fiat this row is in.
+  fiatCurrency: string;
 }
 
-export async function withdrawalsReport(userIds: string[], from: Date, to: Date): Promise<WithdrawalReportRow[]> {
+export async function withdrawalsReport(userIds: string[], from: Date, to: Date, fiatCurrency: string = "GHS"): Promise<WithdrawalReportRow[]> {
   if (userIds.length === 0) return [];
   const rows = await prisma.withdrawal.findMany({
-    where: { userId: { in: userIds }, createdAt: { gte: from, lte: to } },
+    where: { userId: { in: userIds }, fiatCurrency, createdAt: { gte: from, lte: to } },
     include: { user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -152,6 +161,7 @@ export async function withdrawalsReport(userIds: string[], from: Date, to: Date)
     status: w.status,
     // The display labels, not the keys — the same words as the Money queue.
     flags: (flags.get(w.id) ?? []).map((f) => WITHDRAWAL_RISK_LABELS[f]).join(", "),
+    fiatCurrency: w.fiatCurrency ?? "GHS",
   }));
 }
 
@@ -186,30 +196,34 @@ export type ReportKind = "deposits" | "players" | "withdrawals";
  */
 export async function serveReport(kind: ReportKind, sp: URLSearchParams, userIds: string[]): Promise<Response> {
   const preview = sp.get("preview") === "1";
+  // Phase 1 country-based (Nov 2026): reports are per-fiat — ?currency=
+  // (default GHS). Amounts in a report are all in this one fiat.
+  const currency = (sp.get("currency") || "GHS").toUpperCase();
+  const sym = symbolFor(currency);
   const { from, to, fromStr, toStr } = parseReportRange(sp);
   if (kind === "deposits") {
-    const rows = await depositsReport(userIds, from, to);
-    if (preview) return Response.json({ report: kind, from: fromStr, to: toStr, total: rows.length, rows: rows.slice(0, 10) });
+    const rows = await depositsReport(userIds, from, to, currency);
+    if (preview) return Response.json({ report: kind, currency, from: fromStr, to: toStr, total: rows.length, rows: rows.slice(0, 10) });
     const csv = toCsv(
-      ["Date", "Player", "Contact", "Amount (GH₵)", "Method", "Referring admin", "Commission (GH₵)"],
+      ["Date", "Player", "Contact", `Amount (${sym})`, "Method", "Referring admin", `Commission (${sym})`],
       rows.map((r) => [r.date, r.player, r.contact, r.amount.toFixed(2), r.method, r.referringAdmin, r.commission.toFixed(2)]),
     );
-    return csvResponse(`royale-gold-deposits-${fromStr}_to_${toStr}.csv`, csv);
+    return csvResponse(`royale-gold-deposits-${currency}-${fromStr}_to_${toStr}.csv`, csv);
   }
   if (kind === "players") {
-    const rows = await playersReport(userIds);
-    if (preview) return Response.json({ report: kind, total: rows.length, rows: rows.slice(0, 10) });
+    const rows = await playersReport(userIds, currency);
+    if (preview) return Response.json({ report: kind, currency, total: rows.length, rows: rows.slice(0, 10) });
     const csv = toCsv(
-      ["Player", "Contact", "Joined", "Total deposited (GH₵)", "Total staked (GH₵)", "Total won (GH₵)", "Commission (GH₵)"],
+      ["Player", "Contact", "Joined", `Total deposited (${sym})`, `Total staked (${sym})`, `Total won (${sym})`, `Commission (${sym})`],
       rows.map((r) => [r.name, r.contact, r.joined, r.totalDeposited.toFixed(2), r.totalStaked.toFixed(2), r.totalWon.toFixed(2), r.commission.toFixed(2)]),
     );
-    return csvResponse(`royale-gold-players-${toStr}.csv`, csv);
+    return csvResponse(`royale-gold-players-${currency}-${toStr}.csv`, csv);
   }
-  const rows = await withdrawalsReport(userIds, from, to);
-  if (preview) return Response.json({ report: kind, from: fromStr, to: toStr, total: rows.length, rows: rows.slice(0, 10) });
+  const rows = await withdrawalsReport(userIds, from, to, currency);
+  if (preview) return Response.json({ report: kind, currency, from: fromStr, to: toStr, total: rows.length, rows: rows.slice(0, 10) });
   const csv = toCsv(
-    ["Date", "Player", "Contact", "Amount (GH₵)", "Method", "Status", "Risk flags"],
+    ["Date", "Player", "Contact", `Amount (${sym})`, "Method", "Status", "Risk flags"],
     rows.map((r) => [r.date, r.player, r.contact, r.amount.toFixed(2), r.method, r.status, r.flags]),
   );
-  return csvResponse(`royale-gold-withdrawals-${fromStr}_to_${toStr}.csv`, csv);
+  return csvResponse(`royale-gold-withdrawals-${currency}-${fromStr}_to_${toStr}.csv`, csv);
 }

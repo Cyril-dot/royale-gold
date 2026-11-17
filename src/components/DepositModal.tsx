@@ -3,13 +3,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, fmtCash, Wallet } from "../lib/api";
+import { api, fmtMoney, Wallet } from "../lib/api";
+import { symbolFor } from "../lib/country";
 import { useStore } from "../lib/store";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
 export default function DepositModal() {
   const { depositOpen, setDepositOpen, setWallet, toast, user } = useStore();
+  // Phase 1 country-based (Nov 2026): the modal shows the player's own
+  // fiat symbol, and only that fiat's methods apply (the server
+  // enforces it — the method list is the same for both fiats in demo).
+  const fiat = user?.currency ?? "GHS";
+  const sym = symbolFor(fiat);
   const [amount, setAmount] = useState(100);
   const [method, setMethod] = useState<(typeof METHODS)[number]>("MTN");
   const [busy, setBusy] = useState(false);
@@ -47,7 +53,7 @@ export default function DepositModal() {
         body: JSON.stringify({ amount, method }),
       });
       setWallet(r);
-      toast(`Deposited ${fmtCash(amount)} via ${method}`, "win");
+      toast(`Deposited ${fmtMoney(amount, fiat)} via ${method}`, "win");
       setDepositOpen(false);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Deposit failed");
@@ -64,7 +70,7 @@ export default function DepositModal() {
           <h3>Top <em>up</em></h3>
           <p className="sub">Cash deposits only.{refPct != null ? ` Your referring admin earns ${refPct}% commission on this deposit.` : ""}</p>
           <form onSubmit={submit}>
-            <div className="rg48-f"><label htmlFor="depAmt">Amount (GH₵)</label><input id="depAmt" type="number" min={1} step={1} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required /></div>
+            <div className="rg48-f"><label htmlFor="depAmt">Amount ({sym})</label><input id="depAmt" type="number" min={1} step={1} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required /></div>
             <div className="rg48-f"><label>Method</label>
               <div className="dep-methods">
                 {METHODS.map((m) => (
@@ -73,7 +79,7 @@ export default function DepositModal() {
               </div>
             </div>
             <p className="rg48-err">{err}</p>
-            <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Depositing…" : `Deposit ${fmtCash(amount)}`}</button>
+            <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Depositing…" : `Deposit ${fmtMoney(amount, fiat)}`}</button>
           </form>
         </div>
       </div>

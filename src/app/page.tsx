@@ -12,7 +12,10 @@ import VerbTilt from "../components/VerbTilt";
 import { BottleRoom } from "../components/games/quick";
 import { getGame } from "../lib/games";
 import { LIVE_WINS, TILE_GAMES, TOP_PLAYERS } from "../lib/tiles";
-import { fmtCash } from "../lib/api";
+import { fmtMoney } from "../lib/api";
+import { symbolFor } from "../lib/country";
+import { useStore } from "../lib/store";
+import { useFiat } from "../lib/use-fiat";
 
 interface AnnouncementItem {
   id: string;
@@ -39,14 +42,21 @@ function loadDismissed(): Set<string> {
 // the homepage itself).
 const BOTTLE_GAME = getGame("spin-da-bottle")!;
 
-// Podium avatar initials ("Kwame A." → "KA") and the artifact's
-// no-decimals podium amounts (GH₵ 12,480, not GH₵ 12,480.00).
+// Podium avatar initials ("Kwame A." → "KA"). Podium amounts are
+// no-decimals (12,480, not 12,480.00) — fmtMoney with the scaled
+// amount, formatted in the component (the factor lives in state).
 const initials = (name: string) =>
   name.split(/[\s.]+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-const fmtPodium = (n: number) => `GH₵ ${n.toLocaleString("en-GH")}`;
+const fmtPodium = (n: number, currency: string) => `${symbolFor(currency)} ${n.toLocaleString("en-GH")}`;
 
 export default function Home() {
   const [filter, setFilter] = useState<"all" | "cash" | "coins" | "crash">("all");
+  // Phase 1 country-based (Nov 2026): the homepage's money copy scales
+  // to the viewer's fiat — podium/feed amounts are GHS-term numbers ×
+  // the factor; the min stake comes from the currency config.
+  const { user } = useStore();
+  const fiat = user?.currency ?? "GHS";
+  const { factor, minStake } = useFiat(fiat);
   // P1 Batch 4 (O20/O21): the owner-set announcements + the maintenance
   // flag, both read from public endpoints. maintenance is null while
   // loading — the normal page shows until the flag resolves, so a
@@ -144,7 +154,7 @@ export default function Home() {
           <div className="gp-filters" role="group" aria-label="Filter games">
             {(["all", "cash", "coins", "crash"] as const).map((f) => (
               <button key={f} type="button" className="fchip" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-                {f === "all" ? "All games" : f === "cash" ? "Cash · GH₵" : f === "coins" ? "Coins" : "Crash"}
+                {f === "all" ? "All games" : f === "cash" ? `Cash · ${symbolFor(fiat)}` : f === "coins" ? "Coins" : "Crash"}
               </button>
             ))}
           </div>
@@ -207,7 +217,7 @@ export default function Home() {
                       <span className="ava" aria-hidden="true">{initials(p.name)}</span>
                       <b>{p.name}</b>
                       <span>{p.game}</span>
-                      <div className="amt">{fmtPodium(p.amount)}</div>
+                      <div className="amt">{fmtPodium(p.amount * factor, fiat)}</div>
                     </div>
                     <div className="base" aria-hidden="true">#{rank}</div>
                   </div>
@@ -219,7 +229,7 @@ export default function Home() {
                 <div key={p.name} className="p-row">
                   <span className="rank">#{i + 4}</span>
                   <span className="who"><b>{p.name}</b><span>{p.game}</span></span>
-                  <span className="won">{fmtPodium(p.amount)}</span>
+                  <span className="won">{fmtPodium(p.amount * factor, fiat)}</span>
                 </div>
               ))}
             </div>
@@ -228,7 +238,7 @@ export default function Home() {
             <h3><span className="live-dot" /> Live wins</h3>
             <div className="feed-list">
               {LIVE_WINS.map((w) => (
-                <div key={w.name + w.amount} className="feed-row"><b>{w.name}</b><span>won {fmtCash(w.amount)}</span><small>{w.game}</small></div>
+                <div key={w.name + w.amount} className="feed-row"><b>{w.name}</b><span>won {fmtMoney(w.amount * factor, fiat)}</span><small>{w.game}</small></div>
               ))}
             </div>
           </aside>
@@ -242,8 +252,8 @@ export default function Home() {
             <h2>Three moves, <em>that&rsquo;s it</em></h2>
           </div>
           <div className="verbs">
-            <article className="verb"><VerbTilt index={0}><span className="vnum">STEP 01</span><div className="v-art" aria-hidden="true"><div className="coin-stack3d"><i /><i /><i /><i /><i /></div><span className="cn-solo">₵</span></div><h3>Depo<em>sit</em></h3><p>Top up from GH₵ 10 — MoMo, bank or card. Instant, no fees.</p></VerbTilt></article>
-            <article className="verb"><VerbTilt index={1}><span className="vnum">STEP 02</span><div className="v-art" aria-hidden="true"><div className="cube cube-a"><i className="fc f-front p5" /><i className="fc f-back p2" /><i className="fc f-right p3" /><i className="fc f-left p4" /><i className="fc f-top p1" /><i className="fc f-bottom p6" /></div><div className="cube cube-b"><i className="fc f-front p3" /><i className="fc f-back p4" /><i className="fc f-right p5" /><i className="fc f-left p2" /><i className="fc f-top p6" /><i className="fc f-bottom p1" /></div></div><h3>Pl<em>ay</em></h3><p>Stakes from GH₵ 1. Every game&rsquo;s RTP is on its tile.</p></VerbTilt></article>
+            <article className="verb"><VerbTilt index={0}><span className="vnum">STEP 01</span><div className="v-art" aria-hidden="true"><div className="coin-stack3d"><i /><i /><i /><i /><i /></div><span className="cn-solo">₵</span></div><h3>Depo<em>sit</em></h3><p>Top up from {fmtMoney(10 * factor, fiat)} — MoMo, bank or card. Instant, no fees.</p></VerbTilt></article>
+            <article className="verb"><VerbTilt index={1}><span className="vnum">STEP 02</span><div className="v-art" aria-hidden="true"><div className="cube cube-a"><i className="fc f-front p5" /><i className="fc f-back p2" /><i className="fc f-right p3" /><i className="fc f-left p4" /><i className="fc f-top p1" /><i className="fc f-bottom p6" /></div><div className="cube cube-b"><i className="fc f-front p3" /><i className="fc f-back p4" /><i className="fc f-right p5" /><i className="fc f-left p2" /><i className="fc f-top p6" /><i className="fc f-bottom p1" /></div></div><h3>Pl<em>ay</em></h3><p>Stakes from {fmtMoney(minStake, fiat)}. Every game&rsquo;s RTP is on its tile.</p></VerbTilt></article>
             <article className="verb"><VerbTilt index={2}><span className="vnum">STEP 03</span><div className="v-art" aria-hidden="true"><div className="fan"><i className="note n1" /><i className="note n2" /><i className="note n3">GH₵</i></div></div><h3>Cash <em>out</em></h3><p>Cash out to the same MoMo number. Most land in under five minutes.</p></VerbTilt></article>
           </div>
         </div>
@@ -257,7 +267,7 @@ export default function Home() {
           </div>
           <article className="promo-gold">
             <div className="pg-txt">
-              <div className="big">100% up to GH₵ 1,000 — welcome bonus</div>
+              <div className="big">100% up to {fmtMoney(1000 * factor, fiat)} — welcome bonus</div>
               <p>We match your first top-up, plus 50 free spins. 18+. Wagering ×35 applies.</p>
             </div>
             <a className="btn" href="#promos">Claim the bonus</a>
@@ -275,7 +285,7 @@ export default function Home() {
           <div className="faq">
             <details>
               <summary><span className="fnum">01</span><span className="fq">Is this real-money play?</span><span className="fx" aria-hidden="true">+</span></summary>
-              <p>Yes — deposits, stakes and winnings are real Ghana cedis. You must be 18 or older and pass a quick ID check before your first withdrawal, as Ghanaian gaming law requires.</p>
+              <p>Yes — deposits, stakes and winnings are real money in your currency. You must be 18 or older and pass a quick ID check before your first withdrawal, as Ghanaian gaming law requires.</p>
             </details>
             <details>
               <summary><span className="fnum">02</span><span className="fq">How fast are withdrawals?</span><span className="fx" aria-hidden="true">+</span></summary>

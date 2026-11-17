@@ -15,6 +15,7 @@ function serializeRound(r: {
   userId: string;
   game: string;
   currency: string;
+  fiatCurrency?: string | null;
   stake: unknown;
   payout: unknown;
   result: unknown;
@@ -30,6 +31,8 @@ function serializeRound(r: {
     game: r.game,
     gameName: getGame(r.game)?.name ?? r.game,
     currency: r.currency,
+    // Phase 1 country-based (Nov 2026): the fiat this round was played in.
+    fiatCurrency: r.fiatCurrency ?? "GHS",
     stake,
     payout,
     net: payout - stake,

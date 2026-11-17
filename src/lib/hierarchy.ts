@@ -120,6 +120,9 @@ export function mergeCommissionDays(daysByAdmin: CommissionDay[][]): CommissionD
     const pcts = new Set(rows.map((r) => r.parentSharePct));
     out.push({
       date,
+      // Phase 1 country-based (Nov 2026): merged days are all in the
+      // one fiat the callers asked for.
+      fiatCurrency: rows[0]?.fiatCurrency ?? "GHS",
       deposits: rows.reduce((s, r) => s + r.deposits, 0),
       totalAmount: round2(rows.reduce((s, r) => s + r.totalAmount, 0)),
       totalStakes: round2(rows.reduce((s, r) => s + r.totalStakes, 0)),
@@ -138,18 +141,20 @@ export async function scopedDayCommissions(
   adminId: string,
   from?: string,
   to?: string,
+  fiatCurrency: string = "GHS",
 ): Promise<CommissionDay[]> {
   const scope = await adminScopeAdminIds(adminId);
-  const per = await Promise.all(scope.map((id) => dayCommissions(id, from, to)));
+  const per = await Promise.all(scope.map((id) => dayCommissions(id, from, to, fiatCurrency)));
   return mergeCommissionDays(per);
 }
 
-/** Commission summary (today/yesterday/7d/30d/all-time) over the admin + descendants. */
-export async function scopedCommissionSummary(adminId: string): Promise<CommissionSummary> {
+/** Commission summary (today/yesterday/7d/30d/all-time) over the admin + descendants, in one fiat. */
+export async function scopedCommissionSummary(adminId: string, fiatCurrency: string = "GHS"): Promise<CommissionSummary> {
   const scope = await adminScopeAdminIds(adminId);
-  const per = await Promise.all(scope.map((id) => commissionSummary(id)));
-  const sum = (k: keyof CommissionSummary) => round2(per.reduce((s, p) => s + p[k], 0));
+  const per = await Promise.all(scope.map((id) => commissionSummary(id, fiatCurrency)));
+  const sum = (k: "today" | "yesterday" | "last7d" | "last30d" | "allTime") => round2(per.reduce((s, p) => s + p[k], 0));
   return {
+    fiatCurrency,
     today: sum("today"),
     yesterday: sum("yesterday"),
     last7d: sum("last7d"),
@@ -158,11 +163,11 @@ export async function scopedCommissionSummary(adminId: string): Promise<Commissi
   };
 }
 
-/** Commission owed over a period, admin + descendants. */
-export async function scopedCommissionOwed(adminId: string, from: string, to: string): Promise<number> {
+/** Commission owed over a period, admin + descendants, in one fiat. */
+export async function scopedCommissionOwed(adminId: string, from: string, to: string, fiatCurrency: string = "GHS"): Promise<number> {
   const scope = await adminScopeAdminIds(adminId);
   let total = 0;
-  for (const id of scope) total = round2(total + (await commissionOwed(id, from, to)));
+  for (const id of scope) total = round2(total + (await commissionOwed(id, from, to, fiatCurrency)));
   return total;
 }
 
@@ -172,13 +177,13 @@ export async function scopedCommissionOwed(adminId: string, from: string, to: st
  * % in force that day. 0 when the admin has no parent or the rule sets
  * no split. NEVER deducted from the child's payout.
  */
-export async function parentShareOwed(adminId: string, from: string, to: string): Promise<number> {
+export async function parentShareOwed(adminId: string, from: string, to: string, fiatCurrency: string = "GHS"): Promise<number> {
   const admin = await prisma.user.findUnique({
     where: { id: adminId },
     select: { parentAdminId: true },
   });
   if (!admin?.parentAdminId) return 0;
-  const days = await dayCommissions(adminId, from, to);
+  const days = await dayCommissions(adminId, from, to, fiatCurrency);
   return round2(days.reduce((s, d) => s + d.totalCommission * (d.parentSharePct / 100), 0));
 }
 
@@ -191,17 +196,20 @@ export async function parentShareOwed(adminId: string, from: string, to: string)
 export async function depositsForAdminOnScoped(
   adminId: string,
   date: string,
+  fiatCurrency: string = "GHS",
 ): Promise<{
   date: string;
+  fiatCurrency: string;
   deposits: (DepositRow & { adminName: string })[];
   totals: { deposits: number; totalAmount: number; totalCommission: number; totalStakes: number; totalPayouts: number; model: string; rate: number };
   scope: { childAdmins: { id: string; name: string }[] };
 }> {
-  const own = await depositsForAdminOn(adminId, date);
+  const own = await depositsForAdminOn(adminId, date, fiatCurrency);
   const scope = await adminScopeInfo(adminId);
   if (scope.childAdmins.length === 0) {
     return {
       date: own.date,
+      fiatCurrency,
       deposits: own.deposits.map((d) => ({ ...d, adminName: "" })),
       totals: {
         deposits: own.totals.deposits,
@@ -221,17 +229,18 @@ export async function depositsForAdminOnScoped(
   const start = new Date(`${date}T00:00:00.000Z`);
   const end = new Date(`${date}T23:59:59.999Z`);
   const rows = await prisma.depositEvent.findMany({
-    where: { adminId: { in: scopeIds }, createdAt: { gte: start, lte: end } },
+    where: { adminId: { in: scopeIds }, fiatCurrency, createdAt: { gte: start, lte: end } },
     include: {
       user: { select: { id: true, name: true, email: true, phone: true } },
       admin: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
-  const days = await scopedDayCommissions(adminId, date, date);
+  const days = await scopedDayCommissions(adminId, date, date, fiatCurrency);
   const day = days[0];
   return {
     date,
+    fiatCurrency,
     deposits: rows.map((r) => ({
       id: r.id,
       userId: r.userId,
@@ -239,6 +248,7 @@ export async function depositsForAdminOnScoped(
       userContact: r.user.email ?? r.user.phone ?? null,
       amount: dec(r.amount),
       method: r.method,
+      fiatCurrency: r.fiatCurrency ?? "GHS",
       pctInForce: dec(r.pctInForce),
       commission: dec(r.commission),
       time: r.createdAt.toISOString(),

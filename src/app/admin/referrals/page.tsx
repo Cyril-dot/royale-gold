@@ -7,7 +7,8 @@
 import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { api, fmtCash } from "../../../lib/api";
+import { api, fmtMoney } from "../../../lib/api";
+import { symbolFor } from "../../../lib/country";
 import { useStore } from "../../../lib/store";
 import { useAdminContext, useAdminReferrals, useAdminDownline, useAdminPromoCodes, copyText, shareLink, type DownlineNode } from "../../../lib/admin-client";
 import { canAccessSection } from "../../../lib/rbac";
@@ -34,8 +35,8 @@ function DownlineTreeNode({ n, playerHref }: { n: DownlineNode; playerHref: (id:
       <div className="b4-tree-card">
         <Link href={playerHref(n.id)}><b>{n.name}</b></Link>
         <span>{n.contact || "—"}</span>
-        <span>Deposited {fmtCash(n.totalDeposited)}</span>
-        <span>Commission {fmtCash(n.commission)}</span>
+        <span>Deposited {fmtMoney(n.totalDeposited, n.fiatCurrency ?? "GHS")}</span>
+        <span>Commission {fmtMoney(n.commission, n.fiatCurrency ?? "GHS")}</span>
       </div>
       {n.children.length > 0 && (
         <ul className="b4-tree">
@@ -184,7 +185,7 @@ function AdminReferralsInner() {
             {promoData.codes.map((c) => (
               <div key={c.id} className="promo-row">
                 <b className="code-chip sm">{c.code}</b>
-                <span>{c.bonusCurrency === "cash" ? fmtCash(c.bonusAmount) : `${c.bonusAmount} coins`}</span>
+                <span>{c.bonusCurrency === "cash" ? fmtMoney(c.bonusAmount, user?.currency ?? "GHS") : `${c.bonusAmount} coins`}</span>
                 <span>{c.usesLeft} of {c.maxUses} left</span>
                 <span>{c.expired ? "Expired" : c.expiresAt ? `Expires ${new Date(c.expiresAt).toLocaleDateString("en-GB")}` : "No expiry"}</span>
                 {c.redemptions.length > 0 ? (
@@ -205,7 +206,7 @@ function AdminReferralsInner() {
               </label>
               <label>Bonus in
                 <select value={promoCurrency} onChange={(e) => setPromoCurrency(e.target.value as "cash" | "coins")} aria-label="Promo bonus currency">
-                  <option value="cash">Cash (GH₵)</option>
+                  <option value="cash">Cash ({symbolFor(user?.currency ?? "GHS")})</option>
                   <option value="coins">Coins</option>
                 </select>
               </label>

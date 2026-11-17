@@ -20,8 +20,11 @@ export async function GET(req: Request) {
     const adminId = sp.get("adminId") || undefined;
     const flaggedOnly = sp.get("flagged") === "1";
     const limit = Math.min(Math.max(Number(sp.get("limit") ?? 50) || 50, 1), 100);
+    // Phase 1 country-based (Nov 2026): ?currency= (default GHS) — the
+    // queue is in one fiat only.
+    const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
     const rows = await prisma.withdrawal.findMany({
-      where: { ...(status ? { status } : {}), ...(adminId ? { adminId } : {}) },
+      where: { fiatCurrency, ...(status ? { status } : {}), ...(adminId ? { adminId } : {}) },
       include: {
         user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } },
         admin: { select: { id: true, name: true } },
@@ -29,7 +32,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
-    const pending = await prisma.withdrawal.count({ where: { status: { in: ["pending", "admin_approved", "held"] } } });
+    const pending = await prisma.withdrawal.count({ where: { fiatCurrency, status: { in: ["pending", "admin_approved", "held"] } } });
     // P1 Batch 1 (A15): risk flags on every row (same computation as the admin queue).
     const flags = await annotateWithdrawalFlags(rows.map((w) => ({ id: w.id, userId: w.userId, amount: dec(w.amount), user: w.user })));
     // P1 Batch 4 (O22): the KYC-required warning (same rule as the admin queue).
@@ -46,6 +49,7 @@ export async function GET(req: Request) {
           adminName: w.admin?.name ?? null,
           amount: dec(w.amount),
           method: w.method,
+          fiatCurrency: w.fiatCurrency ?? "GHS",
           status: w.status,
           reason: w.reason,
           decidedBy: w.decidedBy,
@@ -57,6 +61,7 @@ export async function GET(req: Request) {
         }))
         .filter((w) => !flaggedOnly || w.flags.length > 0),
       pending,
+      currency: fiatCurrency,
     });
   } catch (err) {
     return toErrorResponse(err);

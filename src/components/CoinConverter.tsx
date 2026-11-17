@@ -1,27 +1,40 @@
-// CoinConverter (round 16) — convert REAL cash to coins at GH₵5 = 1 coin.
-// One-way only, REAL cash only, SIM never touched. The 3D tilt card
-// follows the WalletCard pattern: pointer tilt on hover-capable pointers,
-// a gentle float on touch, nothing moves under prefers-reduced-motion.
-// The gold coin idles in a slow spin and does three fast turns on a
-// successful convert; the coin total counts up to its new value.
+// CoinConverter (round 16) — convert REAL cash to coins at the
+// per-currency rate from /api/games/config (GHS 5 = 1 coin, NGN 500 =
+// 1 coin seed). One-way only, REAL cash only, SIM never touched.
+// The 3D tilt card follows the WalletCard pattern: pointer tilt on
+// hover-capable pointers, a gentle float on touch, nothing moves under
+// prefers-reduced-motion. The gold coin idles in a slow spin and does
+// three fast turns on a successful convert; the coin total counts up
+// to its new value.
 
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, fmtCash } from "../lib/api";
+import { api, fmtMoney } from "../lib/api";
+import { symbolFor } from "../lib/country";
 import { useStore } from "../lib/store";
 
-const RATE = 5; // GH₵5 = 1 coin
-const CHIPS = [5, 10, 25, 50, 100];
-const DEFAULT_AMOUNT = 50;
+// Phase 1 country-based (Nov 2026): the rate + chips come from the
+// player's currency config (fetched below); these are the GHS
+// fallbacks used before the config loads.
+const FALLBACK_RATE = 5;
+const CHIP_MULTS = [1, 2, 5, 10, 20];
+const DEFAULT_MULT = 10;
 
 /** "50" not "50.00" — the preview reads GH₵50 → 10 coins. */
 const fmtAmt = (n: number) =>
   Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, "");
 
+interface CurrencyCfg {
+  currency: string;
+  symbol: string;
+  conversionRate: number;
+}
+
 export default function CoinConverter() {
   const { user, wallet, mode, setMode, setWallet, toast, setDepositOpen } = useStore();
-  const [text, setText] = useState(String(DEFAULT_AMOUNT));
+  const [rate, setRate] = useState(FALLBACK_RATE);
+  const [text, setText] = useState(String(FALLBACK_RATE * DEFAULT_MULT));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(false);
@@ -33,13 +46,40 @@ export default function CoinConverter() {
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const fiat = user?.currency ?? wallet?.currency ?? "GHS";
+  const sym = symbolFor(fiat);
+  const chips = CHIP_MULTS.map((m) => m * rate);
+
+  // Phase 1 country-based (Nov 2026): the conversion rate is the
+  // player's currency config, not a hardcoded 5.
+  useEffect(() => {
+    let cancelled = false;
+    api<{ currencies: CurrencyCfg[] }>("/api/games/config")
+      .then((r) => {
+        if (cancelled) return;
+        const row = r.currencies?.find((c) => c.currency === fiat);
+        if (row && row.conversionRate > 0) {
+          setRate(row.conversionRate);
+          setText((prev) => {
+            const n = Number.parseFloat(prev);
+            // Re-base the typed amount when the rate loads (e.g. a GHS
+            // default of 50 becomes the NGN default of 5,000).
+            if (!Number.isFinite(n) || n <= 0) return String(row.conversionRate * DEFAULT_MULT);
+            return prev;
+          });
+        }
+      })
+      .catch(() => { /* GHS fallback stays */ });
+    return () => { cancelled = true; };
+  }, [fiat]);
+
   const cash = wallet?.cash ?? user?.cash ?? 0;
   const coins = wallet?.coins ?? user?.coins ?? 0;
   const amount = Number.parseFloat(text);
   const parsed = Number.isFinite(amount) ? amount : 0;
-  const previewCoins = Math.floor(parsed / RATE);
-  const insufficient = mode === "REAL" && parsed >= RATE && parsed > cash;
-  const canConvert = mode === "REAL" && parsed >= RATE && !insufficient && !busy;
+  const previewCoins = Math.floor(parsed / rate);
+  const insufficient = mode === "REAL" && parsed >= rate && parsed > cash;
+  const canConvert = mode === "REAL" && parsed >= rate && !insufficient && !busy;
 
   // Coin total counts up to its new value after a convert (instant when
   // reduced motion is on, or when the balance changes for any other reason).
@@ -117,11 +157,11 @@ export default function CoinConverter() {
   }, []);
 
   const onBlurSnap = () => {
-    // Snap DOWN to the nearest multiple of GH₵5, minimum GH₵5.
-    if (!Number.isFinite(parsed) || parsed < RATE) {
-      setText(String(RATE));
+    // Snap DOWN to the nearest multiple of the rate, minimum the rate.
+    if (!Number.isFinite(parsed) || parsed < rate) {
+      setText(String(rate));
     } else {
-      setText(String(Math.floor(parsed / RATE) * RATE));
+      setText(String(Math.floor(parsed / rate) * rate));
     }
   };
 
@@ -131,16 +171,16 @@ export default function CoinConverter() {
     setError(null);
     const fromCoins = coins;
     try {
-      const r = await api<{ cash: number; coins: number; sim: number; coinsGained: number; cashDebited: number }>(
+      const r = await api<{ cash: number; coins: number; sim: number; coinsGained: number; cashDebited: number; fiatCurrency: string; rate: number }>(
         "/api/wallet/convert",
         { method: "POST", body: JSON.stringify({ cashAmount: parsed }) }
       );
-      setWallet({ cash: r.cash, coins: r.coins, sim: r.sim });
+      setWallet({ cash: r.cash, coins: r.coins, sim: r.sim, currency: r.fiatCurrency ?? fiat, country: user?.country ?? wallet?.country ?? "GH" });
       setCountFrom(fromCoins);
       setSpinKey((k) => k + 1);
       setSpinning(true);
       setJustConverted({ gained: r.coinsGained, debited: r.cashDebited });
-      toast(`Converted GH₵${fmtAmt(r.cashDebited)} → ${r.coinsGained} coins`, "win");
+      toast(`Converted ${sym}${fmtAmt(r.cashDebited)} → ${r.coinsGained} coins`, "win");
       if (spinTimer.current) clearTimeout(spinTimer.current);
       spinTimer.current = setTimeout(() => setSpinning(false), 950);
       if (flashTimer.current) clearTimeout(flashTimer.current);
@@ -160,8 +200,8 @@ export default function CoinConverter() {
             <h3>Convert cash to coins</h3>
             <p className="cv-sub">Turn your cash into coins to play the coin games.</p>
           </div>
-          <div className="cv-rate" aria-label="Rate: 5 cedis equals 1 coin">
-            <span className="cv-rate-num">GH₵5 = 1</span>
+          <div className="cv-rate" aria-label={`Rate: ${rate} ${fiat} equals 1 coin`}>
+            <span className="cv-rate-num">{sym}{rate} = 1</span>
             <span className="cv-rate-coin">◉ coin</span>
           </div>
         </div>
@@ -204,7 +244,7 @@ export default function CoinConverter() {
             </label>
             <div className="cv-input-row">
               <span className="cv-cur" aria-hidden="true">
-                GH₵
+                {sym}
               </span>
               <input
                 id="cv-amount"
@@ -213,7 +253,7 @@ export default function CoinConverter() {
                 inputMode="decimal"
                 autoComplete="off"
                 value={text}
-                aria-label="Cash amount in Ghana cedis"
+                aria-label={`Cash amount in ${fiat}`}
                 onChange={(e) => {
                   const v = e.target.value.replace(/[^0-9.]/g, "");
                   setText(v.indexOf(".") === v.lastIndexOf(".") ? v : v.slice(0, -1));
@@ -223,7 +263,7 @@ export default function CoinConverter() {
               />
             </div>
             <div className="cv-chips" role="group" aria-label="Quick amounts">
-              {CHIPS.map((c) => (
+              {chips.map((c) => (
                 <button
                   key={c}
                   type="button"
@@ -242,28 +282,28 @@ export default function CoinConverter() {
             <p className="cv-preview" aria-live="polite">
               {justConverted ? (
                 <span className="cv-flash" key={`flash-${justConverted.gained}-${justConverted.debited}`}>
-                  GH₵{fmtAmt(justConverted.debited)} became {justConverted.gained} ◉ coins
+                  {sym}{fmtAmt(justConverted.debited)} became {justConverted.gained} ◉ coins
                 </span>
-              ) : parsed >= RATE ? (
+              ) : parsed >= rate ? (
                 <span>
-                  GH₵{fmtAmt(parsed)} <span className="cv-arrow">→</span> {previewCoins} ◉ coins
+                  {sym}{fmtAmt(parsed)} <span className="cv-arrow">→</span> {previewCoins} ◉ coins
                 </span>
               ) : parsed > 0 ? (
-                <span>Minimum GH₵{RATE} to convert</span>
+                <span>Minimum {sym}{rate} to convert</span>
               ) : (
                 <span>Type an amount to see your coins</span>
               )}
             </p>
 
             <button className="btn btn-gold cv-convert" type="button" disabled={!canConvert} onClick={convert}>
-              {busy ? "Converting…" : `Convert GH₵${fmtAmt(parsed >= RATE ? parsed : RATE)}`}
+              {busy ? "Converting…" : `Convert ${sym}${fmtAmt(parsed >= rate ? parsed : rate)}`}
             </button>
 
             <div className="cv-msg" role="status">
               {insufficient && (
                 <>
                   <p className="cv-err">
-                    Not enough cash — you have {fmtCash(cash)} and need GH₵{fmtAmt(parsed)}.
+                    Not enough cash — you have {fmtMoney(cash, fiat)} and need {sym}{fmtAmt(parsed)}.
                   </p>
                   <button className="cv-dep-link" type="button" onClick={() => setDepositOpen(true)}>
                     Deposit cash →

@@ -5,14 +5,17 @@ import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { AuthError } from "@/lib/errors";
 import { drawRoulette, PLAY_GATED_GAMES, type RouletteBetKind } from "@/lib/play";
 import { round2 } from "@/lib/money";
+import { symbolFor } from "@/lib/country";
 import { settleGame } from "@/lib/settle";
 // P0 Batch 2 (O9/O10/O11): per-game owner control — the draw must not
 // run for a killed/hidden game or a stake outside the game's limits.
 import {
+  getCurrencyConfig,
   getGameConfig,
   getPlatformSettings,
   isGameBlocked,
-  platformMinStake,
+  platformMinStakeFiat,
+  scaleGhsAmount,
 } from "@/lib/game-config";
 // P1 Batch 1 (A20): per-player limits — checked before the draw so a
 // limited player never draws (settleGame re-checks on the REAL path).
@@ -64,6 +67,12 @@ export async function POST(req: Request) {
     }
     const stake = Number(body.stake);
     if (!Number.isFinite(stake) || stake <= 0) return fail("Stake must be > 0");
+    // Phase 1 country-based (Nov 2026): the draw is in the player's
+    // fiat — the LIVE factor reads the per-fiat lifetime deposits and
+    // the per-fiat decay step, so a ₦ deposit never moves a GHS factor.
+    const fiatCurrency = user.currency ?? "GHS";
+    const sym = symbolFor(fiatCurrency);
+    const currencyCfg = await getCurrencyConfig(fiatCurrency);
     // P0 Batch 2 (O9/O10/O11): check before the draw, so a killed/hidden
     // game or an out-of-range stake never draws (settleGame re-checks
     // the same rules on the REAL path as defence in depth).
@@ -72,33 +81,39 @@ export async function POST(req: Request) {
     if (cfg) {
       const blocked = isGameBlocked(cfg, settings);
       if (blocked) return fail(blocked, 403);
-      const minBet = cfg.minBet ?? platformMinStake(game.currency, settings);
+      const minBet = cfg.minBet != null ? await scaleGhsAmount(cfg.minBet, fiatCurrency) : await platformMinStakeFiat(game.currency, settings, fiatCurrency);
       if (stake < minBet) {
-        return fail(`Minimum stake for ${game.name} is ${game.currency === "coins" ? `${minBet} coins` : `GH₵ ${minBet.toFixed(2)}`}`);
+        return fail(`Minimum stake for ${game.name} is ${game.currency === "coins" ? `${minBet} coins` : `${sym} ${minBet.toFixed(2)}`}`);
       }
-      if (cfg.maxBet != null && stake > cfg.maxBet) {
-        return fail(`Maximum stake for ${game.name} is ${game.currency === "coins" ? `${cfg.maxBet} coins` : `GH₵ ${cfg.maxBet.toFixed(2)}`}`);
+      if (cfg.maxBet != null) {
+        const maxBet = await scaleGhsAmount(cfg.maxBet, fiatCurrency);
+        if (stake > maxBet) {
+          return fail(`Maximum stake for ${game.name} is ${game.currency === "coins" ? `${maxBet} coins` : `${sym} ${maxBet.toFixed(2)}`}`);
+        }
       }
     }
     const mode = body.mode === "SIM" ? "SIM" : "REAL";
     const betKind = body.choice?.betKind;
     if (!betKind || !BET_KINDS.has(betKind)) return fail("A valid bet type is required");
     // P1 Batch 1 (A20): per-player limits before the draw.
-    const limitErr = await checkPlayLimits(user.id, stake, game.currency);
+    const limitErr = await checkPlayLimits(user.id, stake, game.currency, fiatCurrency);
     if (limitErr) return fail(limitErr, 403);
     const pick = Number(body.choice?.pick ?? 7);
     if (betKind === "straight" && (!Number.isInteger(pick) || pick < 0 || pick > 36)) {
       return fail("Pick a number from 0 to 36");
     }
 
-    const lifetimeDeposited = await getLifetimeDeposited(user.id);
-    const factor = winFactorFor({ mode, currency: game.currency, lifetimeDeposited });
+    const lifetimeDeposited = await getLifetimeDeposited(user.id, fiatCurrency);
+    const factor = winFactorFor({ mode, currency: game.currency, lifetimeDeposited, decayStep: currencyCfg.decayStep });
     const { pocket, won, mult } = drawRoulette(betKind as RouletteBetKind, pick, factor);
     // P0 Batch 2 (O10): the owner's max-payout cap applies to the drawn
     // payout too (SIM and REAL alike) — settleGame re-caps on the REAL path.
     let payout = round2(stake * mult);
-    if (cfg?.maxPayout != null && payout > cfg.maxPayout) {
-      payout = game.currency === "coins" ? Math.floor(cfg.maxPayout) : round2(cfg.maxPayout);
+    if (cfg?.maxPayout != null) {
+      const maxPayout = await scaleGhsAmount(cfg.maxPayout, fiatCurrency);
+      if (payout > maxPayout) {
+        payout = game.currency === "coins" ? Math.floor(maxPayout) : round2(maxPayout);
+      }
     }
 
     if (mode === "SIM") {

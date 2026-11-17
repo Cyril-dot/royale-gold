@@ -14,7 +14,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fmtCash } from "../../lib/api";
+import { fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 import { playSfx } from "../../lib/store";
@@ -151,9 +151,9 @@ export default function PlinkoRoom({ game }: { game: GameDef }) {
     setLastMult(mult);
     setLastPay(pay);
     setMsg(
-      mult > 1 ? `Bin ${drop.bin + 1} — ×${mult}! ${fmtCash(pay)} paid to your balance.`
-      : mult === 1 ? `Dead centre — ×1, your ${fmtCash(drop.stake)} stake comes straight back.`
-      : `Bin ${drop.bin + 1} — ×${mult}. ${pay > 0 ? `${fmtCash(pay)} back of your ${fmtCash(drop.stake)}.` : "Nothing back this drop."}`
+      mult > 1 ? `Bin ${drop.bin + 1} — ×${mult}! ${fmtMoney(pay, room.user?.currency ?? "GHS")} paid to your balance.`
+      : mult === 1 ? `Dead centre — ×1, your ${fmtMoney(drop.stake, room.user?.currency ?? "GHS")} stake comes straight back.`
+      : `Bin ${drop.bin + 1} — ×${mult}. ${pay > 0 ? `${fmtMoney(pay, room.user?.currency ?? "GHS")} back of your ${fmtMoney(drop.stake, room.user?.currency ?? "GHS")}.` : "Nothing back this drop."}`
     );
     drawRef.current(null, []);
     void settleRef.current(drop.stake, pay, { bin: drop.bin, mult, risk: drop.risk });
@@ -245,7 +245,7 @@ export default function PlinkoRoom({ game }: { game: GameDef }) {
     <RoomShell game={game} subtitle="8 rows · 9 bins · pick your risk, drop the ball" stats={room.stats} history={room.history}>
       <div className="pk-stage">
         <canvas ref={canvasRef} width={W} height={H} className="pk-canvas" aria-label="Plinko Drop board" />
-        <div className={`pk-last${lastMult !== null ? (lastMult > 1 ? " win" : lastMult < 1 ? " lose" : "") : ""}`}>{lastMult !== null && lastPay !== null ? <>×{lastMult} · {fmtCash(lastPay)}</> : "No drop yet"}</div>
+        <div className={`pk-last${lastMult !== null ? (lastMult > 1 ? " win" : lastMult < 1 ? " lose" : "") : ""}`}>{lastMult !== null && lastPay !== null ? <>×{lastMult} · {fmtMoney(lastPay, room.user?.currency ?? "GHS")}</> : "No drop yet"}</div>
       </div>
       <div className="xg-controls">
         <div className="xg-pickrow" role="group" aria-label="Risk">

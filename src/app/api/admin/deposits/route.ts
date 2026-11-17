@@ -25,10 +25,15 @@ export async function GET(req: Request) {
     const limit = Math.min(Math.max(Number(sp.get("limit") ?? 50) || 50, 1), 100);
     const fromD = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? new Date(`${from}T00:00:00.000Z`) : undefined;
     const toD = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? new Date(`${to}T23:59:59.999Z`) : undefined;
+    // Phase 1 country-based (Nov 2026): ?currency= (default the
+    // admin's own currency) — rows AND the commission total are in
+    // that one fiat only.
+    const fiatCurrency = (sp.get("currency") || admin.currency || "GHS").toUpperCase();
 
     const rows = await prisma.depositEvent.findMany({
       where: {
         adminId: admin.id,
+        fiatCurrency,
         ...(method ? { method } : {}),
         createdAt: { gte: fromD, lte: toD },
       },
@@ -42,8 +47,12 @@ export async function GET(req: Request) {
     });
     const page = filtered.slice(0, limit);
     const totalAmount = filtered.reduce((s, d) => s + dec(d.amount), 0);
-    const totalCommission = await commissionOwed(admin.id, from ?? "2020-01-01", to ?? todayStr());
+    // P0 Batch 3 (O4): the deposits tab's commission total is the
+    // rules-engine figure for the filtered date range — not the sum of
+    // the stamped row commissions (which are 0 when a rule is in force).
+    const totalCommission = await commissionOwed(admin.id, from ?? "2020-01-01", to ?? todayStr(), fiatCurrency);
     return ok({
+      currency: fiatCurrency,
       deposits: page.map((d) => ({
         id: d.id,
         userId: d.userId,
@@ -51,6 +60,7 @@ export async function GET(req: Request) {
         userContact: d.user.email ?? d.user.phone ?? null,
         amount: dec(d.amount),
         method: d.method,
+        fiatCurrency: d.fiatCurrency ?? "GHS",
         pctInForce: dec(d.pctInForce),
         commission: dec(d.commission),
         createdAt: d.createdAt.toISOString(),

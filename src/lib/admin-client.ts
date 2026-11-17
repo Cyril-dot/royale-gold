@@ -29,18 +29,23 @@ export interface AdminIdentity {
 export interface AdminOverview {
   admin: AdminIdentity;
   codes: { id: string; code: string; active: boolean; createdAt: string }[];
-  referredUsers: { id: string; name: string; email: string | null; phone: string | null; referralCodeUsed: string | null; referredByAdminName: string | null; createdAt: string }[];
+  referredUsers: { id: string; name: string; email: string | null; phone: string | null; referralCodeUsed: string | null; referredByAdminName: string | null; createdAt: string; country?: string | null; currency?: string }[];
   coinsGiven: number;
   redemptions: number;
+  // Phase 1 country-based (Nov 2026): the fiat the commission +
+  // history figures are in (the admin's currency by default).
+  currency: string;
   commission: { today: number; yesterday: number; last7d: number; last30d: number; allTime: number };
-  history: { date: string; deposits: number; totalAmount: number; totalCommission: number; totalStakes?: number; totalPayouts?: number; model?: string; rate?: number; parentSharePct?: number }[];
+  history: { date: string; deposits: number; totalAmount: number; totalCommission: number; totalStakes?: number; totalPayouts?: number; model?: string; rate?: number; parentSharePct?: number; fiatCurrency: string }[];
   // P1 Batch 4 (O24): the child admins rolled into these figures.
   scope: { childAdmins: { id: string; name: string }[] };
 }
 
 export interface DayDetail {
   date: string;
-  deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; pctInForce: number; commission: number; time: string; adminName: string }[];
+  // Phase 1 country-based (Nov 2026): the fiat this day's figures are in.
+  fiatCurrency: string;
+  deposits: { id: string; userId: string; userName: string; userContact: string; amount: number; method: string; fiatCurrency: string; pctInForce: number; commission: number; time: string; adminName: string }[];
   totals: { deposits: number; totalAmount: number; totalCommission: number; totalStakes?: number; totalPayouts?: number; model?: string; rate?: number };
   // P1 Batch 4 (O24): the child admins rolled into this day.
   scope: { childAdmins: { id: string; name: string }[] };
@@ -50,12 +55,12 @@ export interface UserDetail {
   // P1 Batch 4 (O24): true when the player is in a child admin's
   // downline — the detail page hides the action sections.
   readOnly: boolean;
-  user: { id: string; name: string; email: string | null; phone: string | null; role: string; cash: number; coins: number; joinedAt: string; referralCodeUsed: string | null; referringAdmin: { id: string; name: string; email: string } | null; blockedAt: string | null; blockedReason: string | null };
-  deposits: { id: string; amount: number; method: string; pctInForce: number; commission: number; createdAt: string }[];
+  user: { id: string; name: string; email: string | null; phone: string | null; role: string; cash: number; coins: number; joinedAt: string; referralCodeUsed: string | null; referringAdmin: { id: string; name: string; email: string } | null; blockedAt: string | null; blockedReason: string | null; country?: string | null; currency?: string };
+  deposits: { id: string; amount: number; method: string; fiatCurrency: string; pctInForce: number; commission: number; createdAt: string }[];
   totals: { deposits: number; totalDeposited: number; totalCommission: number; coinsGiven: number };
   // P0 Batch 4 (A3): bet/round history, KYC status, commission earned,
   // and support tickets.
-  rounds: { id: string; game: string; gameName: string; currency: string; stake: number; payout: number; net: number; createdAt: string }[];
+  rounds: { id: string; game: string; gameName: string; currency: string; fiatCurrency: string; stake: number; payout: number; net: number; createdAt: string }[];
   // P1 Batch 2 (A21): the real KYC status — the latest submission, with
   // its document type, submitted date and rejection reason.
   kycStatus: "not_submitted" | "pending" | "approved" | "rejected";
@@ -63,7 +68,7 @@ export interface UserDetail {
   kycDocumentUrl: string | null;
   kycSubmittedAt: string | null;
   kycRejectionReason: string | null;
-  commission: { total: number; model: string; rate: number };
+  commission: { total: number; model: string; rate: number; fiatCurrency: string };
   tickets: { id: string; subject: string; status: string; createdAt: string }[];
   // P1 Batch 1 (A19/A20): admin-only notes + tags, and per-player limits.
   notes: { id: string; text: string; authorId: string; authorName: string; createdAt: string }[];
@@ -81,6 +86,8 @@ export interface UserDetail {
 }
 
 export interface AdminDashboardData {
+  // Phase 1 country-based (Nov 2026): the fiat these figures are in.
+  currency: string;
   today: { deposits: number; depositsTotal: number; newPlayers: number; activePlayers: number; commission: number };
   week: { date: string; deposits: number; total: number }[];
   topPlayers: { id: string; name: string; contact: string | null; deposits: number; totalDeposited: number }[];
@@ -93,6 +100,10 @@ export interface DownlineNode {
   name: string;
   contact: string | null;
   role: string;
+  // Phase 1 country-based (Nov 2026): the player's country + fiat
+  // (the server already returns them — see src/lib/admin.ts).
+  country: string | null;
+  fiatCurrency: string;
   totalDeposited: number;
   commission: number;
   commissionModel: string;
@@ -154,20 +165,27 @@ export function useAdminContext(previewId: string | null) {
   return { ctx, err, load };
 }
 
+/** Phase 1 country-based (Nov 2026): append ?currency= (or &currency=
+ * when the URL already has a query) to a fetch URL. */
+function withCurrency(url: string, currency?: string): string {
+  if (!currency) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}currency=${encodeURIComponent(currency)}`;
+}
+
 /** Overview for the signed-in admin, or for the admin the owner is
  *  previewing (?preview=<adminId>). Same endpoints as the old panel. */
-export function useAdminOverview(previewId: string | null) {
+export function useAdminOverview(previewId: string | null, currency?: string) {
   const [ov, setOv] = useState<AdminOverview | null>(null);
   const [err, setErr] = useState("");
   const load = useCallback(async () => {
     try {
       const url = previewId ? `/api/owner/admins/${previewId}/preview` : "/api/admin/overview";
-      setOv(await api<AdminOverview>(url));
+      setOv(await api<AdminOverview>(withCurrency(url, currency)));
       setErr("");
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Could not load admin panel.");
     }
-  }, [previewId]);
+  }, [previewId, currency]);
   useEffect(() => { void load(); }, [load]);
   return { ov, err, load };
 }
@@ -209,52 +227,52 @@ export function useAdminPlayers(previewId: string | null) {
 }
 
 /** Every commission day for the Commission page's History tab. */
-export function useAdminHistory(previewId: string | null) {
+export function useAdminHistory(previewId: string | null, currency?: string) {
   const [days, setDays] = useState<AdminOverview["history"] | null>(null);
   const [err, setErr] = useState("");
   const load = useCallback(async () => {
     try {
       const url = previewId ? `/api/owner/admins/${previewId}/preview` : "/api/admin/commission/history";
-      const res = await api<{ days: AdminOverview["history"]; history?: AdminOverview["history"] }>(url);
+      const res = await api<{ days: AdminOverview["history"]; history?: AdminOverview["history"] }>(withCurrency(url, currency));
       setDays(res.days ?? res.history ?? []);
       setErr("");
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Could not load commission history.");
     }
-  }, [previewId]);
+  }, [previewId, currency]);
   useEffect(() => { void load(); }, [load]);
   return { days, err, load };
 }
 
 /** One day's deposits for the signed-in admin, or the previewed admin. */
-export function useAdminDay(previewId: string | null, date: string) {
+export function useAdminDay(previewId: string | null, date: string, currency?: string) {
   const [day, setDay] = useState<DayDetail | null>(null);
   const loadDay = useCallback(async (d: string) => {
     try {
       const url = previewId ? `/api/owner/commission?adminId=${previewId}&date=${d}` : `/api/admin/commission?date=${d}`;
-      setDay(await api<DayDetail>(url));
+      setDay(await api<DayDetail>(withCurrency(url, currency)));
     } catch {
       setDay(null);
     }
-  }, [previewId]);
+  }, [previewId, currency]);
   useEffect(() => { if (date) void loadDay(date); }, [date, loadDay]);
   return { day, loadDay };
 }
 
 /** P0 Batch 4 (A1): the enhanced dashboard — "today so far", the last
  * 7 days of deposits, and the top 5 players by total deposited. */
-export function useAdminDashboard(previewId: string | null) {
+export function useAdminDashboard(previewId: string | null, currency?: string) {
   const [dash, setDash] = useState<AdminDashboardData | null>(null);
   const [err, setErr] = useState("");
   const load = useCallback(async () => {
     try {
       const url = previewId ? `/api/owner/dashboard?adminId=${previewId}` : "/api/admin/dashboard";
-      setDash(await api<AdminDashboardData>(url));
+      setDash(await api<AdminDashboardData>(withCurrency(url, currency)));
       setErr("");
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Could not load dashboard.");
     }
-  }, [previewId]);
+  }, [previewId, currency]);
   useEffect(() => { void load(); }, [load]);
   return { dash, err, load };
 }
@@ -526,6 +544,9 @@ export interface LeaderboardRow {
   userName: string;
   userContact: string | null;
   points: number;
+  // Phase 1 country-based (Nov 2026): the fiat this player's points
+  // are in — points are that player's stakes, never a blended sum.
+  fiatCurrency: string;
 }
 
 export function useAdminTournaments(previewId: string | null) {
@@ -571,6 +592,8 @@ export interface LiveFeedRow {
   game: string;
   gameName: string;
   currency: string;
+  // Phase 1 country-based (Nov 2026): the fiat this round was played in.
+  fiatCurrency: string;
   stake: number;
   payout: number;
   net: number;

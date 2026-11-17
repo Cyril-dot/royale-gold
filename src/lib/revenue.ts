@@ -53,6 +53,10 @@ export interface RevenueMethodRow {
 export interface RevenueBreakdown {
   from: string;
   to: string;
+  // Phase 1 country-based (Nov 2026): the fiat every cash figure here
+  // is in. Coin rows are the coin play of players of this fiat (coins
+  // themselves have no fiat — the row's fiat is the player's).
+  fiatCurrency: string;
   byGameCash: RevenueGameRow[];
   byGameCoins: RevenueGameRow[];
   byAdmin: RevenueAdminRow[];
@@ -74,23 +78,26 @@ function dayBounds(from: string, to: string): { from: Date; to: Date } {
   return { from: new Date(`${from}T00:00:00Z`), to: new Date(`${to}T23:59:59.999Z`) };
 }
 
-export async function revenueBreakdown(from: string, to: string): Promise<RevenueBreakdown> {
+export async function revenueBreakdown(from: string, to: string, fiatCurrency: string = "GHS"): Promise<RevenueBreakdown> {
   const { from: fromDate, to: toDate } = dayBounds(from, to);
   const range = { createdAt: { gte: fromDate, lte: toDate } };
+  // Phase 1 country-based (Nov 2026): every cash figure is filtered to
+  // one fiat. Coin rows carry the player's fiat too (see the interface
+  // comment) so the whole breakdown stays in one currency view.
 
   const [gameGroups, deposits, cashRounds, admins] = await Promise.all([
     prisma.gameResult.groupBy({
       by: ["game", "currency"],
-      where: range,
+      where: { ...range, fiatCurrency },
       _sum: { stake: true, payout: true },
       _count: true,
     }),
     prisma.depositEvent.findMany({
-      where: range,
+      where: { ...range, fiatCurrency },
       select: { amount: true, method: true, adminId: true, userId: true, createdAt: true },
     }),
     prisma.gameResult.findMany({
-      where: { ...range, currency: "cash" },
+      where: { ...range, currency: "cash", fiatCurrency },
       select: { userId: true, stake: true, payout: true, createdAt: true },
     }),
     prisma.user.findMany({ where: { role: "admin" }, select: { id: true, name: true } }),
@@ -134,7 +141,7 @@ export async function revenueBreakdown(from: string, to: string): Promise<Revenu
       adminName: a.name,
       deposits: deps.length,
       totalDeposited: round2(deps.reduce((s, d) => s + dec(d.amount), 0)),
-      commission: await commissionOwed(a.id, from, to),
+      commission: await commissionOwed(a.id, from, to, fiatCurrency),
       ggr,
     });
   }
@@ -168,7 +175,7 @@ export async function revenueBreakdown(from: string, to: string): Promise<Revenu
   // per admin covers the whole range).
   const dayCommission = new Map<string, number>();
   for (const a of admins) {
-    for (const d of await dayCommissions(a.id, from, to)) {
+    for (const d of await dayCommissions(a.id, from, to, fiatCurrency)) {
       dayCommission.set(d.date, round2((dayCommission.get(d.date) ?? 0) + d.totalCommission));
     }
   }
@@ -204,6 +211,7 @@ export async function revenueBreakdown(from: string, to: string): Promise<Revenu
   return {
     from,
     to,
+    fiatCurrency,
     byGameCash,
     byGameCoins,
     byAdmin,

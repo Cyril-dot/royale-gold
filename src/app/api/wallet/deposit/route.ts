@@ -2,8 +2,9 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2, toDecimal } from "@/lib/money";
+import { symbolFor } from "@/lib/country";
 // P0 Batch 2 (O12/O13): owner-controlled payment methods + wallet config.
-import { getPaymentMethodConfig, getPlatformSettings } from "@/lib/game-config";
+import { getCurrencyConfig, getPaymentMethodConfig, getPlatformSettings } from "@/lib/game-config";
 // P0 Batch 3 (O4): the commission rule in force decides what a deposit stamps.
 import { getEffectiveRuleNow } from "@/lib/commission";
 // P1 Batch 1 (A20): per-player daily deposit max.
@@ -18,9 +19,12 @@ import { evaluateDepositRules } from "@/lib/risk-rules";
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
 /**
- * Demo cashier deposit. Credits REAL cash (GH₵) only — coins are never
- * involved. If the user was referred, a DepositEvent is recorded with the
- * referring admin and the rate in force FROZEN as pctInForce.
+ * Demo cashier deposit. Credits REAL cash (in the player's fiat) only —
+ * coins are never involved. If the user was referred, a DepositEvent is
+ * recorded with the referring admin and the rate in force FROZEN as
+ * pctInForce. Phase 1 country-based (Nov 2026): the event is stamped
+ * with the player's fiatCurrency, and the min/max come from
+ * CurrencyConfig + the (method × fiat) PaymentMethodConfig row.
  *
  * P0 Batch 3 (O4): when a commission rule is in force for the admin, the
  * commission is earned on ACTIVITY (stakes / net loss), not on the deposit
@@ -44,24 +48,29 @@ export async function POST(req: Request) {
     const me = await prisma.user.findUnique({ where: { id: user.id } });
     // P0 Batch 1 (A8): a blocked player cannot deposit.
     if (me?.blockedAt) return fail("This account is blocked and cannot deposit", 403);
+    // Phase 1 country-based (Nov 2026): this deposit is in the
+    // player's fiat, full stop — the amount is never converted.
+    const fiatCurrency = me?.currency ?? "GHS";
+    const sym = symbolFor(fiatCurrency);
 
     // P0 Batch 2 (O12/O13): owner-controlled payment methods + wallet
     // config. A disabled method is rejected; a per-method min/max (or
-    // the platform cash minimum deposit when the method sets none) is
+    // the currency's minimum deposit when the method sets none) is
     // enforced here, server-side.
-    const pm = await getPaymentMethodConfig(method);
+    const pm = await getPaymentMethodConfig(method, fiatCurrency);
     if (!pm.enabled) return fail(`${method} deposits are currently disabled`, 403);
     const settings = await getPlatformSettings();
-    const minDeposit = pm.minDeposit ?? settings.cashMinDeposit;
+    const currencyCfg = await getCurrencyConfig(fiatCurrency, settings);
+    const minDeposit = pm.minDeposit ?? currencyCfg.minDeposit;
     if (amount < minDeposit) {
-      return fail(`Minimum deposit via ${method} is GH₵ ${round2(minDeposit).toFixed(2)}`);
+      return fail(`Minimum deposit via ${method} is ${sym} ${round2(minDeposit).toFixed(2)}`);
     }
     if (pm.maxDeposit != null && amount > pm.maxDeposit) {
-      return fail(`Maximum deposit via ${method} is GH₵ ${round2(pm.maxDeposit).toFixed(2)}`);
+      return fail(`Maximum deposit via ${method} is ${sym} ${round2(pm.maxDeposit).toFixed(2)}`);
     }
 
     // P1 Batch 1 (A20): per-player daily deposit max.
-    const limitErr = await checkDepositLimit(user.id, amount);
+    const limitErr = await checkDepositLimit(user.id, amount, fiatCurrency);
     if (limitErr) return fail(limitErr, 403);
 
     const result = await prisma.$transaction(async (tx) => {
@@ -99,6 +108,7 @@ export async function POST(req: Request) {
           adminId,
           amount: round2(amount),
           method,
+          fiatCurrency,
           pctInForce: round2(pctInForce),
           commission: round2(commission),
         },
@@ -126,11 +136,16 @@ export async function POST(req: Request) {
       cash: dec(result.updated.cashBalance),
       coins: result.updated.coins,
       sim: dec(result.updated.simBalance),
+      // Phase 1 country-based (Nov 2026): the wallet's fiat + country
+      // (the store needs them to keep formatting the wallet right).
+      currency: result.event.fiatCurrency ?? "GHS",
+      country: user.country ?? "GH",
       promotions: result.promoGrants,
       deposit: {
         id: result.event.id,
         amount: dec(result.event.amount),
         method: result.event.method,
+        fiatCurrency: result.event.fiatCurrency,
         pctInForce: dec(result.event.pctInForce),
         commission: result.commission,
         createdAt: result.event.createdAt.toISOString(),

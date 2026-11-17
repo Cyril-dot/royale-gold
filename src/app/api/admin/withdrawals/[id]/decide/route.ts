@@ -1,14 +1,16 @@
 // P0 Batch 1 (A5/O8): an admin decides a withdrawal in their queue.
-// Maker-checker: approving a LARGE amount (over GH₵ 500) does NOT finish
-// it — it moves to "admin_approved" and waits for the owner's second
-// approval. Approving a small amount finishes it ("approved"). Rejecting
-// needs a reason. No money moves on any decision — requests only.
+// Maker-checker: approving a LARGE amount (over the per-fiat threshold
+// — GH₵ 500 / ₦ 50,000 seed) does NOT finish it — it moves to
+// "admin_approved" and waits for the owner's second approval.
+// Approving a small amount finishes it ("approved"). Rejecting needs a
+// reason. No money moves on any decision — requests only.
 import { requireRole } from "@/lib/auth";
 import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
-import { needsOwnerApproval, WITHDRAWAL_OWNER_THRESHOLD } from "@/lib/withdrawals";
+import { symbolFor } from "@/lib/country";
+import { needsOwnerApproval, withdrawalOwnerThresholdFor } from "@/lib/withdrawals";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -28,7 +30,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (w.status !== "pending" && w.status !== "held") return fail(`This withdrawal is already ${w.status}`, 400);
 
     const amount = dec(w.amount);
-    const nextStatus = decision === "reject" ? "rejected" : needsOwnerApproval(amount) ? "admin_approved" : "approved";
+    const fiatCurrency = w.fiatCurrency ?? "GHS";
+    const threshold = await withdrawalOwnerThresholdFor(fiatCurrency);
+    const nextStatus = decision === "reject" ? "rejected" : (await needsOwnerApproval(amount, fiatCurrency)) ? "admin_approved" : "approved";
     const updated = await prisma.$transaction(async (tx) => {
       const u = await tx.withdrawal.update({
         where: { id },
@@ -45,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           actorId: admin.id,
           action: decision === "approve" ? "withdrawal.approve" : "withdrawal.reject",
           targetId: w.id,
-          detail: `${decision === "approve" ? "Approved" : "Rejected"} withdrawal of ${amount} for user ${w.userId}${nextStatus === "admin_approved" ? ` — over GH₵ ${WITHDRAWAL_OWNER_THRESHOLD}, awaiting owner` : ""}${decision === "reject" ? ` — ${reason}` : ""}`,
+          detail: `${decision === "approve" ? "Approved" : "Rejected"} withdrawal of ${amount} ${fiatCurrency} for user ${w.userId}${nextStatus === "admin_approved" ? ` — over ${symbolFor(fiatCurrency)} ${threshold}, awaiting owner` : ""}${decision === "reject" ? ` — ${reason}` : ""}`,
         },
       });
       return u;
@@ -54,7 +58,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return ok({
       withdrawal: { id: updated.id, status: updated.status, decidedAt: updated.decidedAt?.toISOString() ?? null },
       note: nextStatus === "admin_approved"
-        ? `Over GH₵ ${WITHDRAWAL_OWNER_THRESHOLD} — the owner must approve it second before it is final.`
+        ? `Over ${symbolFor(fiatCurrency)} ${threshold} — the owner must approve it second before it is final.`
         : undefined,
     });
   } catch (err) {

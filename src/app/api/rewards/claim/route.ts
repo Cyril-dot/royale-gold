@@ -6,7 +6,8 @@ import { currentStreak } from "@/lib/rewards";
 
 /**
  * Daily claim, once per day per type.
- *  - sim:   +100 SIM credits to the separate SIM/demo balance (GH₵100).
+ *  - sim:   +100 SIM credits to the separate SIM/demo balance
+ *             (100 demo units, shown in the player's fiat symbol).
  *  - coins: +5 coins.
  * Also awards +10 XP. Streak counts consecutive claim days.
  */

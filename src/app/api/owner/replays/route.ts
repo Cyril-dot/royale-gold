@@ -28,6 +28,8 @@ export async function GET() {
         game: r.game,
         gameName: getGame(r.game)?.name ?? r.game,
         currency: r.currency,
+        // Phase 1 country-based (Nov 2026): the fiat this round was played in.
+        fiatCurrency: r.fiatCurrency ?? "GHS",
         stake: dec(r.stake),
         payout: dec(r.payout),
         net: round2(dec(r.payout) - dec(r.stake)),

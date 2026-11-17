@@ -19,7 +19,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { fmtCash, fmtCoins } from "../lib/api";
+import { fmtMoney, fmtCoins } from "../lib/api";
 import { useJackpot } from "../lib/jackpot";
 import { useStore } from "../lib/store";
 
@@ -106,7 +106,7 @@ export default function Header() {
   // after playing in SIM (the server SIM only moves on signup + daily claim).
   const sim = simSession ?? wallet?.sim ?? user?.sim ?? 0;
   const shownBal = mode === "SIM" ? sim : cash;
-  const balText = mode === "SIM" ? `SIM ${sim.toLocaleString("en-GH")}` : fmtCash(shownBal);
+  const balText = mode === "SIM" ? `SIM ${sim.toLocaleString("en-GH")}` : fmtMoney(shownBal, user?.currency ?? "GHS");
   // Round 15d: the chip shows the balance as a bare number — no "GH₵ "
   // prefix in REAL mode, no "SIM" prefix in SIM mode (the REAL/SIM toggle
   // already shows the mode). balText keeps its full labels for the

@@ -11,16 +11,18 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, fmtCash, fmtCoins } from "../../../lib/api";
+import { api, fmtMoney, fmtCoins } from "../../../lib/api";
 import { useStore } from "../../../lib/store";
+import { useFiat } from "../../../lib/use-fiat";
 import { useAdminContext, todayStr } from "../../../lib/admin-client";
 import { canAccessSection } from "../../../lib/rbac";
 import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
-import { WITHDRAWAL_RISK_LABELS, WITHDRAWAL_OWNER_THRESHOLD, type WithdrawalRiskFlag } from "../../../lib/withdrawal-flags";
+import CurrencyChips from "../../../components/CurrencyChips";
+import { WITHDRAWAL_RISK_LABELS, type WithdrawalRiskFlag } from "../../../lib/withdrawal-flags";
 
-interface DepositRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; pctInForce: number; commission: number; createdAt: string }
-interface WithdrawalRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; status: string; reason: string | null; decidedBy: string | null; createdAt: string; decidedAt: string | null; flags: string[]; kycStatus: string; kycRequired: boolean }
-interface LedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; detail: string; stake?: number; payout?: number; method?: string; status?: string; reason?: string; createdAt: string }
+interface DepositRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; fiatCurrency: string; pctInForce: number; commission: number; createdAt: string }
+interface WithdrawalRow { id: string; userId: string; userName: string; userContact: string | null; amount: number; method: string; fiatCurrency: string; status: string; reason: string | null; decidedBy: string | null; createdAt: string; decidedAt: string | null; flags: string[]; kycStatus: string; kycRequired: boolean }
+interface LedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; fiatCurrency: string; detail: string; stake?: number; payout?: number; method?: string; status?: string; reason?: string; createdAt: string }
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"];
 const LEDGER_TYPES = ["deposit", "bet", "withdrawal", "adjustment", "conversion", "payout"] as const;
@@ -44,6 +46,14 @@ function AdminMoneyInner() {
   const previewId = sp.get("preview");
   const { ctx, err } = useAdminContext(previewId);
   const [tab, setTab] = useState<"deposits" | "withdrawals" | "ledger">("deposits");
+  // Phase 1 country-based (Nov 2026): the currency filter — deposits,
+  // withdrawals and the ledger are each in ONE fiat only. Defaults to
+  // the admin's own currency.
+  const [fiatSel, setFiatSel] = useState<string | null>(null);
+  const fiat = fiatSel ?? user?.currency ?? "GHS";
+  // The owner-approval threshold for the selected fiat (GHS 500 /
+  // NGN 50,000 seed) — shown under the Withdrawals tab.
+  const { cfg: fiatCfg } = useFiat(fiat);
 
   // --- Deposits state ---
   const [depMethod, setDepMethod] = useState("");
@@ -74,18 +84,20 @@ function AdminMoneyInner() {
     const p = new URLSearchParams();
     if (depMethod) p.set("method", depMethod);
     if (depQ.trim()) p.set("q", depQ.trim());
+    p.set("currency", fiat);
     const qs = p.toString();
     return qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base;
-  }, [previewId, depMethod, depQ]);
+  }, [previewId, depMethod, depQ, fiat]);
   const wdUrl = useCallback(() => {
     const base = previewId ? `/api/owner/withdrawals?adminId=${previewId}` : "/api/admin/withdrawals";
     const p = new URLSearchParams();
     if (wdStatus) p.set("status", wdStatus);
     // P1 Batch 1 (A15): flagged-only filter.
     if (wdFlaggedOnly) p.set("flagged", "1");
+    p.set("currency", fiat);
     const qs = p.toString();
     return qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base;
-  }, [previewId, wdStatus, wdFlaggedOnly]);
+  }, [previewId, wdStatus, wdFlaggedOnly, fiat]);
   const ledUrl = useCallback(() => {
     const base = previewId ? `/api/owner/ledger?adminId=${previewId}` : "/api/admin/ledger";
     const p = new URLSearchParams();
@@ -93,9 +105,10 @@ function AdminMoneyInner() {
     if (ledQ.trim()) p.set("q", ledQ.trim());
     if (ledFrom) p.set("from", ledFrom);
     if (ledTo) p.set("to", ledTo);
+    p.set("currency", fiat);
     const qs = p.toString();
     return qs ? `${base}${base.includes("?") ? "&" : "?"}${qs}` : base;
-  }, [previewId, ledType, ledQ, ledFrom, ledTo]);
+  }, [previewId, ledType, ledQ, ledFrom, ledTo, fiat]);
 
   const loadDeposits = useCallback(async () => {
     try {
@@ -139,10 +152,10 @@ function AdminMoneyInner() {
   const card = (label: string, value: string) => (
     <div className="sum-card"><span>{label}</span><b>{value}</b></div>
   );
-  const fmtAmt = (amount: number, wallet: string) => {
+  const fmtAmt = (amount: number, wallet: string, rowFiat: string) => {
     const sign = amount > 0 ? "+" : amount < 0 ? "−" : "";
     const abs = Math.abs(amount);
-    return wallet === "coins" ? `${sign}${Math.round(abs)} coins` : `${sign}${fmtCash(abs)}`;
+    return wallet === "coins" ? `${sign}${Math.round(abs)} coins` : `${sign}${fmtMoney(abs, rowFiat)}`;
   };
   const decide = async (w: WithdrawalRow, decision: "approve" | "reject") => {
     if (decision === "reject" && rejectId !== w.id) { setRejectId(w.id); setRejectReason(""); return; }
@@ -172,6 +185,7 @@ function AdminMoneyInner() {
       <p className="rg48-sub">{ov.admin.name} · {ov.admin.email} · {ov.admin.commissionPct}% commission{ov.admin.active ? "" : " · DEACTIVATED"}</p>
       <AdminNav />
       {previewId ? <p className="rg48-sub">Preview — actions are disabled.</p> : null}
+      <CurrencyChips value={fiat} onChange={setFiatSel} label="Money currency" />
       <section className="admin-sec">
         <h3>Money</h3>
         <div className="ac-tabs" role="tablist" aria-label="Money views">
@@ -196,8 +210,8 @@ function AdminMoneyInner() {
             {depTotals && (
               <div className="sum-cards">
                 {card("Deposits", String(depTotals.deposits))}
-                {card("Total deposited", fmtCash(depTotals.totalAmount))}
-                {card("Commission", fmtCash(depTotals.totalCommission))}
+                {card("Total deposited", fmtMoney(depTotals.totalAmount, fiat))}
+                {card("Commission", fmtMoney(depTotals.totalCommission, fiat))}
               </div>
             )}
             {deposits === null ? <p>Loading deposits…</p> : deposits.length === 0 ? (
@@ -210,9 +224,9 @@ function AdminMoneyInner() {
                     {deposits.map((d) => (
                       <tr key={d.id} onClick={() => goPlayer(d.userId)} onKeyDown={(e) => { if (e.key === "Enter") goPlayer(d.userId); }} tabIndex={0} className="clickable">
                         <td>{d.userName}<span className="td-sub">{d.userContact || ""}</span></td>
-                        <td>{fmtCash(d.amount)}</td>
+                        <td>{fmtMoney(d.amount, d.fiatCurrency ?? fiat)}</td>
                         <td>{d.method}</td>
-                        <td>{fmtCash(d.commission)} ({d.pctInForce}%)</td>
+                        <td>{fmtMoney(d.commission, d.fiatCurrency ?? fiat)} ({d.pctInForce}%)</td>
                         <td>{new Date(d.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
                       </tr>
                     ))}
@@ -225,7 +239,7 @@ function AdminMoneyInner() {
 
         {tab === "withdrawals" && (
           <div role="tabpanel" aria-label="Withdrawals">
-            <p className="rg48-sub">Requests only — no real money moves. Nothing pays out without an admin action. Over {fmtCash(WITHDRAWAL_OWNER_THRESHOLD)} also needs the owner’s approval.</p>
+            <p className="rg48-sub">Requests only — no real money moves. Nothing pays out without an admin action. Over {fmtMoney(fiatCfg?.withdrawalOwnerThreshold ?? 500, fiat)} also needs the owner’s approval.</p>
             <div className="money-chips" role="group" aria-label="Filter by status">
               <button type="button" className={!wdStatus ? "on" : ""} onClick={() => setWdStatus("")}>All</button>
               {["pending", "held", "admin_approved", "approved", "rejected"].map((s) => (
@@ -241,7 +255,7 @@ function AdminMoneyInner() {
                   <div key={w.id} className="wd-row">
                     <div className="wd-main">
                       <b>{w.userName}</b><span>{w.userContact || ""}</span>
-                      <span className="wd-amt">{fmtCash(w.amount)} · {w.method}</span>
+                      <span className="wd-amt">{fmtMoney(w.amount, w.fiatCurrency ?? fiat)} · {w.method}</span>
                       <span className="wd-date">{new Date(w.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
                     <span className={`wd-status wd-${w.status}`}>{w.status === "admin_approved" ? "Awaiting owner" : w.status}</span>
@@ -306,8 +320,8 @@ function AdminMoneyInner() {
             {ledTotals && (
               <div className="sum-cards">
                 {card("Rows", String(ledTotals.rows))}
-                {card("Cash in", fmtCash(ledTotals.cashIn))}
-                {card("Cash out", fmtCash(ledTotals.cashOut))}
+                {card("Cash in", fmtMoney(ledTotals.cashIn, fiat))}
+                {card("Cash out", fmtMoney(ledTotals.cashOut, fiat))}
               </div>
             )}
             {ledger === null ? <p>Loading ledger…</p> : ledger.length === 0 ? (
@@ -321,7 +335,7 @@ function AdminMoneyInner() {
                       <span>{r.detail}{r.reason ? ` — ${r.reason}` : ""}{r.status ? ` · ${r.status}` : ""}</span>
                       <span>{new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </span>
-                    <b className={r.amount >= 0 ? "ledger-in" : "ledger-out"}>{fmtAmt(r.amount, r.wallet)}</b>
+                    <b className={r.amount >= 0 ? "ledger-in" : "ledger-out"}>{fmtAmt(r.amount, r.wallet, r.fiatCurrency ?? fiat)}</b>
                   </div>
                 ))}
               </div>

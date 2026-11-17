@@ -5,13 +5,18 @@
 // only debits cashBalance. The debit + credit + audit row land in one
 // $transaction, so a failed convert can never leave half a conversion
 // behind.
+//
+// Phase 1 country-based (Nov 2026): the rate is PER-FIAT, from
+// CurrencyConfig (GHS 5 / NGN 500 seed) — an NGN user converts at
+// ₦500 = 1 coin, never ₦5. The event is stamped with the fiat.
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
-import { getPlatformSettings, PLATFORM_DEFAULTS } from "@/lib/game-config";
+import { symbolFor } from "@/lib/country";
+import { getCurrencyConfig, getPlatformSettings, PLATFORM_DEFAULTS } from "@/lib/game-config";
 
-export const CONVERSION_RATE = PLATFORM_DEFAULTS.conversionRate; // GH₵5 = 1 coin (default)
+export const CONVERSION_RATE = PLATFORM_DEFAULTS.conversionRate; // GH₵5 = 1 coin (default, GHS)
 
 export async function POST(req: Request) {
   try {
@@ -21,14 +26,19 @@ export async function POST(req: Request) {
     // P0 Batch 2 (O13): the conversion rate comes from the wallet
     // config (default GH₵5 = 1 coin); the minimum and the multiple are
     // the rate itself, so changing the rate moves both together.
-    const rate = (await getPlatformSettings()).conversionRate;
+    // Phase 1 (Nov 2026): per-fiat — CurrencyConfig for the player's
+    // currency (GHS 5 / NGN 500 seed).
+    const me = await prisma.user.findUnique({ where: { id: user.id }, select: { currency: true } });
+    const fiatCurrency = me?.currency ?? "GHS";
+    const sym = symbolFor(fiatCurrency);
+    const rate = (await getCurrencyConfig(fiatCurrency, await getPlatformSettings())).conversionRate;
     const amount = Math.round(Number(body.cashAmount) * 100) / 100;
     if (!Number.isFinite(amount) || amount < rate) {
-      return fail(`Amount must be at least GH₵${rate}`);
+      return fail(`Amount must be at least ${sym}${rate}`);
     }
     // Compare in pesewas so float dust can never pass or block a convert.
     if (Math.round(amount * 100) % Math.round(rate * 100) !== 0) {
-      return fail(`Amount must be a multiple of GH₵${rate}`);
+      return fail(`Amount must be a multiple of ${sym}${rate}`);
     }
     const coinsGained = amount / rate;
 
@@ -47,7 +57,7 @@ export async function POST(req: Request) {
         },
       });
       await tx.conversionEvent.create({
-        data: { userId: user.id, cashDebited: round2(amount), coinsGained },
+        data: { userId: user.id, cashDebited: round2(amount), coinsGained, fiatCurrency },
       });
       return updated;
     });
@@ -58,6 +68,8 @@ export async function POST(req: Request) {
       sim: dec(result.simBalance),
       coinsGained,
       cashDebited: round2(amount),
+      fiatCurrency,
+      rate,
     }, 201);
   } catch (err) {
     if (err instanceof Error && err.message === "INSUFFICIENT_CASH") {

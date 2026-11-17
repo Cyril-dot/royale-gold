@@ -27,7 +27,7 @@ export async function GET() {
       where: { role: "user" },
       orderBy: { createdAt: "desc" },
       take: 10,
-      select: { id: true, name: true },
+      select: { id: true, name: true, currency: true },
     });
     const totals = await totalsDeposited(users.map((u) => u.id));
     const points = await Promise.all(users.map((u) => pointsFor(u.id, settings.pointsPerGhs)));
@@ -43,6 +43,9 @@ export async function GET() {
           name: u.name,
           totalDeposited: total,
           totalStaked: points[i].totalStaked,
+          // Phase 1 country-based (Nov 2026): the player's own fiat —
+          // totals + stakes are in it, points are per-GHS-equivalent.
+          fiatCurrency: points[i].fiatCurrency ?? u.currency ?? "GHS",
           points: points[i].points,
           tier: tier ? tier.name : null,
         };

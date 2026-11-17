@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "../../lib/store";
-import { api, fmtCash, type GameHistoryRow } from "../../lib/api";
+import { api, fmtMoney, type GameHistoryRow } from "../../lib/api";
 
 interface SessionStats {
   minutes: number;
@@ -87,9 +87,9 @@ export default function RealityCheck() {
         <p>You have been playing for <b>{stats.minutes} min</b> in this room.</p>
         <div className="sum-cards">
           <div className="sum-card"><span>Rounds</span><b>{stats.rounds}</b></div>
-          <div className="sum-card"><span>Cash staked</span><b>{fmtCash(stats.cashStaked)}</b></div>
-          <div className="sum-card"><span>Cash won</span><b>{fmtCash(stats.cashWon)}</b></div>
-          <div className="sum-card"><span>Cash net</span><b>{cashNet >= 0 ? `+${fmtCash(cashNet)}` : fmtCash(cashNet)}</b></div>
+          <div className="sum-card"><span>Cash staked</span><b>{fmtMoney(stats.cashStaked, user?.currency ?? "GHS")}</b></div>
+          <div className="sum-card"><span>Cash won</span><b>{fmtMoney(stats.cashWon, user?.currency ?? "GHS")}</b></div>
+          <div className="sum-card"><span>Cash net</span><b>{cashNet >= 0 ? `+${fmtMoney(cashNet, user?.currency ?? "GHS")}` : fmtMoney(cashNet, user?.currency ?? "GHS")}</b></div>
           <div className="sum-card"><span>Coins staked</span><b>{stats.coinsStaked}</b></div>
           <div className="sum-card"><span>Coins net</span><b>{coinsNet >= 0 ? `+${coinsNet}` : `${coinsNet}`}</b></div>
         </div>

@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { getCurrencyConfig } from "./game-config";
 
 /**
  * SIM-vs-LIVE win-chance economy (round 6).
@@ -24,8 +25,14 @@ import { prisma } from "./prisma";
  * Numbers (named constants so they can be tuned):
  * - SIM: win probability × SIM_WIN_BOOST, capped at SIM_WIN_PROB_CAP.
  * - LIVE: factor starts at 1.00 and falls LIVE_DECAY_PER_STEP for every
- *   LIVE_DECAY_STEP_GHS of lifetime deposits, down to LIVE_FACTOR_FLOOR.
+ *   decay step of lifetime deposits, down to LIVE_FACTOR_FLOOR.
  *   GH₵0 → 1.00 · GH₵100 → 0.95 · GH₵500 → 0.75 · GH₵1000 → 0.50 (floor).
+ *
+ * Phase 1 country-based (Nov 2026) — THE MUST-FIX: lifetime deposits
+ * are summed per FIAT (DepositEvent.fiatCurrency), and the decay step
+ * comes from CurrencyConfig for the user's currency (GHS 100, NGN
+ * 10,000 — same "effort", 100x scale). A ₦ deposit must NEVER move a
+ * GHS decay factor, and a GH₵ deposit must never move an NGN one.
  */
 
 export const SIM_WIN_BOOST = 2.0;
@@ -34,10 +41,14 @@ export const LIVE_DECAY_STEP_GHS = 100;
 export const LIVE_DECAY_PER_STEP = 0.05;
 export const LIVE_FACTOR_FLOOR = 0.5;
 
-/** Total GH₵ the user has ever deposited (sum of DepositEvent amounts). */
-export async function getLifetimeDeposited(userId: string): Promise<number> {
+/**
+ * Total the user has ever deposited IN ONE FIAT (sum of DepositEvent
+ * amounts where fiatCurrency matches). Never sum across fiats — a
+ * ₦10,000 deposit would otherwise floor the LIVE factor instantly.
+ */
+export async function getLifetimeDeposited(userId: string, fiatCurrency: string = "GHS"): Promise<number> {
   const agg = await prisma.depositEvent.aggregate({
-    where: { userId },
+    where: { userId, fiatCurrency },
     _sum: { amount: true },
   });
   // Prisma types the Decimal sum as `number` on SQLite but `Decimal` on
@@ -46,24 +57,26 @@ export async function getLifetimeDeposited(userId: string): Promise<number> {
 }
 
 /** LIVE win-chance factor for a lifetime-deposited total. 1.0 → floor. */
-export function liveWinFactor(lifetimeDeposited: number): number {
-  const steps = Math.floor(Math.max(0, lifetimeDeposited) / LIVE_DECAY_STEP_GHS);
+export function liveWinFactor(lifetimeDeposited: number, decayStep: number = LIVE_DECAY_STEP_GHS): number {
+  const steps = Math.floor(Math.max(0, lifetimeDeposited) / Math.max(1, decayStep));
   return Math.max(LIVE_FACTOR_FLOOR, 1 - steps * LIVE_DECAY_PER_STEP);
 }
 
 /**
  * Win-chance factor for a round. `mode` is the mode the client claims;
  * the caller (the /play route) only ever honours SIM for demo draws —
- * SIM outcomes can never settle for real cash.
+ * SIM outcomes can never settle for real cash. `decayStep` is the
+ * per-currency step from CurrencyConfig (GHS 100 / NGN 10,000).
  */
 export function winFactorFor(args: {
   mode: "REAL" | "SIM";
   currency: "cash" | "coins";
   lifetimeDeposited: number;
+  decayStep?: number;
 }): number {
   if (args.currency === "coins") return 1;
   if (args.mode === "SIM") return SIM_WIN_BOOST;
-  return liveWinFactor(args.lifetimeDeposited);
+  return liveWinFactor(args.lifetimeDeposited, args.decayStep ?? LIVE_DECAY_STEP_GHS);
 }
 
 /** Adjusted win probability: natural probability × factor, capped (SIM). */
@@ -81,14 +94,19 @@ export function drawWin(naturalProb: number, factor: number, rng: () => number =
 
 /** Full economy snapshot for one user (drives GET /api/games/economy). */
 export async function getEconomyForUser(userId: string) {
-  const lifetimeDeposited = await getLifetimeDeposited(userId);
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { currency: true } });
+  const currency = user?.currency ?? "GHS";
+  const cfg = await getCurrencyConfig(currency);
+  const lifetimeDeposited = await getLifetimeDeposited(userId, currency);
   return {
+    currency,
     lifetimeDeposited,
-    liveFactor: liveWinFactor(lifetimeDeposited),
+    liveFactor: liveWinFactor(lifetimeDeposited, cfg.decayStep),
     liveFactorFloor: LIVE_FACTOR_FLOOR,
     simBoost: SIM_WIN_BOOST,
     simWinProbCap: SIM_WIN_PROB_CAP,
     decayPerStep: LIVE_DECAY_PER_STEP,
     decayStepGhs: LIVE_DECAY_STEP_GHS,
+    decayStep: cfg.decayStep,
   };
 }

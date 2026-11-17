@@ -14,7 +14,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../../lib/store";
-import { api, fmtCash } from "../../../lib/api";
+import { api, fmtMoney } from "../../../lib/api";
 import { todayStr } from "../../../lib/money";
 import { useAdminContext, useAdminPlayers } from "../../../lib/admin-client";
 import { canAccessSection } from "../../../lib/rbac";
@@ -28,6 +28,7 @@ interface LookupRound {
   game: string;
   gameName: string;
   currency: string;
+  fiatCurrency: string;
   stake: number;
   payout: number;
   net: number;
@@ -156,9 +157,9 @@ function AdminLookupInner() {
     <>
       <div className="sum-cards">
         <div className="sum-card"><span>Game</span><b>{r.gameName}</b></div>
-        <div className="sum-card"><span>Stake</span><b>{r.currency === "coins" ? `${Math.round(r.stake)} coins` : fmtCash(r.stake)}</b></div>
-        <div className="sum-card"><span>Payout</span><b>{r.currency === "coins" ? `${Math.round(r.payout)} coins` : fmtCash(r.payout)}</b></div>
-        <div className="sum-card"><span>Net</span><b>{r.currency === "coins" ? `${r.net >= 0 ? "+" : ""}${Math.round(r.net)} coins` : `${r.net >= 0 ? "+" : "−"}${fmtCash(Math.abs(r.net))}`}</b></div>
+        <div className="sum-card"><span>Stake</span><b>{r.currency === "coins" ? `${Math.round(r.stake)} coins` : fmtMoney(r.stake, r.fiatCurrency ?? user?.currency ?? "GHS")}</b></div>
+        <div className="sum-card"><span>Payout</span><b>{r.currency === "coins" ? `${Math.round(r.payout)} coins` : fmtMoney(r.payout, r.fiatCurrency ?? user?.currency ?? "GHS")}</b></div>
+        <div className="sum-card"><span>Net</span><b>{r.currency === "coins" ? `${r.net >= 0 ? "+" : ""}${Math.round(r.net)} coins` : `${r.net >= 0 ? "+" : "−"}${fmtMoney(Math.abs(r.net), r.fiatCurrency ?? user?.currency ?? "GHS")}`}</b></div>
       </div>
       <p className="rg48-sub">Player: {r.userName}{r.userContact ? ` · ${r.userContact}` : ""} · {new Date(r.createdAt).toLocaleString("en-GB")}</p>
       <p className="rg48-sub">Round id: <code>{r.id}</code></p>
@@ -212,7 +213,7 @@ function AdminLookupInner() {
             <div className="user-list">
               {playerRounds.map((r) => (
                 <button key={r.id} type="button" className="user-row" onClick={() => { setRoundId(r.id); setRound(r); setRoundErr(""); }}>
-                  <b>{r.gameName}</b><span>{r.currency === "coins" ? `${Math.round(r.stake)} coins` : fmtCash(r.stake)}</span><span className={r.net >= 0 ? "lk-win" : "lk-lose"}>{r.net >= 0 ? "+" : "−"}{r.currency === "coins" ? `${Math.round(Math.abs(r.net))} coins` : fmtCash(Math.abs(r.net))}</span><span>{new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                  <b>{r.gameName}</b><span>{r.currency === "coins" ? `${Math.round(r.stake)} coins` : fmtMoney(r.stake, r.fiatCurrency ?? user?.currency ?? "GHS")}</span><span className={r.net >= 0 ? "lk-win" : "lk-lose"}>{r.net >= 0 ? "+" : "−"}{r.currency === "coins" ? `${Math.round(Math.abs(r.net))} coins` : fmtMoney(Math.abs(r.net), r.fiatCurrency ?? user?.currency ?? "GHS")}</span><span>{new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                 </button>
               ))}
             </div>

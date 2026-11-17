@@ -15,17 +15,20 @@ export async function GET(req: Request) {
     const adminId = q.get("adminId") ?? undefined;
     const date = q.get("date") ?? todayStr();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("date must be YYYY-MM-DD");
+    // Phase 1 country-based (Nov 2026): ?currency= (default GHS) —
+    // the day's figures are in one fiat only.
+    const fiatCurrency = (q.get("currency") || "GHS").toUpperCase();
     if (adminId) {
       const admin = await prisma.user.findUnique({ where: { id: adminId } });
       if (!admin || admin.role !== "admin") return fail("Admin not found", 404);
       // P1 Batch 4 (O24): the owner preview shows the admin's own view —
       // a parent admin's day detail rolls their child downlines in.
-      return ok({ admin: { id: admin.id, name: admin.name }, ...(await depositsForAdminOnScoped(adminId, date)) });
+      return ok({ admin: { id: admin.id, name: admin.name }, ...(await depositsForAdminOnScoped(adminId, date, fiatCurrency)) });
     }
     const start = new Date(`${date}T00:00:00.000Z`);
     const end = new Date(`${date}T23:59:59.999Z`);
     const rows = await prisma.depositEvent.findMany({
-      where: { createdAt: { gte: start, lte: end }, adminId: { not: null } },
+      where: { createdAt: { gte: start, lte: end }, adminId: { not: null }, fiatCurrency },
       include: {
         user: { select: { id: true, name: true, email: true, phone: true } },
         admin: { select: { id: true, name: true } },
@@ -48,6 +51,7 @@ export async function GET(req: Request) {
         userContact: r.user.email ?? r.user.phone ?? null,
         amount: dec(r.amount),
         method: r.method,
+        fiatCurrency: r.fiatCurrency ?? "GHS",
         pctInForce: dec(r.pctInForce),
         commission: dec(r.commission),
         time: r.createdAt.toISOString(),
@@ -58,6 +62,7 @@ export async function GET(req: Request) {
     }
     return ok({
       date,
+      currency: fiatCurrency,
       admins: [...byAdmin.values()],
       totals: {
         deposits: rows.length,

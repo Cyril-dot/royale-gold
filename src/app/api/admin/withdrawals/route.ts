@@ -20,13 +20,16 @@ export async function GET(req: Request) {
     const status = sp.get("status") || undefined;
     const flaggedOnly = sp.get("flagged") === "1";
     const limit = Math.min(Math.max(Number(sp.get("limit") ?? 50) || 50, 1), 100);
+    // Phase 1 country-based (Nov 2026): ?currency= (default the admin's
+    // own currency) — the queue is in one fiat only.
+    const fiatCurrency = (sp.get("currency") || admin.currency || "GHS").toUpperCase();
     const rows = await prisma.withdrawal.findMany({
-      where: { adminId: admin.id, ...(status ? { status } : {}) },
+      where: { adminId: admin.id, fiatCurrency, ...(status ? { status } : {}) },
       include: { user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } } },
       orderBy: { createdAt: "desc" },
       take: limit,
     });
-    const pending = await prisma.withdrawal.count({ where: { adminId: admin.id, status: { in: ["pending", "admin_approved", "held"] } } });
+    const pending = await prisma.withdrawal.count({ where: { adminId: admin.id, fiatCurrency, status: { in: ["pending", "admin_approved", "held"] } } });
     const flags = await annotateWithdrawalFlags(rows.map((w) => ({ id: w.id, userId: w.userId, amount: dec(w.amount), user: w.user })));
     // P1 Batch 4 (O22): the KYC-required warning — a request above the
     // owner's threshold from a player whose KYC is not Approved gets a
@@ -41,6 +44,7 @@ export async function GET(req: Request) {
         userContact: w.user.email ?? w.user.phone ?? null,
         amount: dec(w.amount),
         method: w.method,
+        fiatCurrency: w.fiatCurrency ?? "GHS",
         status: w.status,
         reason: w.reason,
         decidedBy: w.decidedBy,
@@ -51,7 +55,7 @@ export async function GET(req: Request) {
         kycRequired: kycRequiredFor(dec(w.amount), kycStatuses.get(w.userId) ?? "not_submitted", kycSettings.withdrawalKycThreshold),
       }))
       .filter((w) => !flaggedOnly || w.flags.length > 0);
-    return ok({ withdrawals, pending });
+    return ok({ withdrawals, pending, currency: fiatCurrency });
   } catch (err) {
     return toErrorResponse(err);
   }

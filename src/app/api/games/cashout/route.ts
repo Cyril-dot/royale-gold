@@ -86,7 +86,7 @@ export async function POST(req: Request) {
     }
     // Same player gates as settle (self-exclusion + cool-off; cash
     // stake/loss limits do not apply to coin games).
-    const limitErr = await checkPlayLimits(user.id, stake, "coins");
+    const limitErr = await checkPlayLimits(user.id, stake, "coins", user.currency ?? "GHS");
     if (limitErr) throw new AuthError(403, limitErr);
 
     const reason = `Tetris line cash-out ${roundId}`;
@@ -122,6 +122,9 @@ export async function POST(req: Request) {
           amount,
           reason,
           kind: "cashout",
+          // Phase 1 country-based (Nov 2026): the player's fiat, so
+          // the ledger never blends fiats on coin rows either.
+          fiatCurrency: fresh.currency ?? "GHS",
         },
       });
       return { after, banked: banked + amount };

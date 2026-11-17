@@ -10,11 +10,12 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../../lib/store";
-import { api, fmtCash } from "../../../lib/api";
+import { api, fmtMoney } from "../../../lib/api";
 import { todayStr } from "../../../lib/money";
 import { useAdminContext } from "../../../lib/admin-client";
 import { canAccessSection } from "../../../lib/rbac";
 import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
+import CurrencyChips from "../../../components/CurrencyChips";
 
 type DepositRow = { date: string; player: string; contact: string; amount: number; method: string; referringAdmin: string; commission: number };
 type PlayerRow = { name: string; contact: string; joined: string; totalDeposited: number; totalStaked: number; totalWon: number; commission: number };
@@ -31,6 +32,10 @@ function AdminReportsInner() {
   const { ctx, err: ctxErr } = useAdminContext(previewId);
   const [from, setFrom] = useState(thirtyDaysAgo());
   const [to, setTo] = useState(todayStr());
+  // Phase 1 country-based (Nov 2026): the currency filter — each
+  // report is in ONE fiat only. Defaults to the admin's own currency.
+  const [fiatSel, setFiatSel] = useState<string | null>(null);
+  const fiat = fiatSel ?? user?.currency ?? "GHS";
   const [dep, setDep] = useState<{ total: number; rows: DepositRow[] } | null>(null);
   const [players, setPlayers] = useState<{ total: number; rows: PlayerRow[] } | null>(null);
   const [wd, setWd] = useState<{ total: number; rows: WithdrawalRow[] } | null>(null);
@@ -46,10 +51,10 @@ function AdminReportsInner() {
     setBusy(true);
     setErr("");
     try {
-      const range = `from=${from}&to=${to}`;
+      const range = `from=${from}&to=${to}&currency=${fiat}`;
       const [d, p, w] = await Promise.all([
         api<{ total: number; rows: DepositRow[] }>(`${base("deposits")}?${range}&preview=1`),
-        api<{ total: number; rows: PlayerRow[] }>(`${base("players")}?preview=1`),
+        api<{ total: number; rows: PlayerRow[] }>(`${base("players")}?currency=${fiat}&preview=1`),
         api<{ total: number; rows: WithdrawalRow[] }>(`${base("withdrawals")}?${range}&preview=1`),
       ]);
       setDep(d);
@@ -60,7 +65,7 @@ function AdminReportsInner() {
     } finally {
       setBusy(false);
     }
-  }, [base, from, to]);
+  }, [base, from, to, fiat]);
 
   useEffect(() => { void loadPreviews(); }, [loadPreviews]);
 
@@ -72,7 +77,8 @@ function AdminReportsInner() {
 
   const csvHref = (kind: string) => {
     const range = kind === "players" ? "" : `from=${from}&to=${to}`;
-    return `${base(kind)}${range ? `?${range}` : ""}`;
+    const qs = [range, `currency=${fiat}`].filter(Boolean).join("&");
+    return `${base(kind)}${qs ? `?${qs}` : ""}`;
   };
 
   const previewTable = (
@@ -107,6 +113,7 @@ function AdminReportsInner() {
       </div>
       <p className="rg48-sub">Deposits, players and withdrawals as CSV — built from the live tables, for your downline only.</p>
       <AdminNav />
+      <CurrencyChips value={fiat} onChange={setFiatSel} label="Report currency" />
 
       <section className="admin-sec">
         <h3>Date range</h3>
@@ -124,7 +131,7 @@ function AdminReportsInner() {
         <p className="rg48-sub">Date, player, amount, method, referring admin and the commission stamped on each deposit.</p>
         {!dep ? <p>Loading preview…</p> : previewTable(
           ["Date", "Player", "Amount", "Method", "Commission"],
-          dep.rows.map((r) => [r.date, r.player, fmtCash(r.amount), r.method, fmtCash(r.commission)]),
+          dep.rows.map((r) => [r.date, r.player, fmtMoney(r.amount, fiat), r.method, fmtMoney(r.commission, fiat)]),
           dep.total,
         )}
         <a className="btn btn-gold" href={csvHref("deposits")} download>Download deposits CSV</a>
@@ -135,7 +142,7 @@ function AdminReportsInner() {
         <p className="rg48-sub">Every player: joined date, total deposited, total staked, total won back, and commission (stamped sum — the Commission page is the source of truth for the rules-engine figure).</p>
         {!players ? <p>Loading preview…</p> : previewTable(
           ["Player", "Joined", "Deposited", "Staked", "Won", "Commission"],
-          players.rows.map((r) => [r.name, r.joined, fmtCash(r.totalDeposited), fmtCash(r.totalStaked), fmtCash(r.totalWon), fmtCash(r.commission)]),
+          players.rows.map((r) => [r.name, r.joined, fmtMoney(r.totalDeposited, fiat), fmtMoney(r.totalStaked, fiat), fmtMoney(r.totalWon, fiat), fmtMoney(r.commission, fiat)]),
           players.total,
         )}
         <a className="btn btn-gold" href={csvHref("players")} download>Download players CSV</a>
@@ -146,7 +153,7 @@ function AdminReportsInner() {
         <p className="rg48-sub">Date, player, amount, method, status and the risk flags on each request.</p>
         {!wd ? <p>Loading preview…</p> : previewTable(
           ["Date", "Player", "Amount", "Method", "Status", "Flags"],
-          wd.rows.map((r) => [r.date, r.player, fmtCash(r.amount), r.method, r.status, r.flags || "—"]),
+          wd.rows.map((r) => [r.date, r.player, fmtMoney(r.amount, fiat), r.method, r.status, r.flags || "—"]),
           wd.total,
         )}
         <a className="btn btn-gold" href={csvHref("withdrawals")} download>Download withdrawals CSV</a>

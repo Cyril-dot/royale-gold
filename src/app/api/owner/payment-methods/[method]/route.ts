@@ -6,11 +6,15 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { PAYMENT_METHODS } from "@/lib/game-config";
 import { round2 } from "@/lib/money";
+import { symbolFor } from "@/lib/country";
 
 type Body = {
   enabled?: boolean;
   minDeposit?: number | null;
   maxDeposit?: number | null;
+  // Phase 1 country-based (Nov 2026): which fiat this row is for
+  // (default GHS). The gateway field is Phase 2's — not set here.
+  currency?: string;
 };
 
 export async function POST(req: Request, { params }: { params: Promise<{ method: string }> }) {
@@ -22,6 +26,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ method:
     }
     const body = await readJson<Body>(req);
     if (!body) return fail("Invalid JSON body");
+    const fiatCurrency = (body.currency || "GHS").toUpperCase();
+    const sym = symbolFor(fiatCurrency);
 
     const changes: string[] = [];
     const data: { enabled?: boolean; minDeposit?: number | null; maxDeposit?: number | null } = {};
@@ -37,14 +43,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ method:
           changes.push(`${key} cleared`);
         } else if (typeof v === "number" && Number.isFinite(v) && v >= 0 && Math.abs(round2(v) - v) <= 1e-9) {
           data[key] = round2(v);
-          changes.push(`${key} = GH₵ ${round2(v).toFixed(2)}`);
+          changes.push(`${key} = ${sym} ${round2(v).toFixed(2)}`);
         } else {
-          return fail(`${key} must be a GH₵ amount >= 0`);
+          return fail(`${key} must be a ${sym} amount >= 0`);
         }
       }
     }
     if (changes.length === 0) return fail("Nothing to update");
-    const existing = await prisma.paymentMethodConfig.findUnique({ where: { method } });
+    const existing = await prisma.paymentMethodConfig.findUnique({ where: { method_fiatCurrency: { method, fiatCurrency } } });
     const mergedMin =
       "minDeposit" in body ? data.minDeposit : existing?.minDeposit == null ? null : Number(existing.minDeposit.toString());
     const mergedMax =
@@ -55,16 +61,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ method:
 
     const updated = await prisma.$transaction(async (tx) => {
       const row = await tx.paymentMethodConfig.upsert({
-        where: { method },
-        create: { method, ...data },
+        where: { method_fiatCurrency: { method, fiatCurrency } },
+        create: { method, fiatCurrency, ...data },
         update: data,
       });
       await tx.auditLog.create({
         data: {
           actorId: owner.id,
           action: "payment.method",
-          targetId: method,
-          detail: `${method}: ${changes.join(", ")}`,
+          targetId: `${method}:${fiatCurrency}`,
+          detail: `${method} (${fiatCurrency}): ${changes.join(", ")}`,
         },
       });
       return row;
@@ -72,6 +78,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ method:
 
     return ok({
       method: updated.method,
+      fiatCurrency: updated.fiatCurrency,
+      gateway: updated.gateway,
       enabled: updated.enabled,
       minDeposit: updated.minDeposit == null ? null : Number(updated.minDeposit.toString()),
       maxDeposit: updated.maxDeposit == null ? null : Number(updated.maxDeposit.toString()),

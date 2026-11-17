@@ -12,7 +12,9 @@ export async function GET(req: Request) {
     await requireRole("owner");
     const sp = new URL(req.url).searchParams;
     const { from, to } = parseOwnerRange(sp);
-    return ok(await revenueBreakdown(from, to));
+    // Phase 1 country-based (Nov 2026): ?currency= (default GHS).
+    const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
+    return ok(await revenueBreakdown(from, to, fiatCurrency));
   } catch (err) {
     return toErrorResponse(err);
   }

@@ -4,7 +4,8 @@
 // threshold + action. Threshold meaning depends on the signal:
 //   (a) withdrawal-flags     = minimum risk-flag count on the request (default 2)
 //   (b) rapid-withdrawals    = requests in 24h (default 3)
-//   (c) deposit-no-play      = GH₵ deposited in 24h with 0 rounds in 24h (default 1000)
+//   (c) deposit-no-play      = deposited in 24h with 0 rounds in 24h (default 1000, stored in
+//                               GHS terms and scaled to the player's fiat — Phase 1, Nov 2026)
 //   (e) deposit-then-withdraw = minutes between deposit and withdrawal (default 60)
 // Action:
 //   "flag"           — the alert already appears in the fraud console; no extra effect.
@@ -24,6 +25,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { dec } from "./money";
 import { withdrawalRiskFlags } from "./withdrawals";
+import { getCurrencyConfig } from "./game-config";
 
 export type RiskSignal = "withdrawal-flags" | "rapid-withdrawals" | "deposit-no-play" | "deposit-then-withdraw";
 export type RiskAction = "flag" | "block_player" | "hold_withdrawal";
@@ -42,7 +44,7 @@ export interface RiskRuleRow {
 export const RISK_SIGNALS: { key: RiskSignal; label: string; thresholdLabel: string; thresholdHint: string; defaultThreshold: number }[] = [
   { key: "withdrawal-flags", label: "Flagged withdrawal", thresholdLabel: "Min risk flags", thresholdHint: "A request carrying this many risk flags fires the rule (default 2 — the fraud console's HIGH bar).", defaultThreshold: 2 },
   { key: "rapid-withdrawals", label: "Rapid withdrawals", thresholdLabel: "Requests in 24h", thresholdHint: "A player with this many withdrawal requests in 24 hours fires the rule (default 3).", defaultThreshold: 3 },
-  { key: "deposit-no-play", label: "Deposit, no play", thresholdLabel: "GH₵ deposited in 24h", thresholdHint: "A player who deposited this much in 24 hours and played 0 rounds in 24 hours fires the rule (default GH₵ 1,000).", defaultThreshold: 1000 },
+  { key: "deposit-no-play", label: "Deposit, no play", thresholdLabel: "GHS deposited in 24h", thresholdHint: "A player who deposited this much in 24 hours and played 0 rounds in 24 hours fires the rule (default 1,000). The threshold is stored in GHS terms and scaled to the player's fiat (NGN: 1,000 → ₦100,000).", defaultThreshold: 1000 },
   { key: "deposit-then-withdraw", label: "Deposit then withdraw", thresholdLabel: "Minutes window", thresholdHint: "A withdrawal within this many minutes of a deposit fires the rule (default 60).", defaultThreshold: 60 },
 ];
 
@@ -142,16 +144,21 @@ export async function evaluateWithdrawalRules(
 
   // Shared inputs for (a) + (b): the player's 24h request count
   // (including the request just created) and their total deposited.
-  const [requestCount, depAgg] = await Promise.all([
+  const [requestCount, depAgg, requester] = await Promise.all([
     tx.withdrawal.count({ where: { userId: w.userId, createdAt: { gte: dayAgo } } }),
     tx.depositEvent.aggregate({ where: { userId: w.userId }, _sum: { amount: true } }),
+    tx.user.findUnique({ where: { id: w.userId }, select: { currency: true } }),
   ]);
   const totalDeposited = dec(depAgg._sum.amount);
+  // Phase 1 country-based (Nov 2026): the "unusual" flag threshold is
+  // scaled to the requester's fiat.
+  const requesterCfg = await getCurrencyConfig(requester?.currency ?? "GHS");
   const flags = withdrawalRiskFlags({
     userCreatedAt,
     amount: w.amount,
     totalDeposited,
     requestsLast24h: requestCount,
+    fiatScale: requesterCfg.conversionRate / 5,
   });
 
   const apply = async (rule: RiskRuleRow) => {
@@ -212,17 +219,22 @@ export async function evaluateDepositRules(userId: string): Promise<{ blocked: b
     if (rules.length === 0) return { blocked, fired };
     const now = Date.now();
     const dayAgo = new Date(now - DAY);
-    const [depAgg, rounds] = await Promise.all([
+    const [depAgg, rounds, user] = await Promise.all([
       prisma.depositEvent.aggregate({
         where: { userId, createdAt: { gte: dayAgo } },
         _sum: { amount: true },
       }),
       prisma.gameResult.count({ where: { userId, createdAt: { gte: dayAgo } } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { currency: true } }),
     ]);
     const deposited24h = dec(depAgg._sum.amount);
     if (rounds > 0) return { blocked, fired };
+    // Phase 1 country-based (Nov 2026): the rule threshold is stored
+    // in GHS terms — scale it to the player's fiat before comparing.
+    const cfg = await getCurrencyConfig(user?.currency ?? "GHS");
+    const factor = cfg.conversionRate / 5;
     for (const rule of rules) {
-      if (deposited24h < rule.threshold) continue;
+      if (deposited24h < rule.threshold * factor) continue;
       if (rule.action !== "block_player") continue; // "flag" is automatic; "hold" is withdrawal-only.
       fired.push(rule.name);
       blocked = true;

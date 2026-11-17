@@ -17,7 +17,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, fmtCash } from "../../lib/api";
+import { api, fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx, useStore } from "../../lib/store";
 import type { CrashSceneState } from "../../lib/three/crash";
@@ -554,7 +554,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
     if (!cashT0Ref.current) cashT0Ref.current = performance.now();
     setBets((bs) => bs.map((b) => (b === bet ? { ...b, cashed: true, payout } : b)));
     await room.settle(bet.stake, payout, { cashout: m }, roundId || undefined);
-    setMsg(`Cashed out at ×${m.toFixed(2)} — ${fmtCash(payout)}`);
+    setMsg(`Cashed out at ×${m.toFixed(2)} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, roundId]);
 
@@ -598,17 +598,17 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
         {phase === "idle" && <button className="btn btn-gold xg-action" type="button" onClick={() => void newRound()}>Start round</button>}
         {phase === "waiting" && (
           <button className="btn btn-gold xg-action" type="button" onClick={() => placeBet(0)}>
-            Place bet · {fmtCash(stake)} {skin === "jet" && bets.length === 1 ? "(2nd panel)" : ""}
+            Place bet · {fmtMoney(stake, room.user?.currency ?? "GHS")} {skin === "jet" && bets.length === 1 ? "(2nd panel)" : ""}
           </button>
         )}
         {phase === "running" && activeBet && (
           <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut(activeBet)}>
-            CASH OUT · {fmtCash(Math.round(activeBet.stake * dispMult * 100) / 100)}
+            CASH OUT · {fmtMoney(Math.round(activeBet.stake * dispMult * 100) / 100, room.user?.currency ?? "GHS")}
           </button>
         )}
         {phase === "running" && !activeBet && <button className="btn btn-ghost xg-action" type="button" disabled>Watching — no active bet</button>}
         <p className="xg-msg">{msg}</p>
-        {bets.length > 0 && <p className="xg-msg">Active bets: {bets.map((b) => `${fmtCash(b.stake)}${b.cashed ? ` → cashed ${fmtCash(b.payout)}` : b.auto ? ` (auto ×${b.auto})` : ""}`).join(" · ")}</p>}
+        {bets.length > 0 && <p className="xg-msg">Active bets: {bets.map((b) => `${fmtMoney(b.stake, room.user?.currency ?? "GHS")}${b.cashed ? ` → cashed ${fmtMoney(b.payout, room.user?.currency ?? "GHS")}` : b.auto ? ` (auto ×${b.auto})` : ""}`).join(" · ")}</p>}
       </div>
       {phase === "crashed" && (
         <div className="cr-reveal" aria-label="Provably fair reveal">
@@ -633,7 +633,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
           <div className="jf-feed" aria-label="Live bets feed">
             <h4>Live bets</h4>
             {feed.length === 0 ? <p className="bh-empty">Bets will appear here once the round is flying.</p> : feed.map((f, i) => (
-              <div key={i} className="jf-feed-row"><span>{f.name}</span><span>{fmtCash(f.stake)}</span><span>×{f.mult.toFixed(2)}</span><span className={f.won ? "win" : "lose"}>{f.won ? "won" : "lost"}</span></div>
+              <div key={i} className="jf-feed-row"><span>{f.name}</span><span>{fmtMoney(f.stake, room.user?.currency ?? "GHS")}</span><span>×{f.mult.toFixed(2)}</span><span className={f.won ? "win" : "lose"}>{f.won ? "won" : "lost"}</span></div>
             ))}
           </div>
           <div className="xg-history"><span className="bh-lab">ROUND HISTORY</span>{history.length === 0 ? <span className="bh-empty">No rounds yet.</span> : history.map((h, i) => <span key={i} className={`bh-item ${h >= 2 ? "win" : "lose"}`}>×{h.toFixed(2)}</span>)}</div>

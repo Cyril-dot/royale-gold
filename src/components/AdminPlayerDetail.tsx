@@ -11,7 +11,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, fmtCash } from "../lib/api";
+import { api, fmtMoney } from "../lib/api";
+import { COUNTRIES, symbolFor } from "../lib/country";
 import { useStore } from "../lib/store";
 import { useAdminContext, type UserDetail } from "../lib/admin-client";
 import { canAccessSection } from "../lib/rbac";
@@ -102,7 +103,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
         method: "POST",
         body: JSON.stringify({ wallet: adjWallet, direction: adjDir, amount, reason: adjReason.trim() }),
       });
-      toast(`${adjDir === "credit" ? "Credited" : "Debited"} ${adjWallet === "cash" ? fmtCash(amount) : `${amount} coins`} — recorded in the ledger`, "win");
+      toast(`${adjDir === "credit" ? "Credited" : "Debited"} ${adjWallet === "cash" ? fmtMoney(amount, detail?.user.currency ?? "GHS") : `${amount} coins`} — recorded in the ledger`, "win");
       setAdjAmount("");
       setAdjReason("");
       await loadDetail();
@@ -141,7 +142,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
         method: "POST",
         body: JSON.stringify({ wallet: bonusWallet, amount, reason: bonusReason.trim(), ...(bonusExpires ? { expiresAt: bonusExpires } : {}) }),
       });
-      toast(`Bonus granted — ${bonusWallet === "cash" ? fmtCash(amount) : `${amount} coins`} credited`, "win");
+      toast(`Bonus granted — ${bonusWallet === "cash" ? fmtMoney(amount, detail?.user.currency ?? "GHS") : `${amount} coins`} credited`, "win");
       setBonusAmount("");
       setBonusReason("");
       setBonusExpires("");
@@ -256,6 +257,10 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
   }
 
   const u = detail.user;
+  // Phase 1 country-based (Nov 2026): this player's fiat — every
+  // cash figure on this page is in it unless a row carries its own.
+  const fiat = u.currency ?? "GHS";
+  const countryName = COUNTRIES.find((c) => c.code === (u.country ?? "GH"))?.name ?? (u.country ?? "GH");
   // P1 Batch 4 (O24): a parent admin viewing a player in a child
   // admin's downline is READ-ONLY — the action sections below hide.
   const canAct = !previewId && user.role === "admin" && !detail.readOnly;
@@ -275,6 +280,8 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       {u.blockedAt ? <p className="pd-blocked-note">Blocked {new Date(u.blockedAt).toLocaleDateString("en-GB")} — {u.blockedReason || "no reason recorded"}. Betting and deposits are suspended.</p> : null}
       {selfExcludedNow ? <p className="pd-blocked-note">Self-excluded until {new Date(detail.limits!.selfExcludedUntil!).toLocaleDateString("en-GB")}{detail.limits?.selfExclusionReason ? ` — ${detail.limits.selfExclusionReason}` : ""}. They cannot deposit, play or settle until then.</p> : null}
       <div className="pd-meta">
+        <span className="pd-meta-item"><span className="pd-meta-label">Country</span><b>{countryName}</b></span>
+        <span className="pd-meta-item"><span className="pd-meta-label">Currency</span><b>{fiat} ({symbolFor(fiat)})</b></span>
         <span className="pd-meta-item"><span className="pd-meta-label">Code used</span>{u.referralCodeUsed ? <b className="code-chip sm">{u.referralCodeUsed}</b> : <b>—</b>}</span>
         <span className="pd-meta-item"><span className="pd-meta-label">Referring admin</span><b>{u.referringAdmin?.name || "—"}</b></span>
         <span className="pd-meta-item"><span className="pd-meta-label">KYC</span><b>{detail.kycStatus === "not_submitted" ? "Not submitted" : detail.kycStatus === "pending" ? "Pending review" : detail.kycStatus === "approved" ? "Approved" : "Rejected"}</b></span>
@@ -293,7 +300,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       <section className="admin-sec">
         <h3>Balances</h3>
         <div className="sum-cards">
-          {card("Cash", fmtCash(u.cash))}
+          {card("Cash", fmtMoney(u.cash, fiat))}
           {card("Coins", String(u.coins))}
           {card("Role", u.role)}
         </div>
@@ -302,8 +309,8 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
         <h3>Totals</h3>
         <div className="sum-cards">
           {card("Deposits", String(detail.totals.deposits))}
-          {card("Deposited", fmtCash(detail.totals.totalDeposited))}
-          {card("Commission", fmtCash(detail.totals.totalCommission))}
+          {card("Deposited", fmtMoney(detail.totals.totalDeposited, fiat))}
+          {card("Commission", fmtMoney(detail.totals.totalCommission, fiat))}
           {card("Coins given", String(detail.totals.coinsGiven))}
         </div>
       </section>
@@ -314,7 +321,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
       <section className="admin-sec">
         <h3>Commission earned</h3>
         <div className="sum-cards">
-          {card("Earned on this player", fmtCash(detail.commission.total))}
+          {card("Earned on this player", fmtMoney(detail.commission.total, detail.commission.fiatCurrency ?? fiat))}
         </div>
         <p className="rg48-sub">
           {detail.commission.model === "revshare"
@@ -339,12 +346,12 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
           <>
             <div className="sum-cards">
               {card("Tier", detail.vip.tier.name)}
-              {card("Deposited", fmtCash(detail.vip.totalDeposited))}
-              {card("Next tier", detail.vip.nextTier ? `${detail.vip.nextTier.name} · ${fmtCash(detail.vip.nextTier.minDeposited)}` : "Top tier")}
+              {card("Deposited", fmtMoney(detail.vip.totalDeposited, fiat))}
+              {card("Next tier", detail.vip.nextTier ? `${detail.vip.nextTier.name} · ${fmtMoney(detail.vip.nextTier.minDeposited, fiat)}` : "Top tier")}
             </div>
             {detail.vip.nextTier ? (
               <p className="rg48-sub">
-                {detail.vip.progressPct}% of the way to {detail.vip.nextTier.name} — {fmtCash(detail.vip.toNext)} more to deposit.
+                {detail.vip.progressPct}% of the way to {detail.vip.nextTier.name} — {fmtMoney(detail.vip.toNext, fiat)} more to deposit.
               </p>
             ) : (
               <p className="rg48-sub">Top tier — nothing above this one.</p>
@@ -368,9 +375,9 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
                 {detail.rounds.map((r) => (
                   <tr key={r.id}>
                     <td>{r.gameName}</td>
-                    <td>{r.currency === "coins" ? `${r.stake} coins` : fmtCash(r.stake)}</td>
-                    <td>{r.currency === "coins" ? `${r.payout} coins` : fmtCash(r.payout)}</td>
-                    <td className={r.net > 0 ? "ok" : r.net < 0 ? "bad" : ""}>{r.currency === "coins" ? `${r.net > 0 ? "+" : ""}${r.net} coins` : r.net > 0 ? `+${fmtCash(r.net)}` : fmtCash(r.net)}</td>
+                    <td>{r.currency === "coins" ? `${r.stake} coins` : fmtMoney(r.stake, r.fiatCurrency ?? fiat)}</td>
+                    <td>{r.currency === "coins" ? `${r.payout} coins` : fmtMoney(r.payout, r.fiatCurrency ?? fiat)}</td>
+                    <td className={r.net > 0 ? "ok" : r.net < 0 ? "bad" : ""}>{r.currency === "coins" ? `${r.net > 0 ? "+" : ""}${r.net} coins` : r.net > 0 ? `+${fmtMoney(r.net, r.fiatCurrency ?? fiat)}` : fmtMoney(r.net, r.fiatCurrency ?? fiat)}</td>
                     <td>{new Date(r.createdAt).toLocaleDateString("en-GB")}</td>
                   </tr>
                 ))}
@@ -565,9 +572,9 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
           </form>
         ) : (
           <div className="sum-cards">
-            {card("Max stake", detail.limits?.maxStake != null ? fmtCash(detail.limits.maxStake) : "No limit")}
-            {card("Max deposit / day", detail.limits?.maxDepositPerDay != null ? fmtCash(detail.limits.maxDepositPerDay) : "No limit")}
-            {card("Max loss / day", detail.limits?.maxLossPerDay != null ? fmtCash(detail.limits.maxLossPerDay) : "No limit")}
+            {card("Max stake", detail.limits?.maxStake != null ? fmtMoney(detail.limits.maxStake, fiat) : "No limit")}
+            {card("Max deposit / day", detail.limits?.maxDepositPerDay != null ? fmtMoney(detail.limits.maxDepositPerDay, fiat) : "No limit")}
+            {card("Max loss / day", detail.limits?.maxLossPerDay != null ? fmtMoney(detail.limits.maxLossPerDay, fiat) : "No limit")}
             {card("Cool-off", detail.limits?.coolOffUntil ? `Until ${new Date(detail.limits.coolOffUntil).toLocaleDateString("en-GB")}` : "None")}
             {card("Self-excluded", selfExcludedNow ? `Until ${new Date(detail.limits!.selfExcludedUntil!).toLocaleDateString("en-GB")}` : "No")}
             {card("Reality check", detail.limits?.realityCheckMinutes ? `Every ${detail.limits.realityCheckMinutes} min` : "Off")}
@@ -582,7 +589,7 @@ export default function AdminPlayerDetail({ id }: { id: string }) {
               <thead><tr><th>Amount</th><th>Method</th><th>%</th><th>Commission</th><th>Date</th></tr></thead>
               <tbody>
                 {detail.deposits.map((d) => (
-                  <tr key={d.id}><td>{fmtCash(d.amount)}</td><td>{d.method}</td><td>{d.pctInForce}%</td><td>{fmtCash(d.commission)}</td><td>{new Date(d.createdAt).toLocaleDateString("en-GB")}</td></tr>
+                  <tr key={d.id}><td>{fmtMoney(d.amount, d.fiatCurrency ?? fiat)}</td><td>{d.method}</td><td>{d.pctInForce}%</td><td>{fmtMoney(d.commission, d.fiatCurrency ?? fiat)}</td><td>{new Date(d.createdAt).toLocaleDateString("en-GB")}</td></tr>
                 ))}
               </tbody>
             </table>

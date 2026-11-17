@@ -8,11 +8,15 @@ import { adminDashboard } from "@/lib/admin";
 export async function GET(req: Request) {
   try {
     await requireRole("owner");
-    const adminId = new URL(req.url).searchParams.get("adminId") || undefined;
+    const sp = new URL(req.url).searchParams;
+    const adminId = sp.get("adminId") || undefined;
     if (!adminId) return fail("adminId is required");
     const admin = await prisma.user.findUnique({ where: { id: adminId } });
     if (!admin || admin.role !== "admin") return fail("Admin not found", 404);
-    return ok(await adminDashboard(adminId));
+    // Phase 1 country-based (Nov 2026): ?currency= (default the
+    // admin's own currency).
+    const fiatCurrency = sp.get("currency") || undefined;
+    return ok(await adminDashboard(adminId, fiatCurrency));
   } catch (err) {
     return toErrorResponse(err);
   }

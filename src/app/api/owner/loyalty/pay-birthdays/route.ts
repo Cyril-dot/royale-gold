@@ -15,6 +15,9 @@ export async function POST() {
     return ok({
       paid: result.paid,
       total: result.total,
+      // Phase 1 country-based (Nov 2026): the per-fiat split — `total`
+      // blends fiats when a run covers more than one.
+      totalsByCurrency: result.totalsByCurrency,
       count: result.paid.length,
       alreadyPaid: result.skippedPaid,
     });

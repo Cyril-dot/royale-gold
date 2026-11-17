@@ -11,7 +11,7 @@ import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../../lib/store";
-import { fmtCash } from "../../../lib/api";
+import { fmtMoney } from "../../../lib/api";
 import { useAdminContext, useAdminLiveFeed } from "../../../lib/admin-client";
 import { canAccessSection } from "../../../lib/rbac";
 import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
@@ -70,12 +70,12 @@ function AdminLiveInner() {
                   <tr key={r.id}>
                     <td><Link href={playerHref(r.userId)}>{r.userName}</Link></td>
                     <td>{r.gameName}</td>
-                    <td>{r.currency === "coins" ? `${r.stake} coins` : fmtCash(r.stake)}</td>
-                    <td>{r.currency === "coins" ? `${r.payout} coins` : fmtCash(r.payout)}</td>
+                    <td>{r.currency === "coins" ? `${r.stake} coins` : fmtMoney(r.stake, r.fiatCurrency ?? user?.currency ?? "GHS")}</td>
+                    <td>{r.currency === "coins" ? `${r.payout} coins` : fmtMoney(r.payout, r.fiatCurrency ?? user?.currency ?? "GHS")}</td>
                     <td className={r.net > 0 ? "ok" : r.net < 0 ? "bad" : ""}>
                       {r.currency === "coins"
                         ? `${r.net > 0 ? "+" : ""}${r.net} coins`
-                        : r.net > 0 ? `+${fmtCash(r.net)}` : fmtCash(r.net)}
+                        : r.net > 0 ? `+${fmtMoney(r.net, r.fiatCurrency ?? user?.currency ?? "GHS")}` : fmtMoney(r.net, r.fiatCurrency ?? user?.currency ?? "GHS")}
                     </td>
                     <td>{new Date(r.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
                   </tr>

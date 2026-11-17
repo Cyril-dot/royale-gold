@@ -67,28 +67,48 @@ const TRIVIA: { question: string; options: [string, string, string, string]; ans
 async function main() {
   const owner = await prisma.user.upsert({
     where: { email: "owner@royale.gold" },
-    update: { name: "Royale Owner", role: "owner", active: true },
+    update: { name: "Royale Owner", role: "owner", active: true, country: "GH", currency: "GHS" },
     create: {
       name: "Royale Owner",
       email: "owner@royale.gold",
       passwordHash: await bcrypt.hash("owner123", 10),
       role: "owner",
+      country: "GH",
+      currency: "GHS",
     },
   });
   console.log("Owner:", owner.email);
 
   const admin = await prisma.user.upsert({
     where: { email: "admin@royale.gold" },
-    update: { name: "Royale Admin", role: "admin", commissionPct: 10, active: true },
+    update: { name: "Royale Admin", role: "admin", commissionPct: 10, active: true, country: "GH", currency: "GHS" },
     create: {
       name: "Royale Admin",
       email: "admin@royale.gold",
       passwordHash: await bcrypt.hash("admin123", 10),
       role: "admin",
       commissionPct: 10,
+      country: "GH",
+      currency: "GHS",
     },
   });
   console.log("Admin:", admin.email, "commission 10%");
+
+  // Phase 1 country-based (Nov 2026): per-currency platform rules.
+  // GHS is the live currency; NGN is seeded ENABLED for demo at 100x
+  // the GHS values (same "effort") — Chuks sets his own numbers in the
+  // owner panel. These are NOT the 7UP limits (a different product).
+  for (const row of [
+    { currency: "GHS", symbol: "GH₵", minDeposit: 1, minStake: 1, conversionRate: 5, decayStep: 100, withdrawalOwnerThreshold: 500, enabled: true },
+    { currency: "NGN", symbol: "₦", minDeposit: 100, minStake: 100, conversionRate: 500, decayStep: 10000, withdrawalOwnerThreshold: 50000, enabled: true },
+  ]) {
+    await prisma.currencyConfig.upsert({
+      where: { currency: row.currency },
+      update: { symbol: row.symbol, enabled: row.enabled },
+      create: row,
+    });
+  }
+  console.log("CurrencyConfig: GHS + NGN seeded");
 
   await prisma.referralCode.upsert({
     where: { code: "RG-DEMO1" },

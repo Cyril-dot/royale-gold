@@ -12,6 +12,7 @@ import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
+import { symbolFor } from "@/lib/country";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -44,9 +45,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           ? await tx.user.update({ where: { id }, data: { cashBalance: round2(dec(fresh.cashBalance) + amount) } })
           : await tx.user.update({ where: { id }, data: { coins: fresh.coins + amount } });
       const adj = await tx.balanceAdjustment.create({
-        data: { userId: id, adminId: admin.id, wallet, direction: "credit", amount: round2(amount), reason, kind: "bonus" },
+        data: {
+          userId: id,
+          adminId: admin.id,
+          wallet,
+          direction: "credit",
+          amount: round2(amount),
+          reason,
+          kind: "bonus",
+          // Phase 1 country-based (Nov 2026): the target player's fiat.
+          fiatCurrency: fresh.currency ?? "GHS",
+        },
       });
-      const bonusLabel = wallet === "cash" ? `GH₵ ${round2(amount).toFixed(2)}` : `${amount} coins`;
+      const bonusLabel = wallet === "cash" ? `${symbolFor(fresh.currency)} ${round2(amount).toFixed(2)}` : `${amount} coins`;
       await tx.auditLog.create({
         data: {
           actorId: admin.id, action: "bonus.grant", targetId: id,

@@ -12,7 +12,8 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../../lib/store";
-import { api, fmtCash } from "../../../lib/api";
+import { api, fmtMoney } from "../../../lib/api";
+import { symbolFor } from "../../../lib/country";
 import { ALL_GAMES } from "../../../lib/games";
 import { useAdminContext, useAdminTournaments, useAdminTournament } from "../../../lib/admin-client";
 import { canAccessSection } from "../../../lib/rbac";
@@ -56,7 +57,7 @@ function AdminTournamentsInner() {
     const prize = Number(prizePool);
     if (name.trim().length < 2) { toast("Give the tournament a name", "lose"); return; }
     if (!startAt || !endAt) { toast("Give a start and an end date", "lose"); return; }
-    if (!Number.isFinite(prize) || prize <= 0) { toast("Prize pool must be above GH₵ 0", "lose"); return; }
+    if (!Number.isFinite(prize) || prize <= 0) { toast(`Prize pool must be above ${symbolFor(user?.currency ?? "GHS")} 0`, "lose"); return; }
     setCreateBusy(true);
     try {
       await api("/api/admin/tournaments", {
@@ -83,7 +84,7 @@ function AdminTournamentsInner() {
         `/api/admin/tournaments/${detail.tournament.id}/end`,
         { method: "POST", body: JSON.stringify({ winnerId: winnerId || undefined }) },
       );
-      toast(`"${detail.tournament.name}" ended — ${fmtCash(r.tournament.prizePool)} paid to ${r.winner.name}`, "win");
+      toast(`"${detail.tournament.name}" ended — ${fmtMoney(r.tournament.prizePool, user?.currency ?? "GHS")} paid to ${r.winner.name}`, "win");
       setWinnerId("");
       await load();
       await loadDetail();
@@ -119,7 +120,7 @@ function AdminTournamentsInner() {
               <select value={gameSlug} onChange={(e) => setGameSlug(e.target.value)} aria-label="Game">
                 <option value="all">All games</option>
                 {ALL_GAMES.map((g) => (
-                  <option key={g.slug} value={g.slug}>{g.name} ({g.currency === "cash" ? "GH₵" : "coins"})</option>
+                  <option key={g.slug} value={g.slug}>{g.name} ({g.currency === "cash" ? symbolFor(user?.currency ?? "GHS") : "coins"})</option>
                 ))}
               </select>
             </label>
@@ -130,7 +131,7 @@ function AdminTournamentsInner() {
               <label>Ends
                 <input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} aria-label="Ends" required />
               </label>
-              <label>Prize pool (GH₵)
+              <label>Prize pool ({symbolFor(user?.currency ?? "GHS")})
                 <input type="number" min={0} step="0.01" inputMode="decimal" placeholder="0.00" value={prizePool} onChange={(e) => setPrizePool(e.target.value)} aria-label="Prize pool" required />
               </label>
             </div>
@@ -154,7 +155,7 @@ function AdminTournamentsInner() {
                   <b>{t.name}</b>
                   <span className={`tk-status tk-${t.status === "ended" ? "closed" : t.status === "active" ? "answered" : "open"}`}>{STATUS_LABEL[t.status] ?? t.status}</span>
                 </div>
-                <p className="rg48-sub">{t.gameName} · {new Date(t.startAt).toLocaleDateString("en-GB")} – {new Date(t.endAt).toLocaleDateString("en-GB")} · Prize {fmtCash(t.prizePool)}{t.winnerName ? ` · Winner: ${t.winnerName}` : ""}</p>
+                <p className="rg48-sub">{t.gameName} · {new Date(t.startAt).toLocaleDateString("en-GB")} – {new Date(t.endAt).toLocaleDateString("en-GB")} · Prize {fmtMoney(t.prizePool, user?.currency ?? "GHS")}{t.winnerName ? ` · Winner: ${t.winnerName}` : ""}</p>
                 <button className="btn btn-ghost" type="button" onClick={() => open(t.id)}>
                   {selectedId === t.id ? "Hide leaderboard" : "Leaderboard"}
                 </button>
@@ -174,7 +175,7 @@ function AdminTournamentsInner() {
                               <tr key={r.userId}>
                                 <td>{r.rank}</td>
                                 <td><Link href={playerHref(r.userId)}>{r.userName}</Link></td>
-                                <td>{fmtCash(r.points)}</td>
+                                <td>{fmtMoney(r.points, r.fiatCurrency ?? user?.currency ?? "GHS")}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -185,14 +186,14 @@ function AdminTournamentsInner() {
                       <>
                         <label className="pd-adjust-reason">Winner
                           <select value={winnerId} onChange={(e) => setWinnerId(e.target.value)} aria-label="Winner">
-                            <option value="">Rank 1 — {detail.leaderboard[0].userName} ({fmtCash(detail.leaderboard[0].points)})</option>
+                            <option value="">Rank 1 — {detail.leaderboard[0].userName} ({fmtMoney(detail.leaderboard[0].points, detail.leaderboard[0].fiatCurrency ?? user?.currency ?? "GHS")})</option>
                             {detail.leaderboard.slice(1, 5).map((r) => (
-                              <option key={r.userId} value={r.userId}>Rank {r.rank} — {r.userName} ({fmtCash(r.points)})</option>
+                              <option key={r.userId} value={r.userId}>Rank {r.rank} — {r.userName} ({fmtMoney(r.points, r.fiatCurrency ?? user?.currency ?? "GHS")})</option>
                             ))}
                           </select>
                         </label>
                         <button className="btn btn-gold" type="button" disabled={endBusy} onClick={() => void end()}>
-                          {endBusy ? "Paying…" : `End + pay ${fmtCash(detail.tournament.prizePool)} to the winner`}
+                          {endBusy ? "Paying…" : `End + pay ${fmtMoney(detail.tournament.prizePool, user?.currency ?? "GHS")} to the winner`}
                         </button>
                         <p className="rg48-mini">The prize is paid once as a bonus credit, and the final standings are frozen — a tournament ends once.</p>
                       </>

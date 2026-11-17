@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
 import { normalizeCode } from "@/lib/serialize";
+import { symbolFor } from "@/lib/country";
 
 export async function POST(req: Request) {
   try {
@@ -43,12 +44,14 @@ export async function POST(req: Request) {
         data: {
           userId: user.id, adminId: promo.createdByAdminId, wallet: promo.bonusCurrency,
           direction: "credit", amount: round2(amount), reason: `Promo code ${promo.code}`, kind: "promo",
+          // Phase 1 country-based (Nov 2026): the redeemer's fiat.
+          fiatCurrency: me.currency ?? "GHS",
         },
       });
       await tx.auditLog.create({
         data: {
           actorId: user.id, action: "promo.redeem", targetId: promo.id,
-          detail: `${me.name} redeemed promo code ${promo.code} — +${promo.bonusCurrency === "cash" ? `GH₵ ${amount.toFixed(2)}` : `${amount} coins`}`,
+          detail: `${me.name} redeemed promo code ${promo.code} — +${promo.bonusCurrency === "cash" ? `${symbolFor(me.currency)} ${amount.toFixed(2)}` : `${amount} coins`}`,
         },
       });
       return updated;

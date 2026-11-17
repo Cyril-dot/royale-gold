@@ -31,6 +31,9 @@ export async function POST(req: Request) {
     if (fresh.blockedAt) return fail("This account is blocked and cannot request a withdrawal", 403);
     if (dec(fresh.cashBalance) < amount) return fail("Amount exceeds your cash balance");
 
+    // Phase 1 country-based (Nov 2026): the request is in the
+    // player's fiat — stamped so the queues never blend fiats.
+    const fiatCurrency = fresh.currency ?? "GHS";
     const created = await prisma.$transaction(async (tx) => {
       const w = await tx.withdrawal.create({
         data: {
@@ -38,11 +41,12 @@ export async function POST(req: Request) {
           adminId: fresh.referredByAdminId ?? null,
           amount: round2(amount),
           method,
+          fiatCurrency,
           status: "pending",
         },
       });
       await tx.auditLog.create({
-        data: { actorId: user.id, action: "withdrawal.request", targetId: w.id, detail: `Requested ${round2(amount)} via ${method}` },
+        data: { actorId: user.id, action: "withdrawal.request", targetId: w.id, detail: `Requested ${round2(amount)} ${fiatCurrency} via ${method}` },
       });
       // P2 Batch 2 (O31): the risk rules run AFTER the request is
       // created — a "hold_withdrawal" rule sets this request "held"
@@ -57,6 +61,7 @@ export async function POST(req: Request) {
         id: created.w.id,
         amount: dec(created.w.amount),
         method: created.w.method,
+        fiatCurrency: created.w.fiatCurrency,
         status: created.status,
         createdAt: created.w.createdAt.toISOString(),
       },

@@ -10,7 +10,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { api, fmtCash, fmtCoins, GameHistoryRow, GameStat, money } from "../../lib/api";
+import { api, fmtMoney, fmtCoins, GameHistoryRow, GameStat, money } from "../../lib/api";
+import { symbolFor } from "../../lib/country";
 import { GameDef } from "../../lib/games";
 import GameRoomHeader from "../GameRoomHeader";
 import { playSfx, useStore } from "../../lib/store";
@@ -122,7 +123,7 @@ export function useGameRoom(game: GameDef) {
   const isCoin = game.currency === "coins";
   const simMode = mode === "SIM" && !isCoin;
   const balance = isCoin ? wallet?.coins ?? user?.coins ?? 0 : simMode ? simSession ?? wallet?.sim ?? 0 : wallet?.cash ?? user?.cash ?? 0;
-  const balText = isCoin ? `${fmtCoins(balance)} coins` : simMode ? `SIM ${Math.round(balance).toLocaleString("en-GH")}` : fmtCash(balance);
+  const balText = isCoin ? `${fmtCoins(balance)} coins` : simMode ? `SIM ${Math.round(balance).toLocaleString("en-GH")}` : fmtMoney(balance, user?.currency ?? "GHS");
 
   // Load this game's persisted SIM stats when SIM mode is on.
   useEffect(() => {
@@ -146,7 +147,7 @@ export function useGameRoom(game: GameDef) {
         // Demo SIM play: in-memory session counter only.
         setSimSession((simSession ?? 0) - stake + payout);
         const won = payout > stake;
-        toast(won ? `You won ${fmtCash(payout)} (SIM)` : payout > 0 ? `${fmtCash(payout)} back (SIM)` : `You lost ${fmtCash(stake)} (SIM)`, won ? "win" : "lose");
+        toast(won ? `You won ${fmtMoney(payout, user?.currency ?? "GHS")} (SIM)` : payout > 0 ? `${fmtMoney(payout, user?.currency ?? "GHS")} back (SIM)` : `You lost ${fmtMoney(stake, user?.currency ?? "GHS")} (SIM)`, won ? "win" : "lose");
         if (won) { playSfx("cheer", muted); fireConfetti(); } else playSfx("groan", muted);
         // SIM stats: same definition as the server (/api/games/stats) —
         // played+1, win iff payout > stake, best = max profit, streak =
@@ -169,14 +170,14 @@ export function useGameRoom(game: GameDef) {
           } catch { /* ignore */ }
           return next;
         });
-        setHistory((h) => [{ id: `sim-${Date.now()}`, game: game.slug, currency: "cash", stake, payout, result, createdAt: new Date().toISOString() }, ...h].slice(0, 20));
+        setHistory((h) => [{ id: `sim-${Date.now()}`, game: game.slug, currency: "cash", fiatCurrency: user?.currency ?? "GHS", stake, payout, result, createdAt: new Date().toISOString() }, ...h].slice(0, 20));
         return true;
       }
       const r = await api<SettleResult>("/api/games/settle", {
         method: "POST",
         body: JSON.stringify({ game: game.slug, currency: game.currency, stake, payout, result, roundId: roundId || undefined }),
       });
-      setWallet({ cash: r.cash, coins: r.coins, sim: r.sim });
+      setWallet({ cash: r.cash, coins: r.coins, sim: r.sim, currency: user?.currency ?? "GHS", country: user?.country ?? "GH" });
       // P0 Batch 2 (O10): the toast shows the EFFECTIVE payout the
       // server settled — equal to the requested one unless the owner's
       // per-game max-payout cap cut it down. Tetris can also bank coins
@@ -186,8 +187,8 @@ export function useGameRoom(game: GameDef) {
       const banked = typeof result.banked === "number" ? result.banked : 0;
       const totalWon = effPayout + banked;
       const won = totalWon > stake;
-      const amt = isCoin ? `${fmtCoins(totalWon)} coins` : fmtCash(totalWon);
-      toast(won ? `You won ${amt}` : totalWon > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtCash(stake)}`, won ? "win" : "lose");
+      const amt = isCoin ? `${fmtCoins(totalWon)} coins` : fmtMoney(totalWon, user?.currency ?? "GHS");
+      toast(won ? `You won ${amt}` : totalWon > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtMoney(stake, user?.currency ?? "GHS")}`, won ? "win" : "lose");
       if (won) { playSfx("cheer", muted); fireConfetti(); } else if (totalWon === 0) playSfx("groan", muted);
       await loadStats();
       return true;
@@ -213,6 +214,10 @@ export function useGameRoom(game: GameDef) {
 }
 
 export function StakeChips({ stake, setStake, currency, disabled }: { stake: number; setStake: (n: number) => void; currency: "cash" | "coins"; disabled?: boolean }) {
+  // Phase 1 country-based (Nov 2026): the stake label shows the
+  // player's own fiat symbol, not a hardcoded GH₵.
+  const { user } = useStore();
+  const fiatSym = symbolFor(user?.currency ?? "GHS");
   // Round 13: a typed stake input. Round 13 follow-up: the quick-amount
   // chips are GONE (user's order — the input is the only stake control).
   // The typed value lives in local text state so the user can clear the
@@ -248,16 +253,16 @@ export function StakeChips({ stake, setStake, currency, disabled }: { stake: num
 
   return (
     <div className="stake-row" role="group" aria-label="Stake">
-      <span className="stake-lab">Stake {currency === "coins" ? "coins" : "GH₵"}</span>
+      <span className="stake-lab">Stake {currency === "coins" ? "coins" : fiatSym}</span>
       <span className="stake-input">
-        <span className="stake-cur" aria-hidden="true">{currency === "coins" ? "◉" : "GH₵"}</span>
+        <span className="stake-cur" aria-hidden="true">{currency === "coins" ? "◉" : fiatSym}</span>
         <input
           type="number"
           min={1}
           step={1}
           inputMode={currency === "coins" ? "numeric" : "decimal"}
           enterKeyHint="done"
-          aria-label={currency === "coins" ? "Stake in coins" : "Stake in Ghana cedis"}
+          aria-label={currency === "coins" ? "Stake in coins" : `Stake in ${user?.currency ?? "GHS"}`}
           value={text}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
@@ -269,6 +274,9 @@ export function StakeChips({ stake, setStake, currency, disabled }: { stake: num
 }
 
 export function StatsStrip({ stats, currency }: { stats: GameStat | null; currency: "cash" | "coins" }) {
+  // Phase 1 country-based (Nov 2026): BEST is a cash amount in the
+  // player's own fiat.
+  const { user } = useStore();
   const played = stats?.played ?? 0;
   const rate = played > 0 ? Math.round(((stats?.wins ?? 0) / played) * 100) + "%" : "—";
   const best = stats?.best ?? 0;
@@ -279,7 +287,7 @@ export function StatsStrip({ stats, currency }: { stats: GameStat | null; curren
       <div className="xg-stat lose"><b>{stats?.losses ?? 0}</b><span>LOSSES</span></div>
       <div className="xg-stat"><b>{rate}</b><span>WIN RATE</span></div>
       <div className="xg-stat"><b>{stats?.streak ?? 0}</b><span>STREAK</span></div>
-      <div className="xg-stat"><b>{currency === "coins" ? fmtCoins(best) : fmtCash(best)}</b><span>BEST</span></div>
+      <div className="xg-stat"><b>{currency === "coins" ? fmtCoins(best) : fmtMoney(best, user?.currency ?? "GHS")}</b><span>BEST</span></div>
     </div>
   );
 }
@@ -292,7 +300,7 @@ export function HistoryList({ history, currency }: { history: GameHistoryRow[]; 
         <span className="bh-empty">No rounds yet — yours will land here.</span>
       ) : (
         history.map((h) => (
-          <span key={h.id} className={`bh-item ${h.payout > h.stake ? "win" : h.payout > 0 ? "push" : "lose"}`} title={`${currency === "coins" ? `${h.stake} → ${h.payout} coins` : `${fmtCash(h.stake)} → ${fmtCash(h.payout)}`}`}>
+          <span key={h.id} className={`bh-item ${h.payout > h.stake ? "win" : h.payout > 0 ? "push" : "lose"}`} title={`${currency === "coins" ? `${h.stake} → ${h.payout} coins` : `${fmtMoney(h.stake, h.fiatCurrency ?? "GHS")} → ${fmtMoney(h.payout, h.fiatCurrency ?? "GHS")}`}`}>
             {h.payout > h.stake ? "W" : h.payout > 0 ? "=" : "L"}
           </span>
         ))

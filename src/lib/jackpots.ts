@@ -52,14 +52,21 @@ export async function getJackpots(): Promise<JackpotRow[]> {
  * Grow every active jackpot whose game matches this stake. Runs
  * INSIDE the settle transaction (tx), AFTER the payout is computed —
  * it never changes a payout, only the JackpotPot rows. Cash only.
+ *
+ * Phase 1 country-based (Nov 2026): GHS-ONLY this phase. NGN stakes
+ * do NOT feed the pot — the pot is a single GHS number and mixing
+ * fiats into it would corrupt every jackpot figure. (A per-currency
+ * pot is Phase 3 work, when Nigeria goes live with real money.)
  */
 export async function contributeToJackpots(
   tx: Prisma.TransactionClient,
   gameSlug: string,
   currency: "cash" | "coins",
   stake: number,
+  fiatCurrency: string = "GHS",
 ): Promise<void> {
   if (currency !== "cash" || stake <= 0) return;
+  if ((fiatCurrency || "GHS").toUpperCase() !== "GHS") return; // GHS-only pot this phase
   const jackpots = await tx.jackpot.findMany({ where: { active: true }, select: { id: true, gameSlug: true, contributionPct: true } });
   if (jackpots.length === 0) return;
   for (const j of jackpots) {

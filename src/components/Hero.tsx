@@ -1,5 +1,7 @@
 // Hero — v48 headline: PLAY [live slot] WIN REAL MONEY.
-// Slot: bet GH₵5 · pairs pay GH₵10 · triples pay GH₵120 · three 7s pay GH₵500.
+// Slot: bet 5 · pairs pay 10 · triples pay 120 · three 7s pay 500
+// (all in GHS terms — scaled to the player's fiat by conversionRate/5,
+// Phase 1 country-based, Nov 2026).
 // NOTE: there is no slot endpoint in API_CONTRACT.md, and v48's
 // localStorage wallet must not be carried over — so the hero slot is a
 // free demo spin: no money moves, the prize is announced in the win line.
@@ -9,7 +11,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fmtCash } from "../lib/api";
+import { api, fmtMoney } from "../lib/api";
 import { useJackpot } from "../lib/jackpot";
 import { useStore } from "../lib/store";
 import { playSfx } from "../lib/store";
@@ -33,7 +35,7 @@ function prize(a: string, b: string, c: string): number {
 void PAYOUTS;
 
 export default function Hero() {
-  const { toast, muted } = useStore();
+  const { toast, muted, user } = useStore();
   const { jackpotText, onlineText } = useJackpot();
   const [reels, setReels] = useState(["7", "♠", "♥"]);
   const [spun, setSpun] = useState(false);
@@ -43,20 +45,40 @@ export default function Hero() {
   // 3D slot controller (null until the scene mounts / when WebGL is down).
   const slot3dRef = useRef<HeroSlotHandle | null>(null);
   const [slot3d, setSlot3d] = useState(false);
+  // Phase 1 country-based (Nov 2026): the demo slot's bet + prizes are
+  // GHS-term numbers scaled to the viewer's fiat (NGN: bet ₦500).
+  const fiat = user?.currency ?? "GHS";
+  const [factor, setFactor] = useState(1);
+  const [minStake, setMinStake] = useState(1);
+  useEffect(() => {
+    let cancelled = false;
+    api<{ currencies: { currency: string; conversionRate: number; minStake: number }[] }>("/api/games/config")
+      .then((r) => {
+        if (cancelled) return;
+        const row = r.currencies?.find((c) => c.currency === fiat);
+        if (row) {
+          setFactor((row.conversionRate || 5) / 5);
+          setMinStake(row.minStake || 1);
+        }
+      })
+      .catch(() => { /* GHS defaults stay */ });
+    return () => { cancelled = true; };
+  }, [fiat]);
+  const bet = 5 * factor;
 
   const finishSpin = useCallback((final: string[]) => {
     setReels(final);
     setSpinning(false);
-    const p = prize(final[0], final[1], final[2]);
+    const p = prize(final[0], final[1], final[2]) * factor;
     if (p > 0) {
-      setMsg(`You won GH₵ ${p}!`);
-      toast(`Slot win — GH₵ ${p}`, "win");
+      setMsg(`You won ${fmtMoney(p, fiat)}!`);
+      toast(`Slot win — ${fmtMoney(p, fiat)}`, "win");
       playSfx("cheer", muted);
     } else {
       setMsg("No win — spin again");
       playSfx("groan", muted);
     }
-  }, [toast, muted]);
+  }, [toast, muted, factor, fiat]);
 
   const spin = useCallback(() => {
     if (spinning) return;
@@ -116,13 +138,13 @@ export default function Hero() {
           Win<br /><span className="rm"><span className="hollow">Real</span> <span className="gold-word">Money</span></span>
         </h1>
         <div className="slot-note">
-          <span>Live slot · bet GH₵ 5 · three 7s pay GH₵ 500 · pairs pay GH₵ 10</span>
+          <span>Live slot · bet {fmtMoney(bet, fiat)} · three 7s pay {fmtMoney(500 * factor, fiat)} · pairs pay {fmtMoney(10 * factor, fiat)}</span>
           <span className="win-msg" id="slotMsg" aria-live="polite">{msg}</span>
         </div>
 
         <div className="hero-lower">
           <div>
-            <p className="hero-sub">Slots, roulette, crash games and live tables — plus arcade favourites for a breather. <b>Deposit with Mobile Money in seconds</b>, play from GH₵ 1, and cash out straight back to your phone.</p>
+            <p className="hero-sub">Slots, roulette, crash games and live tables — plus arcade favourites for a breather. <b>Deposit with Mobile Money in seconds</b>, play from {fmtMoney(minStake, fiat)}, and cash out straight back to your phone.</p>
             <div className="hero-cta">
               <a className="btn btn-gold" href="#games">Play now <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 12h14M13 6l6 6-6 6" /></svg></a>
               <a className="btn btn-ghost" href="#stage">Watch the table</a>
@@ -151,7 +173,7 @@ export default function Hero() {
               <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C9 7 4 9 4 13a8 8 0 0 0 16 0c0-4-5-6-8-11z" /></svg>
               Your croupier deals a fresh hand every few seconds
             </div>
-            <button className="btn btn-gold stage-spin" type="button" onClick={spin} disabled={spinning}>Spin the 3D slot · GH₵ 5</button>
+            <button className="btn btn-gold stage-spin" type="button" onClick={spin} disabled={spinning}>Spin the 3D slot · {fmtMoney(bet, fiat)}</button>
           </div>
         </div>
         {/* Phone-only jackpot strip: the export hides BOTH jackpot spots at
@@ -168,11 +190,11 @@ export default function Hero() {
         <div className="marquee-track" id="winsTrack">
           <span className="mq-item mq-live"><i />LIVE WINS</span>
           {LIVE_WINS.map((w) => (
-            <span key={w.name + w.amount} className="mq-item"><span className="mq-dot" />{w.name} won <b>{fmtCash(w.amount)}</b> on {w.game}</span>
+            <span key={w.name + w.amount} className="mq-item"><span className="mq-dot" />{w.name} won <b>{fmtMoney(w.amount * factor, fiat)}</b> on {w.game}</span>
           ))}
           <span className="mq-item mq-live"><i />LIVE WINS</span>
           {LIVE_WINS.map((w) => (
-            <span key={w.name + w.amount + "-dup"} className="mq-item"><span className="mq-dot" />{w.name} won <b>{fmtCash(w.amount)}</b> on {w.game}</span>
+            <span key={w.name + w.amount + "-dup"} className="mq-item"><span className="mq-dot" />{w.name} won <b>{fmtMoney(w.amount * factor, fiat)}</b> on {w.game}</span>
           ))}
         </div>
       </div>

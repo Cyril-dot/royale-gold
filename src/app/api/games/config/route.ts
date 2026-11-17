@@ -10,12 +10,16 @@
 // with this repo's cacheComponents setting.)
 import { connection } from "next/server";
 import { ok, toErrorResponse } from "@/lib/http";
-import { getAllGameConfigs, getPlatformSettings } from "@/lib/game-config";
+import { getAllCurrencyConfigs, getAllGameConfigs, getPlatformSettings } from "@/lib/game-config";
 
 export async function GET() {
   await connection();
   try {
-    const [games, settings] = await Promise.all([getAllGameConfigs(), getPlatformSettings()]);
+    const [games, settings, currencies] = await Promise.all([
+      getAllGameConfigs(),
+      getPlatformSettings(),
+      getAllCurrencyConfigs(),
+    ]);
     return ok({
       globalKill: settings.globalKill,
       // P1 Batch 4 (O21): the header reads the site name from here and
@@ -24,6 +28,10 @@ export async function GET() {
       maintenanceMode: settings.maintenanceMode,
       supportContact: settings.supportContact,
       games,
+      // Phase 1 country-based (Nov 2026): the enabled per-currency
+      // rules (min deposit/stake, conversion rate) so the client can
+      // show the right numbers for the player's fiat without auth.
+      currencies: currencies.filter((c) => c.enabled),
     });
   } catch (err) {
     return toErrorResponse(err);

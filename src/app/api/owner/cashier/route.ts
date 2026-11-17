@@ -17,17 +17,22 @@ import { dec, round2 } from "@/lib/money";
 
 const METHOD_ORDER = ["MTN", "Telecel", "AirtelTigo", "card"];
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await requireRole("owner");
+    // Phase 1 country-based (Nov 2026): the cashier is per-fiat —
+    // ?currency= (default GHS). Wallet balances are the users of that
+    // fiat; deposits/withdrawals/payouts are filtered to it.
+    const sp = new URL(req.url).searchParams;
+    const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
     const [deposits, withdrawals, payouts, users] = await Promise.all([
-      prisma.depositEvent.findMany({ select: { method: true, amount: true } }),
+      prisma.depositEvent.findMany({ where: { fiatCurrency }, select: { method: true, amount: true } }),
       prisma.withdrawal.findMany({
-        where: { status: "approved" },
+        where: { status: "approved", fiatCurrency },
         select: { method: true, amount: true },
       }),
-      prisma.commissionPayout.aggregate({ _sum: { amount: true } }),
-      prisma.user.aggregate({ _sum: { cashBalance: true } }),
+      prisma.commissionPayout.aggregate({ where: { fiatCurrency }, _sum: { amount: true } }),
+      prisma.user.aggregate({ where: { currency: fiatCurrency }, _sum: { cashBalance: true } }),
     ]);
     const byMethod = new Map<string, { deposited: number; withdrawn: number }>();
     for (const d of deposits) {
@@ -55,6 +60,7 @@ export async function GET() {
     const expectedCashOnHand = round2(totalDeposited - totalWithdrawn - totalCommissionPaid);
     const actualWalletBalances = dec(users._sum.cashBalance);
     return ok({
+      currency: fiatCurrency,
       perMethod,
       totals: {
         deposited: totalDeposited,

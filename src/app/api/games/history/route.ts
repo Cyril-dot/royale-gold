@@ -18,6 +18,9 @@ export async function GET(req: Request) {
         id: r.id,
         game: r.game,
         currency: r.currency,
+        // Phase 1 country-based (Nov 2026): the fiat this round was
+        // played in — the client formats stakes in it.
+        fiatCurrency: r.fiatCurrency ?? "GHS",
         stake: dec(r.stake),
         payout: dec(r.payout),
         result: r.result,

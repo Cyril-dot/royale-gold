@@ -8,7 +8,7 @@
 "use client";
 
 import Link from "next/link";
-import { fmtCash, fmtCoins } from "../lib/api";
+import { fmtMoney, fmtCoins } from "../lib/api";
 import { useStore } from "../lib/store";
 
 export default function GameRoomHeader() {
@@ -23,9 +23,9 @@ export default function GameRoomHeader() {
       <div className="wrap grh-in">
         <div className="grh-top">
           <Link className="xg-back xg-back-icon grh-back" href="/games" aria-label="Back to all games">←</Link>
-          <Link href="/wallet" className="grh-pill grh-cash" aria-label={simMode ? `SIM balance ${sim.toLocaleString("en-GH")} — open wallet` : `Cash balance ${fmtCash(cash)} — open wallet`}>
+          <Link href="/wallet" className="grh-pill grh-cash" aria-label={simMode ? `SIM balance ${sim.toLocaleString("en-GH")} — open wallet` : `Cash balance ${fmtMoney(cash, user?.currency ?? "GHS")} — open wallet`}>
             <small>{simMode ? "SIM" : "Cash"}</small>
-            <b>{simMode ? sim.toLocaleString("en-GH") : fmtCash(cash)}</b>
+            <b>{simMode ? sim.toLocaleString("en-GH") : fmtMoney(cash, user?.currency ?? "GHS")}</b>
           </Link>
           <Link href="/wallet" className="grh-pill grh-coins" aria-label={`Coins balance ${fmtCoins(coins)} — open wallet`}>
             <small>Coins</small>

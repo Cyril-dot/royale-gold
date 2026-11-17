@@ -11,7 +11,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { fmtCash } from "../../lib/api";
+import { fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
@@ -107,7 +107,7 @@ export function BaccaratRoom({ game }: { game: GameDef }) {
     if (bThird) steps.push([1600, () => setBc(finalB)]);
     steps.push([1900, () => {
       setPhase("done");
-      setMsg(winner === "tie" ? `Tie ${fp}–${fb} — ${mult ? `Tie pays ×9! ${fmtCash(payout)}` : "no win."}` : `${winner === "player" ? "Player" : "Banker"} ${winner === "player" ? fp : fb} beats ${winner === "player" ? fb : fp} — ${mult ? `you called it! ${fmtCash(payout)}` : "not your side."}`);
+      setMsg(winner === "tie" ? `Tie ${fp}–${fb} — ${mult ? `Tie pays ×9! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : "no win."}` : `${winner === "player" ? "Player" : "Banker"} ${winner === "player" ? fp : fb} beats ${winner === "player" ? fb : fp} — ${mult ? `you called it! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : "not your side."}`);
       void room.settle(stake, payout, { pick, winner, p: fp, b: fb });
     }]);
     steps.forEach(([ms, fn]) => { timersRef.current.push(window.setTimeout(fn, ms)); });
@@ -128,7 +128,7 @@ export function BaccaratRoom({ game }: { game: GameDef }) {
         <div className="v18-cards" aria-label="Player hand">{pc.length ? pc.map((c, i) => <CardView key={i} c={c} />) : <CardView back />}</div>
         <div className="v18-handlab">Banker <span>{bc.length ? baccTotal(bc) : "—"}</span></div>
         <div className="v18-cards" aria-label="Banker hand">{bc.length ? bc.map((c, i) => <CardView key={i} c={c} />) : <CardView back />}</div>
-        {phase !== "dealing" && <button className="btn btn-gold xg-action" type="button" onClick={() => void deal()}>{phase === "done" ? `Deal again · ${fmtCash(stake)}` : `Deal · ${fmtCash(stake)}`}</button>}
+        {phase !== "dealing" && <button className="btn btn-gold xg-action" type="button" onClick={() => void deal()}>{phase === "done" ? `Deal again · ${fmtMoney(stake, room.user?.currency ?? "GHS")}` : `Deal · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>
@@ -195,7 +195,7 @@ export function ThreeCardPokerRoom({ game }: { game: GameDef }) {
     setPhase("done");
     setMsg(
       `You: ${pe.name} · Dealer: ${de.name}${qualifies ? "" : " (dealer does not qualify)"} — ` +
-      (mult === 0 ? "dealer wins, no Pair Plus." : mult === pairPlus && pairPlus > ante ? `Pair Plus pays ×${pairPlus}! ${fmtCash(payout)}` : ante === 2 ? `you beat the dealer! ${fmtCash(payout)}` : `ante pushes, stake back. ${fmtCash(payout)}`)
+      (mult === 0 ? "dealer wins, no Pair Plus." : mult === pairPlus && pairPlus > ante ? `Pair Plus pays ×${pairPlus}! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : ante === 2 ? `you beat the dealer! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : `ante pushes, stake back. ${fmtMoney(payout, room.user?.currency ?? "GHS")}`)
     );
     await room.settle(stake, payout, { player: pe.name, dealer: de.name, qualifies, mult });
   };
@@ -210,7 +210,7 @@ export function ThreeCardPokerRoom({ game }: { game: GameDef }) {
         <div className="v18-cards" aria-label="Your hand">{ph.length ? ph.map((c, i) => <CardView key={i} c={c} />) : <><CardView back /><CardView back /><CardView back /></>}</div>
         <div className="v18-handlab">Dealer <span>{phase === "done" && dh.length ? eval3CP(dh).name : "—"}</span></div>
         <div className="v18-cards" aria-label="Dealer hand">{dh.length ? dh.map((c, i) => <CardView key={i} c={c} />) : <><CardView back /><CardView back /><CardView back /></>}</div>
-        {phase !== "dealt" && <button className="btn btn-gold xg-action" type="button" onClick={() => { if (phase === "done") reset(); void deal(); }}>{phase === "done" ? `Deal again · ${fmtCash(stake)}` : `Deal · ${fmtCash(stake)}`}</button>}
+        {phase !== "dealt" && <button className="btn btn-gold xg-action" type="button" onClick={() => { if (phase === "done") reset(); void deal(); }}>{phase === "done" ? `Deal again · ${fmtMoney(stake, room.user?.currency ?? "GHS")}` : `Deal · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>
@@ -261,7 +261,7 @@ export function SicBoRoom({ game }: { game: GameDef }) {
       else if (bet === "small") mult = !triple && total >= 4 && total <= 10 ? 2 : 0;
       else mult = total === Number(bet) ? SIC_TOTALS[total] : 0;
       const payout = Math.round(stake * mult * 100) / 100;
-      setMsg(`Rolled ${d.join(" + ")} = ${total}${triple ? " — TRIPLE!" : ""} — ${mult > 0 ? `win ×${mult}! ${fmtCash(payout)}` : "no win."}`);
+      setMsg(`Rolled ${d.join(" + ")} = ${total}${triple ? " — TRIPLE!" : ""} — ${mult > 0 ? `win ×${mult}! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : "no win."}`);
       void room.settle(stake, payout, { bet, dice: d, total, triple, mult });
     }, 750);
   };
@@ -282,7 +282,7 @@ export function SicBoRoom({ game }: { game: GameDef }) {
         <div className="v18-dice" aria-label="Dice">
           {dice.map((v, i) => <Die key={i} v={v} rolling={rolling} />)}
         </div>
-        <button className="btn btn-gold xg-action" type="button" onClick={() => void roll()} disabled={rolling}>{rolling ? "Rolling…" : `Roll · ${fmtCash(stake)}`}</button>
+        <button className="btn btn-gold xg-action" type="button" onClick={() => void roll()} disabled={rolling}>{rolling ? "Rolling…" : `Roll · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>
@@ -346,7 +346,7 @@ export function JacksOrBetterRoom({ game }: { game: GameDef }) {
     setPhase("done");
     const ev = evalPoker(final);
     const payout = Math.round(stake * ev.mult * 100) / 100;
-    setMsg(ev.mult > 0 ? `${ev.name}! Pays ×${ev.mult} — ${fmtCash(payout)}` : `${ev.name} — no win. Deal again.`);
+    setMsg(ev.mult > 0 ? `${ev.name}! Pays ×${ev.mult} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : `${ev.name} — no win. Deal again.`);
     await room.settle(stake, payout, { hand: final.map(label), result: ev.name, mult: ev.mult });
   };
 
@@ -358,9 +358,9 @@ export function JacksOrBetterRoom({ game }: { game: GameDef }) {
           {hand.length ? hand.map((c, i) => <CardView key={`${i}-${label(c)}`} c={c} held={held[i]} onClick={phase === "held" ? () => setHeld((h) => { const n = [...h]; n[i] = !n[i]; return n; }) : undefined} />) : <><CardView back /><CardView back /><CardView back /><CardView back /><CardView back /></>}
         </div>
         <p className="v18-sub">{phase === "held" ? "Tap cards to hold them — held cards lift up in gold." : phase === "done" ? "Round settled — deal again." : "Deal five cards to start."}</p>
-        {phase === "idle" && <button className="btn btn-gold xg-action" type="button" onClick={deal}>Deal · {fmtCash(stake)}</button>}
+        {phase === "idle" && <button className="btn btn-gold xg-action" type="button" onClick={deal}>Deal · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
         {phase === "held" && <button className="btn btn-gold xg-action" type="button" onClick={() => void draw()}>Draw</button>}
-        {phase === "done" && <button className="btn btn-gold xg-action" type="button" onClick={deal}>Deal again · {fmtCash(stake)}</button>}
+        {phase === "done" && <button className="btn btn-gold xg-action" type="button" onClick={deal}>Deal again · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>

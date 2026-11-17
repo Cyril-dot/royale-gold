@@ -9,7 +9,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { fmtCash } from "../../lib/api";
+import { fmtMoney } from "../../lib/api";
 import type { GameHistoryRow, GameStat } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
@@ -92,7 +92,7 @@ export function CoinFlipRoom({ game }: { game: GameDef }) {
       setResult(out);
       setFlipping(false);
       const won = out === pick;
-      setMsg(won ? `It landed ${out} — you called it! ${fmtCash(stake * 2)}` : `It landed ${out} — not your call.`);
+      setMsg(won ? `It landed ${out} — you called it! ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}` : `It landed ${out} — not your call.`);
       await room.settle(stake, won ? stake * 2 : 0, { pick, out });
     };
     // 3D: flip to the pre-decided face (2350ms artifact flip), then
@@ -122,7 +122,7 @@ export function CoinFlipRoom({ game }: { game: GameDef }) {
           ))}
         </div>
       </div>
-      <button className="btn btn-gold xg-action" type="button" onClick={() => void flip()} disabled={flipping}>{flipping ? "Flipping…" : `Flip · ${fmtCash(stake)}`}</button>
+      <button className="btn btn-gold xg-action" type="button" onClick={() => void flip()} disabled={flipping}>{flipping ? "Flipping…" : `Flip · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>
     </Shell>
   );
 }
@@ -167,7 +167,7 @@ export function DiceRoom({ game }: { game: GameDef }) {
       const payout = won ? stake * mult : 0;
       setLast({ d1, d2, total, won, payout, stake });
       const call = pick === "over" ? "Over 7" : pick === "under" ? "Under 7" : "Exactly 7";
-      setMsg(won ? `${d1} + ${d2} = ${total} — ${call}! ${fmtCash(stake * mult)} paid to your balance.` : `${d1} + ${d2} = ${total} — you called ${call}. The ${fmtCash(stake)} stake is gone; roll again.`);
+      setMsg(won ? `${d1} + ${d2} = ${total} — ${call}! ${fmtMoney(stake * mult, room.user?.currency ?? "GHS")} paid to your balance.` : `${d1} + ${d2} = ${total} — you called ${call}. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone; roll again.`);
       await room.settle(stake, payout, { d1, d2, total, pick });
     };
     // 3D: the physics throw lands on the pre-decided values, then
@@ -185,7 +185,7 @@ export function DiceRoom({ game }: { game: GameDef }) {
         <div className={`dr-total${last.won ? " win" : " lose"}`} aria-live="polite">
           <span className="dr-total-label">TOTAL</span>
           <span className="dr-total-num">{last.total}</span>
-          <span className="dr-total-sub">{last.d1} + {last.d2} · {last.won ? `Won ${fmtCash(last.payout)}` : `Lost ${fmtCash(last.stake)}`}</span>
+          <span className="dr-total-sub">{last.d1} + {last.d2} · {last.won ? `Won ${fmtMoney(last.payout, room.user?.currency ?? "GHS")}` : `Lost ${fmtMoney(last.stake, room.user?.currency ?? "GHS")}`}</span>
         </div>
       )}
       <div className="xg-pickrow" role="group" aria-label="Pick the total">
@@ -195,7 +195,7 @@ export function DiceRoom({ game }: { game: GameDef }) {
           </button>
         ))}
       </div>
-      <button className="btn btn-gold xg-action" type="button" onClick={() => void roll()} disabled={rolling}>{rolling ? "Rolling…" : `Roll · ${fmtCash(stake)}`}</button>
+      <button className="btn btn-gold xg-action" type="button" onClick={() => void roll()} disabled={rolling}>{rolling ? "Rolling…" : `Roll · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>
     </Shell>
   );
 }
@@ -324,16 +324,16 @@ export function WheelRoom({ game }: { game: GameDef }) {
         const payout = Math.round(stake * w.mult * 100) / 100;
         if (w.mult === 0) {
           setResult({ text: "LOSE — no payout", cls: "lose" });
-          setMsg("LOSE — the pointer stopped on a losing segment. The " + fmtCash(stake) + " stake is gone.");
+          setMsg("LOSE — the pointer stopped on a losing segment. The " + fmtMoney(stake, room.user?.currency ?? "GHS") + " stake is gone.");
         } else if (w.mult === 0.5) {
-          setResult({ text: `×0.5 — ${fmtCash(payout)} back`, cls: "lose" });
-          setMsg(`×0.5 — half back: ${fmtCash(payout)} returned to your balance.`);
+          setResult({ text: `×0.5 — ${fmtMoney(payout, room.user?.currency ?? "GHS")} back`, cls: "lose" });
+          setMsg(`×0.5 — half back: ${fmtMoney(payout, room.user?.currency ?? "GHS")} returned to your balance.`);
         } else if (w.mult === 1) {
-          setResult({ text: `×1 — stake back ${fmtCash(payout)}`, cls: "" });
-          setMsg(`×1 — your ${fmtCash(stake)} stake comes straight back. Spin again.`);
+          setResult({ text: `×1 — stake back ${fmtMoney(payout, room.user?.currency ?? "GHS")}`, cls: "" });
+          setMsg(`×1 — your ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake comes straight back. Spin again.`);
         } else {
-          setResult({ text: `${w.label} — ${fmtCash(payout)} paid`, cls: "win" });
-          setMsg(`${w.label}! ${fmtCash(payout)} paid to your balance.`);
+          setResult({ text: `${w.label} — ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid`, cls: "win" });
+          setMsg(`${w.label}! ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid to your balance.`);
         }
         void room.settle(stake, payout, { segment: idx, mult: w.mult });
       }
@@ -343,7 +343,7 @@ export function WheelRoom({ game }: { game: GameDef }) {
   return (
     <Shell game={game} subtitle="One ×4, two ×2, three ×1 stake-back, one ×0.5 half-back, five LOSE." stake={stake} setStake={setStake} msg={msg} stats={room.stats} history={room.history}>
       <div className="lw-stage"><canvas ref={canvasRef} width={560} height={560} className="wheel-canvas" aria-label="Lucky Wheel — a 12-segment prize wheel: one ×4, two ×2, three ×1 stake-back, one ×0.5 half-back and five LOSE segments, with a gold pointer at the top" /><div className="lw-pointer" ref={pointerRef} aria-hidden="true" /><div className={`lw-result${result.cls ? ` ${result.cls}` : ""}`}>{result.text}</div></div>
-      <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin · ${fmtCash(stake)}`}</button>
+      <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>
     </Shell>
   );
 }
@@ -384,10 +384,10 @@ export function HiLoRoom({ game }: { game: GameDef }) {
     if (ok) {
       const c = chain + 1;
       setChain(c);
-      setMsg(`Right — ${cardLabel(prev)} to ${cardLabel(next)}! Chain ×${Math.pow(1.9, c).toFixed(2)} (${fmtCash(Math.round(stake * Math.pow(1.9, c) * 100) / 100)}). Go again or cash out.`);
+      setMsg(`Right — ${cardLabel(prev)} to ${cardLabel(next)}! Chain ×${Math.pow(1.9, c).toFixed(2)} (${fmtMoney(Math.round(stake * Math.pow(1.9, c) * 100) / 100, room.user?.currency ?? "GHS")}). Go again or cash out.`);
     } else {
       setPlaying(false);
-      setMsg(`${diff === 1 ? "So close — one rank away! " : ""}${cardLabel(next)} beats your call. The chain dies and the ${fmtCash(stake)} stake is gone.`);
+      setMsg(`${diff === 1 ? "So close — one rank away! " : ""}${cardLabel(next)} beats your call. The chain dies and the ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
       await room.settle(stake, 0, { chain, next: cardLabel(next) });
     }
   };
@@ -395,21 +395,21 @@ export function HiLoRoom({ game }: { game: GameDef }) {
     if (!playing || chain === 0) return;
     const payout = Math.round(stake * mult * 100) / 100;
     setPlaying(false);
-    setMsg(`Cashed out — ${chain} ${chain === 1 ? "card" : "cards"} chained at ×${mult.toFixed(2)}: ${fmtCash(payout)} to your balance.`);
+    setMsg(`Cashed out — ${chain} ${chain === 1 ? "card" : "cards"} chained at ×${mult.toFixed(2)}: ${fmtMoney(payout, room.user?.currency ?? "GHS")} to your balance.`);
     await room.settle(stake, payout, { chain });
   };
   return (
     <Shell game={game} subtitle="Guess higher or lower — every right call chains ×1.9. Cash out anytime." stake={stake} setStake={setStake} msg={msg} stats={room.stats} history={room.history} lockStake={playing}>
       <div className="qg-stage">
         <div className="qg-cardrow"><PlayingCard c={card} flip key={`${card.rank}-${card.sym}-${chain}`} /></div>
-        <div className="qg-mult">CHAIN ×{mult.toFixed(2)}<small>{chain ? `Worth ${fmtCash(Math.round(stake * mult * 100) / 100)} — cash out or ride it` : "Cash out any time after a right guess"}</small></div>
+        <div className="qg-mult">CHAIN ×{mult.toFixed(2)}<small>{chain ? `Worth ${fmtMoney(Math.round(stake * mult * 100) / 100, room.user?.currency ?? "GHS")} — cash out or ride it` : "Cash out any time after a right guess"}</small></div>
       </div>
       <div className="xg-pickrow">
         <button className="xg-pick" type="button" onClick={() => void guess("lo")} disabled={!playing}><span className="xg-pick-txt">Lower<small>next card is lower</small></span></button>
         <button className="xg-pick" type="button" onClick={() => void guess("hi")} disabled={!playing}><span className="xg-pick-txt">Higher<small>next card is higher</small></span></button>
       </div>
       {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start — deal a card</button>}
-      {playing && chain > 0 && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()}>Cash out {fmtCash(Math.round(stake * mult * 100) / 100)}</button>}
+      {playing && chain > 0 && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()}>Cash out {fmtMoney(Math.round(stake * mult * 100) / 100, room.user?.currency ?? "GHS")}</button>}
     </Shell>
   );
 }
@@ -475,19 +475,19 @@ export function RpsRoom({ game }: { game: GameDef }) {
       let roundMsg = "";
       let res: "win" | "lose" | "draw" = "draw";
       if (pick === c) {
-        roundMsg = `Draw — ${RPS_NAMES[pick]} meets ${RPS_NAMES[c]}. Your ${fmtCash(stake)} stake comes straight back.`;
+        roundMsg = `Draw — ${RPS_NAMES[pick]} meets ${RPS_NAMES[c]}. Your ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake comes straight back.`;
         await room.settle(stake, stake, { pick, cpu: c, draw: true });
       } else if (beats[pick] === c) {
         yw++;
         setYouWins(yw);
         res = "win";
-        roundMsg = `${RPS_NAMES[pick]} beats ${RPS_NAMES[c]} — ${fmtCash(stake * 2)} paid to your balance.`;
+        roundMsg = `${RPS_NAMES[pick]} beats ${RPS_NAMES[c]} — ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")} paid to your balance.`;
         await room.settle(stake, stake * 2, { pick, cpu: c });
       } else {
         cw++;
         setCpuWins(cw);
         res = "lose";
-        roundMsg = `${RPS_NAMES[c]} beats ${RPS_NAMES[pick]} — the ${fmtCash(stake)} stake is gone. Throw again.`;
+        roundMsg = `${RPS_NAMES[c]} beats ${RPS_NAMES[pick]} — the ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone. Throw again.`;
         await room.settle(stake, 0, { pick, cpu: c });
       }
       setResult(res);
@@ -586,7 +586,7 @@ export function LimboRoom({ game }: { game: GameDef }) {
         setRolling(false);
         const won = r < th;
         const payout = won ? Math.round(stake * target * 0.97 * 100) / 100 : 0;
-        setMsg(won ? `${r.toFixed(2)} — under the ${th.toFixed(2)} line! ${fmtCash(payout)} paid to your balance.` : `${r - th <= 5 ? `So close — just ${(r - th).toFixed(2)} over the line! ` : ""}${r.toFixed(2)} is over the ${th.toFixed(2)} line. The ${fmtCash(stake)} stake is gone.`);
+        setMsg(won ? `${r.toFixed(2)} — under the ${th.toFixed(2)} line! ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid to your balance.` : `${r - th <= 5 ? `So close — just ${(r - th).toFixed(2)} over the line! ` : ""}${r.toFixed(2)} is over the ${th.toFixed(2)} line. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
         void room.settle(stake, payout, { target, rolled: Math.round(r * 100) / 100 });
       }
     };
@@ -597,7 +597,7 @@ export function LimboRoom({ game }: { game: GameDef }) {
       <div className="qg-stage">
         <div className={`lm-roll${rolled !== null && !rolling ? (rolled < threshold ? " win" : " lose") : ""}`}>{rolled !== null ? rolled.toFixed(2) : "—"}</div>
         <div className="lm-track"><div className="lm-fill" style={{ width: `${rolled !== null ? Math.min(100, rolled) : 0}%` }} /><span className="lm-line" style={{ left: `${threshold.toFixed(2)}%` }} /></div>
-        <p className="lm-need">Roll under <b>{threshold.toFixed(2)}</b> to win <b>{fmtCash(Math.round(stake * target * 0.97 * 100) / 100)}</b> (stake × ×{target.toFixed(1)} × 0.97)</p>
+        <p className="lm-need">Roll under <b>{threshold.toFixed(2)}</b> to win <b>{fmtMoney(Math.round(stake * target * 0.97 * 100) / 100, room.user?.currency ?? "GHS")}</b> (stake × ×{target.toFixed(1)} × 0.97)</p>
       </div>
       <div className="lm-slider"><span className="stake-lab">Target</span><input type="range" min={1.5} max={20} step={0.1} value={target} onChange={(e) => syncTarget(Number(e.target.value))} aria-label="Target multiplier" /><span className="lm-target">×{target.toFixed(1)}</span></div>
       <div className="xg-pickrow">
@@ -635,12 +635,12 @@ export function RedBlackRoom({ game }: { game: GameDef }) {
       if (n >= 3) {
         const payout = Math.round(stake * 8 * 100) / 100;
         setPlaying(false);
-        setMsg(`${cardLabel(c)} — ${out}! That's the ×8 cap: ${fmtCash(payout)} paid automatically. Top of the ladder!`);
+        setMsg(`${cardLabel(c)} — ${out}! That's the ×8 cap: ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid automatically. Top of the ladder!`);
         await room.settle(stake, payout, { chain: n });
-      } else setMsg(`${cardLabel(c)} — ${out}, called it! Chain ×${Math.pow(2, n)} (${fmtCash(stake * Math.pow(2, n))}). Call the next card or cash out.`);
+      } else setMsg(`${cardLabel(c)} — ${out}, called it! Chain ×${Math.pow(2, n)} (${fmtMoney(stake * Math.pow(2, n), room.user?.currency ?? "GHS")}). Call the next card or cash out.`);
     } else {
       setPlaying(false);
-      setMsg(`${cardLabel(c)} — that's ${out}, not your call. The chain breaks and the ${fmtCash(stake)} stake is gone.`);
+      setMsg(`${cardLabel(c)} — that's ${out}, not your call. The chain breaks and the ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
       await room.settle(stake, 0, { chain, out });
     }
   };
@@ -648,21 +648,21 @@ export function RedBlackRoom({ game }: { game: GameDef }) {
     if (!playing || chain === 0) return;
     const payout = Math.round(stake * mult * 100) / 100;
     setPlaying(false);
-    setMsg(`Cashed out — ${chain} ${chain === 1 ? "call" : "calls"} chained at ×${mult}: ${fmtCash(payout)} to your balance.`);
+    setMsg(`Cashed out — ${chain} ${chain === 1 ? "call" : "calls"} chained at ×${mult}: ${fmtMoney(payout, room.user?.currency ?? "GHS")} to your balance.`);
     await room.settle(stake, payout, { chain });
   };
   return (
     <Shell game={game} subtitle="Call red or black — each right call doubles. Chain to ×8, cash out anytime." stake={stake} setStake={setStake} msg={msg} stats={room.stats} history={room.history} lockStake={playing}>
       <div className="qg-stage">
         <div className="qg-cardrow">{last ? <PlayingCard c={last} flip key={`${last.rank}-${last.sym}-${chain}`} /> : <PlayingCard back />}</div>
-        <div className="qg-mult">CHAIN ×{mult}<small>{chain ? `Worth ${fmtCash(stake * mult)} — cash out or call the next card` : "Each right call doubles it — cash out any time"}</small></div>
+        <div className="qg-mult">CHAIN ×{mult}<small>{chain ? `Worth ${fmtMoney(stake * mult, room.user?.currency ?? "GHS")} — cash out or call the next card` : "Each right call doubles it — cash out any time"}</small></div>
       </div>
       <div className="xg-pickrow">
         <button className="xg-pick" type="button" onClick={() => void guess("red")} disabled={!playing}><span className="xg-pick-txt">Red<small>hearts · diamonds</small></span></button>
         <button className="xg-pick" type="button" onClick={() => void guess("black")} disabled={!playing}><span className="xg-pick-txt">Black<small>spades · clubs</small></span></button>
       </div>
       {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start</button>}
-      {playing && chain > 0 && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()}>Cash out {fmtCash(stake * mult)}</button>}
+      {playing && chain > 0 && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()}>Cash out {fmtMoney(stake * mult, room.user?.currency ?? "GHS")}</button>}
     </Shell>
   );
 }
@@ -689,8 +689,8 @@ export function WarRoom({ game }: { game: GameDef }) {
     setTimeout(async () => {
       setDealing(false);
       setRevealed(true);
-      if (y.rank > d.rank) { setMsg(`Your ${cardLabel(y)} beats the dealer's ${cardLabel(d)} — ${fmtCash(stake * 2)} paid to your balance.`); await room.settle(stake, stake * 2, { you: cardLabel(y), dealer: cardLabel(d) }); }
-      else if (y.rank < d.rank) { setMsg(`${d.rank - y.rank === 1 ? "So close — one rank in it! " : ""}The dealer's ${cardLabel(d)} beats your ${cardLabel(y)}. The ${fmtCash(stake)} stake is gone.`); await room.settle(stake, 0, { you: cardLabel(y), dealer: cardLabel(d) }); }
+      if (y.rank > d.rank) { setMsg(`Your ${cardLabel(y)} beats the dealer's ${cardLabel(d)} — ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")} paid to your balance.`); await room.settle(stake, stake * 2, { you: cardLabel(y), dealer: cardLabel(d) }); }
+      else if (y.rank < d.rank) { setMsg(`${d.rank - y.rank === 1 ? "So close — one rank in it! " : ""}The dealer's ${cardLabel(d)} beats your ${cardLabel(y)}. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`); await room.settle(stake, 0, { you: cardLabel(y), dealer: cardLabel(d) }); }
       else { setMsg(`Tie — ${cardLabel(y)} apiece. No harm done: your stake is back and the re-deal is free. Deal again.`); await room.settle(stake, stake, { you: cardLabel(y), dealer: cardLabel(d), draw: true }); }
     }, 380);
   };
@@ -705,7 +705,7 @@ export function WarRoom({ game }: { game: GameDef }) {
         </div>
         <div className="qg-mult"><small>YOUR CARD · DEALER CARD — ACES HIGH</small></div>
       </div>
-      <button className="btn btn-gold xg-action" type="button" onClick={() => void deal()} disabled={dealing}>{dealing ? "Dealing…" : `Deal the cards · ${fmtCash(stake)}`}</button>
+      <button className="btn btn-gold xg-action" type="button" onClick={() => void deal()} disabled={dealing}>{dealing ? "Dealing…" : `Deal the cards · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>
     </Shell>
   );
 }
@@ -742,14 +742,14 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
       const s = step + 1;
       setStep(s);
       setPhase("gold");
-      setMsg(`Gold in chest ${i + 1}! That's ×${Math.pow(1.8, s).toFixed(2)} banked (${fmtCash(Math.round(stake * Math.pow(1.8, s) * 100) / 100)}). The gold moves — open another or cash out.`);
+      setMsg(`Gold in chest ${i + 1}! That's ×${Math.pow(1.8, s).toFixed(2)} banked (${fmtMoney(Math.round(stake * Math.pow(1.8, s) * 100) / 100, room.user?.currency ?? "GHS")}). The gold moves — open another or cash out.`);
       setTimeout(() => {
         setGold(Math.floor(Math.random() * 3));
         setPicked(null); setPhase("idle"); setBusy(false); setRound((r) => r + 1);
       }, 500);
     } else {
       setPhase("dust");
-      setMsg(`Dust — the gold was in chest ${gold + 1}. The round ends and the ${fmtCash(stake)} stake is gone.`);
+      setMsg(`Dust — the gold was in chest ${gold + 1}. The round ends and the ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
       setTimeout(async () => {
         setBusy(false);
         setPlaying(false);
@@ -761,7 +761,7 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
     if (!playing || step < 1) return;
     const pay = Math.round(stake * mult * 100) / 100;
     setPlaying(false);
-    setMsg(`Cashed out — ${step} ${step === 1 ? "find" : "finds"} at ×${mult.toFixed(2)}: ${fmtCash(pay)} to your balance.`);
+    setMsg(`Cashed out — ${step} ${step === 1 ? "find" : "finds"} at ×${mult.toFixed(2)}: ${fmtMoney(pay, room.user?.currency ?? "GHS")} to your balance.`);
     await room.settle(stake, pay, { step });
   };
   const chestLabel = (i: number): { text: string; color?: string } => {
@@ -786,10 +786,10 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
             );
           })}
         </div>
-        <div className="qg-mult">{step ? `BANKED ×${mult.toFixed(2)}` : "NEXT FIND ×1.80"}<small>{step ? `Worth ${fmtCash(Math.round(stake * mult * 100) / 100)} — cash out or open another chest` : "Cash out any time after a find"}</small></div>
+        <div className="qg-mult">{step ? `BANKED ×${mult.toFixed(2)}` : "NEXT FIND ×1.80"}<small>{step ? `Worth ${fmtMoney(Math.round(stake * mult * 100) / 100, room.user?.currency ?? "GHS")} — cash out or open another chest` : "Cash out any time after a find"}</small></div>
       </div>
       {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start</button>}
-      {playing && step > 0 && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()} disabled={busy}>Cash out {fmtCash(Math.round(stake * mult * 100) / 100)}</button>}
+      {playing && step > 0 && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()} disabled={busy}>Cash out {fmtMoney(Math.round(stake * mult * 100) / 100, room.user?.currency ?? "GHS")}</button>}
     </Shell>
   );
 }
@@ -821,11 +821,11 @@ export function MiniRouletteRoom({ game }: { game: GameDef }) {
       const mult = (bet === "red" && colour === "red") || (bet === "black" && colour === "black") ? 2 : bet === "green" && colour === "green" ? 36 : 0;
       const payout = Math.round(stake * mult * 100) / 100;
       if (mult > 0) {
-        setResult({ text: `${out} ${colour.toUpperCase()} — ×${mult} · ${fmtCash(payout)}`, cls: "win" });
-        setMsg(`It lands on ${out} ${colour} — your colour! ×${mult}: ${fmtCash(payout)} paid to your balance.`);
+        setResult({ text: `${out} ${colour.toUpperCase()} — ×${mult} · ${fmtMoney(payout, room.user?.currency ?? "GHS")}`, cls: "win" });
+        setMsg(`It lands on ${out} ${colour} — your colour! ×${mult}: ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid to your balance.`);
       } else {
         setResult({ text: `${out} ${colour.toUpperCase()} — no payout`, cls: "lose" });
-        setMsg(`It lands on ${out} ${colour} — you were on ${bet}. The ${fmtCash(stake)} stake is gone.`);
+        setMsg(`It lands on ${out} ${colour} — you were on ${bet}. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
       }
       await room.settle(stake, payout, { bet, out, colour });
     };
@@ -852,7 +852,7 @@ export function MiniRouletteRoom({ game }: { game: GameDef }) {
           ))}
         </div>
       </div>
-      <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin on ${bet} · ${fmtCash(stake)}`}</button>
+      <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin on ${bet} · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>
     </Shell>
   );
 }
@@ -927,7 +927,7 @@ export function BottleRoom({ game, variant = "room" }: { game: GameDef; variant?
       setSpinning(false);
       setHistory((h) => [{ out: result, won }, ...h].slice(0, 20));
       if (won) {
-        setMsg(`${result.toUpperCase()}! You called it — +${fmtCash(stake * 2).replace(".00", "")} paid to your balance. Bottle stands tall.`);
+        setMsg(`${result.toUpperCase()}! You called it — +${fmtMoney(stake * 2, room.user?.currency ?? "GHS").replace(".00", "")} paid to your balance. Bottle stands tall.`);
         burst(stageRef.current);
       } else {
         setLost(true);
@@ -970,7 +970,7 @@ export function BottleRoom({ game, variant = "room" }: { game: GameDef; variant?
           <button className="pick-btn pick-down" type="button" aria-pressed={pick === "down"} onClick={() => setPick("down")}>▼ DOWN</button>
         </div>
         <button className="btn btn-gold xg-action bottle-spin-btn" type="button" onClick={() => void spin()} disabled={spinning}>
-          {spinning ? "Spinning…" : isPhone ? "Spin" : `Spin — win ${fmtCash(stake * 2).replace(".00", "")}`}
+          {spinning ? "Spinning…" : isPhone ? "Spin" : `Spin — win ${fmtMoney(stake * 2, room.user?.currency ?? "GHS").replace(".00", "")}`}
         </button>
       </div>
       <div className="bottle-history" aria-label="Last spins">

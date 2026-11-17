@@ -10,7 +10,7 @@
 "use client";
 
 import { useState } from "react";
-import { fmtCash } from "../../lib/api";
+import { fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
 import { playSfx } from "../../lib/store";
@@ -131,18 +131,18 @@ export default function MinesRoom({ game }: { game: GameDef }) {
       const pay = Math.round(stake * m * 100) / 100;
       revealAll(null, t);
       setPlaying(false);
-      setMsg(`Every safe tile found! ${r} gems at ×${m.toFixed(2)}: ${fmtCash(pay)} to your balance.`);
+      setMsg(`Every safe tile found! ${r} gems at ×${m.toFixed(2)}: ${fmtMoney(pay, room.user?.currency ?? "GHS")} to your balance.`);
       await room.settle(stake, pay, { mines: mineCount, revealed: r });
       return;
     }
-    setMsg(`Gem ${r} — ×${multFor(r, mineCount).toFixed(2)} (${fmtCash(Math.round(stake * multFor(r, mineCount) * 100) / 100)}). Next gem pays ×${multFor(r + 1, mineCount).toFixed(2)} — cash out or keep digging?`);
+    setMsg(`Gem ${r} — ×${multFor(r, mineCount).toFixed(2)} (${fmtMoney(Math.round(stake * multFor(r, mineCount) * 100) / 100, room.user?.currency ?? "GHS")}). Next gem pays ×${multFor(r + 1, mineCount).toFixed(2)} — cash out or keep digging?`);
   };
 
   const cashOut = async () => {
     if (!playing || revealed === 0) return;
     revealAll(null, tiles);
     setPlaying(false);
-    setMsg(`Cashed out — ${revealed} gems at ×${mult.toFixed(2)}: ${fmtCash(pays)}.`);
+    setMsg(`Cashed out — ${revealed} gems at ×${mult.toFixed(2)}: ${fmtMoney(pays, room.user?.currency ?? "GHS")}.`);
     await room.settle(stake, pays, { mines: mineCount, revealed });
   };
 
@@ -157,7 +157,7 @@ export default function MinesRoom({ game }: { game: GameDef }) {
         <div className="xg-hud mn-hud">
           <span className="xg-chip" aria-label={`Multiplier ×${mult.toFixed(2)}`}><b>×{mult.toFixed(2)}</b></span>
           <span className="xg-chip" aria-label={`Gems found: ${revealed}`}><b>{revealed}</b></span>
-          <span className="xg-chip push">CASH OUT <b>{playing && revealed > 0 ? fmtCash(pays) : fmtCash(0)}</b></span>
+          <span className="xg-chip push">CASH OUT <b>{playing && revealed > 0 ? fmtMoney(pays, room.user?.currency ?? "GHS") : fmtMoney(0, room.user?.currency ?? "GHS")}</b></span>
         </div>
         <div className="mn-board" role="grid" aria-label="Mines board, 5 by 5">
           {tiles.map((t, i) => (
@@ -177,7 +177,7 @@ export default function MinesRoom({ game }: { game: GameDef }) {
         </div>
         <StakeChips stake={stake} setStake={setStake} currency="cash" disabled={playing} />
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start round</button>}
-        {playing && <button className="btn btn-gold xg-action mn-cash" type="button" onClick={() => void cashOut()} disabled={revealed === 0}>Cash out {revealed > 0 ? fmtCash(pays) : ""}</button>}
+        {playing && <button className="btn btn-gold xg-action mn-cash" type="button" onClick={() => void cashOut()} disabled={revealed === 0}>Cash out {revealed > 0 ? fmtMoney(pays, room.user?.currency ?? "GHS") : ""}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>

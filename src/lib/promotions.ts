@@ -21,6 +21,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { dec, round2 } from "./money";
+import { symbolFor } from "./country";
 
 export type PromotionType = "deposit_match" | "free_coins" | "cashback";
 export const PROMOTION_TYPES: PromotionType[] = ["deposit_match", "free_coins", "cashback"];
@@ -52,6 +53,9 @@ export interface PromotionGrantRow {
   userName: string;
   amount: number;
   wallet: string;
+  // Phase 1 country-based (Nov 2026): the recipient's fiat — a cash
+  // grant is always in the recipient's currency.
+  fiatCurrency: string;
   day: string;
   createdAt: string;
 }
@@ -79,7 +83,7 @@ export async function listPromotions(): Promise<{ promotions: PromotionRow[]; re
     prisma.promotionGrant.findMany({
       include: {
         promotion: { select: { name: true } },
-        user: { select: { name: true } },
+        user: { select: { name: true, currency: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -110,6 +114,7 @@ export async function listPromotions(): Promise<{ promotions: PromotionRow[]; re
       userName: g.user.name,
       amount: dec(g.amount),
       wallet: g.wallet,
+      fiatCurrency: g.user.currency ?? "GHS",
       day: g.day,
       createdAt: g.createdAt.toISOString(),
     })),
@@ -219,7 +224,11 @@ async function grantPromotion(
   } else {
     await tx.user.update({ where: { id: opts.userId }, data: { coins: fresh.coins + Math.round(opts.amount) } });
   }
-  const label = opts.wallet === "cash" ? `GH₵ ${round2(opts.amount).toFixed(2)}` : `${Math.round(opts.amount)} coins`;
+  // Phase 1 country-based (Nov 2026): a cash grant is in the player's
+  // fiat — stamp it so the ledger never blends fiats. (A promotion's
+  // `cap` is read in the player's fiat too.)
+  const fiatCurrency = fresh.currency ?? "GHS";
+  const label = opts.wallet === "cash" ? `${symbolFor(fiatCurrency)} ${round2(opts.amount).toFixed(2)}` : `${Math.round(opts.amount)} coins`;
   await tx.promotionGrant.create({
     data: { promotionId: opts.promotion.id, userId: opts.userId, amount: round2(opts.amount), wallet: opts.wallet, day: opts.day },
   });
@@ -232,6 +241,7 @@ async function grantPromotion(
       amount: round2(opts.amount),
       reason: `Promotion: ${opts.promotion.name}`,
       kind: "bonus",
+      fiatCurrency,
     },
   });
   await tx.auditLog.create({
@@ -330,7 +340,7 @@ export async function payCashback(
   promotionId: string,
   date: string,
   actorId: string,
-): Promise<{ promotionId: string; date: string; paid: number; total: number; players: { userId: string; name: string; netLoss: number; granted: number }[] }> {
+): Promise<{ promotionId: string; date: string; paid: number; total: number; totalsByCurrency: Record<string, number>; players: { userId: string; name: string; netLoss: number; granted: number; fiatCurrency: string }[] }> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date must be YYYY-MM-DD");
   const promo = await prisma.promotion.findUnique({ where: { id: promotionId } });
   if (!promo) throw new Error("Promotion not found");
@@ -349,11 +359,11 @@ export async function payCashback(
   });
   const users = await prisma.user.findMany({
     where: { id: { in: groups.map((g) => g.userId) } },
-    select: { id: true, name: true, referredByAdminId: true },
+    select: { id: true, name: true, referredByAdminId: true, currency: true },
   });
   const userById = new Map(users.map((u) => [u.id, u]));
   const result = await prisma.$transaction(async (tx) => {
-    const paid: { userId: string; name: string; netLoss: number; granted: number }[] = [];
+    const paid: { userId: string; name: string; netLoss: number; granted: number; fiatCurrency: string }[] = [];
     let total = 0;
     for (const g of groups) {
       const u = userById.get(g.userId);
@@ -367,10 +377,17 @@ export async function payCashback(
       await grantPromotion(tx, {
         promotion: promo, userId: u.id, userName: u.name, amount: grant, wallet: "cash", day: date, auditAction: "promotion.cashback",
       });
-      paid.push({ userId: u.id, name: u.name, netLoss, granted: grant });
+      paid.push({ userId: u.id, name: u.name, netLoss, granted: grant, fiatCurrency: u.currency ?? "GHS" });
       total = round2(total + grant);
     }
     return { paid, total };
   });
-  return { promotionId, date, paid: result.paid.length, total: result.total, players: result.paid };
+  // Phase 1 country-based (Nov 2026): cashback is paid in each
+  // player's own fiat — `total` sums across fiats only when a run
+  // covers more than one; `totalsByCurrency` is the honest split.
+  const totalsByCurrency: Record<string, number> = {};
+  for (const p of result.paid) {
+    totalsByCurrency[p.fiatCurrency] = round2((totalsByCurrency[p.fiatCurrency] ?? 0) + p.granted);
+  }
+  return { promotionId, date, paid: result.paid.length, total: result.total, totalsByCurrency, players: result.paid };
 }

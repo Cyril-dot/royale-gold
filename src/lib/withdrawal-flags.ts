@@ -3,7 +3,10 @@
 // client component and imports the labels to render the pills, while
 // the server-only computation lives in src/lib/withdrawals.ts.
 
-/** Above this amount (GH₵) a withdrawal needs the owner's second approval. */
+/** Above this amount a withdrawal needs the owner's second approval.
+ * GHS default only — the live per-fiat thresholds live in
+ * CurrencyConfig (see withdrawalOwnerThresholdFor in ./withdrawals);
+ * the admin Money page shows the per-fiat value from the API. */
 export const WITHDRAWAL_OWNER_THRESHOLD = 500;
 
 export type WithdrawalRiskFlag = "new-account" | "large-vs-deposits" | "rapid" | "unusual";

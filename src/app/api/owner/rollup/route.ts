@@ -8,16 +8,20 @@ import { ok, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
 import { dayCommissions } from "@/lib/commission";
 
-/** Per-day per-admin rollup table + totals (newest day first). */
-export async function GET() {
+/** Per-day per-admin rollup table + totals (newest day first).
+ * Phase 1 country-based (Nov 2026): ?currency= (default GHS). */
+export async function GET(req: Request) {
   try {
     await requireRole("owner");
+    const sp = new URL(req.url).searchParams;
+    const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
     const admins = await prisma.user.findMany({
       where: { role: "admin" },
       select: { id: true, name: true },
     });
     const days: {
       date: string;
+      fiatCurrency: string;
       adminId: string;
       adminName: string;
       deposits: number;
@@ -32,10 +36,11 @@ export async function GET() {
     let totalAmount = 0;
     let totalCommission = 0;
     for (const a of admins) {
-      const rows = await dayCommissions(a.id);
+      const rows = await dayCommissions(a.id, undefined, undefined, fiatCurrency);
       for (const r of rows) {
         days.push({
           date: r.date,
+          fiatCurrency: r.fiatCurrency,
           adminId: a.id,
           adminName: a.name,
           deposits: r.deposits,
@@ -55,6 +60,7 @@ export async function GET() {
       a.date === b.date ? a.adminName.localeCompare(b.adminName) : a.date < b.date ? 1 : -1,
     );
     return ok({
+      currency: fiatCurrency,
       days,
       totals: {
         deposits: depositCount,

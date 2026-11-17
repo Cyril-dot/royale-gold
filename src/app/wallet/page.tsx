@@ -7,7 +7,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, fmtCash, fmtCoins, type GameHistoryRow } from "../../lib/api";
+import { api, fmtMoney, fmtCoins, type GameHistoryRow } from "../../lib/api";
+import { symbolFor } from "../../lib/country";
 import { getGame } from "../../lib/games";
 import { useStore } from "../../lib/store";
 import WalletCard from "../../components/WalletCard";
@@ -48,12 +49,16 @@ export default function WalletPage() {
   // value — the server value only changes at signup / daily claim.
   const sim = mode === "SIM" ? (simSession ?? wallet?.sim ?? user.sim ?? 0) : (wallet?.sim ?? user.sim ?? 0);
   const coins = wallet?.coins ?? user.coins ?? 0;
+  // Phase 1 country-based (Nov 2026): the wallet shows the player's
+  // own fiat everywhere; SIM is demo money in the same symbol.
+  const fiat = user.currency ?? "GHS";
+  const sym = symbolFor(fiat);
   // Wallet id, not a payment card — the last 4 of the user id, uppercased.
   const last4 = (user.id || "").replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase() || "0000";
   // Round 20: the Visa card shows the cash balance for the active mode —
   // REAL = cash, SIM = the SIM balance labelled SIM. The coins live on
   // their own coin card below, not in a pill tab.
-  const cardBalance = mode === "SIM" ? fmtCash(sim) : fmtCash(cash);
+  const cardBalance = mode === "SIM" ? fmtMoney(sim, fiat) : fmtMoney(cash, fiat);
   const cardLabel = mode === "SIM" ? "SIM Balance" : "Balance";
 
   return (
@@ -74,15 +79,16 @@ export default function WalletPage() {
         {/* Round 12: SIM mode is demo-only — the action is an instant
             SIM top-up, never a real-money deposit. */}
         {mode === "SIM" ? (
-          <button className="btn btn-gold wallet-dep" type="button" onClick={topUpSim}>Top up SIM +GH₵ 1,000</button>
+          <button className="btn btn-gold wallet-dep" type="button" onClick={topUpSim}>Top up SIM +{sym} 1,000</button>
         ) : (
           <button className="btn btn-gold wallet-dep" type="button" onClick={() => setDepositOpen(true)}>Deposit</button>
         )}
         {mode === "SIM" && (
           <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
         )}
-        {/* Round 16: convert REAL cash to coins at GH₵5 = 1 coin. The
-            deposit centre above stays as-is; this section is the new work.
+        {/* Round 16: convert REAL cash to coins at the per-currency
+            rate (GHS 5 = 1 coin, NGN 500 = 1 coin seed). The deposit
+            centre above stays as-is; this section is the new work.
             (The "coins are play-only" line lives inside the converter now.) */}
         <CoinConverter />
         {/* Round 31: History — recent game rounds (stake out, payout in),
@@ -99,14 +105,17 @@ export default function WalletPage() {
               {history.map((h) => {
                 const net = Number(h.payout || 0) - Number(h.stake || 0);
                 const isCoin = h.currency === "coins";
+                // Phase 1 country-based (Nov 2026): each round carries
+                // its own fiat — use it, not the viewer's.
+                const rowFiat = h.fiatCurrency ?? fiat;
                 const netTxt = isCoin
                   ? `${net >= 0 ? "+" : "−"}${Math.abs(Math.round(net))} coins`
-                  : `${net >= 0 ? "+" : "−"}${fmtCash(Math.abs(net))}`;
+                  : `${net >= 0 ? "+" : "−"}${fmtMoney(Math.abs(net), rowFiat)}`;
                 return (
                   <div key={h.id} className="wallet-hist-row">
                     <span className="wallet-hist-txt">
                       <b>{getGame(h.game)?.name || h.game}</b>
-                      <span>{new Date(h.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {isCoin ? `${fmtCoins(h.stake)} coins staked` : `${fmtCash(h.stake)} staked`}</span>
+                      <span>{new Date(h.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {isCoin ? `${fmtCoins(h.stake)} coins staked` : `${fmtMoney(h.stake, rowFiat)} staked`}</span>
                     </span>
                     <b className={net >= 0 ? "wallet-hist-win" : "wallet-hist-lose"}>{netTxt}</b>
                   </div>

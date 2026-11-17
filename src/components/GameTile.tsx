@@ -12,7 +12,9 @@
 
 import Link from "next/link";
 import { TileGame } from "../lib/tiles";
+import { fmtMoney } from "../lib/api";
 import { useStore } from "../lib/store";
+import { useFiat } from "../lib/use-fiat";
 import { useGameCardTilt } from "./VerbTilt";
 
 const PLAY_ICON = (
@@ -29,8 +31,18 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
   const m = g.meta;
   const sizeCls = m.size === "hero" ? " g-hero" : m.size === "wide" ? " g-wide" : m.size === "tall" ? " g-tall" : " g-cell";
   const cur = g.currency === "coins" ? "coin" : "cash";
-  const { toast } = useStore();
+  const { toast, user } = useStore();
   useGameCardTilt();
+  // Phase 1 country-based (Nov 2026): tile mins are GHS-term strings
+  // ("GH₵ 1", "GH₵ 10") — scale them to the viewer's fiat; coin mins
+  // ("5 coins") never change.
+  const fiat = user?.currency ?? "GHS";
+  const { factor } = useFiat(fiat);
+  const minText = (() => {
+    if (m.min.endsWith("coins")) return m.min;
+    const n = Number(m.min.replace(/[^0-9.]/g, ""));
+    return Number.isFinite(n) && n > 0 ? fmtMoney(n * factor, fiat) : m.min;
+  })();
   // Artifact's Demo button: a toast only — free play-money mode, same
   // game, no risk. It never opens the room.
   const demo = () => toast(`${g.name} — free play mode, same game, no risk.`, "info");
@@ -116,7 +128,7 @@ export default function GameTile({ g, extra, simple }: { g: TileGame; extra?: bo
         <div className="g-txt">
           <h3>{g.name}</h3>
           <div className="g-meta">
-            <span>Min <b>{m.min}</b></span>
+            <span>Min <b>{minText}</b></span>
             <span className="rtp">RTP <b>{m.rtp}</b></span>
             {m.beginner && <span className="g-1tap">1 TAP</span>}
           </div>

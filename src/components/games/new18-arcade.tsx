@@ -10,7 +10,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fmtCash } from "../../lib/api";
+import { fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
@@ -207,7 +207,7 @@ export function TowerClimbRoom({ game }: { game: GameDef }) {
     if (row === cfg.rows - 1) {
       setPhase("done");
       const payout = Math.round(stake * mult * 100) / 100;
-      setMsg(`Top of the tower! ×${mult} — ${fmtCash(payout)}`);
+      setMsg(`Top of the tower! ×${mult} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}`);
       await room.settle(stake, payout, { diff, row, mult });
       return;
     }
@@ -220,7 +220,7 @@ export function TowerClimbRoom({ game }: { game: GameDef }) {
     const mult = cfg.ladder[row - 1];
     const payout = Math.round(stake * mult * 100) / 100;
     setPhase("done");
-    setMsg(`Cashed out at row ${row} — ×${mult}, ${fmtCash(payout)}!`);
+    setMsg(`Cashed out at row ${row} — ×${mult}, ${fmtMoney(payout, room.user?.currency ?? "GHS")}!`);
     await room.settle(stake, payout, { diff, row: row - 1, mult });
   };
 
@@ -253,9 +253,9 @@ export function TowerClimbRoom({ game }: { game: GameDef }) {
             );
           })}
         </div>
-        {phase === "idle" && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start climbing · {fmtCash(stake)}</button>}
-        {phase === "climbing" && row > 0 && <button className="btn btn-gold xg-action" type="button" onClick={() => void cashOut()}>CASH OUT · {fmtCash(Math.round(stake * curMult * 100) / 100)} (×{curMult})</button>}
-        {phase === "done" && <button className="btn btn-gold xg-action" type="button" onClick={start}>Climb again · {fmtCash(stake)}</button>}
+        {phase === "idle" && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start climbing · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
+        {phase === "climbing" && row > 0 && <button className="btn btn-gold xg-action" type="button" onClick={() => void cashOut()}>CASH OUT · {fmtMoney(Math.round(stake * curMult * 100) / 100, room.user?.currency ?? "GHS")} (×{curMult})</button>}
+        {phase === "done" && <button className="btn btn-gold xg-action" type="button" onClick={start}>Climb again · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>
@@ -310,7 +310,7 @@ export function GoldenCatchRoom({ game }: { game: GameDef }) {
     setFishes([]);
     const mult = Math.min(10, Math.round(potRef.current * 100) / 100);
     const payout = Math.round(stake * mult * 100) / 100;
-    setMsg(`${reason} — you caught ${caughtRef.current} fish for a ×${mult.toFixed(1)} pot. ${payout > 0 ? fmtCash(payout) : "Nothing in the net."}`);
+    setMsg(`${reason} — you caught ${caughtRef.current} fish for a ×${mult.toFixed(1)} pot. ${payout > 0 ? fmtMoney(payout, room.user?.currency ?? "GHS") : "Nothing in the net."}`);
     if (!settledRef.current) {
       settledRef.current = true;
       await room.settle(stake, payout, { caught: caughtRef.current, pot: mult });
@@ -389,8 +389,8 @@ export function GoldenCatchRoom({ game }: { game: GameDef }) {
           </div>
           <p className="v18-aim">Minnow 0.2× · Clownfish 0.5× · Puffer 1× · Golden koi 2×</p>
         </div>
-        {phase === "idle" && <button className="btn btn-gold xg-action" type="button" onClick={start}>Cast your line · {fmtCash(stake)}</button>}
-        {phase === "done" && <button className="btn btn-gold xg-action" type="button" onClick={start}>Fish again · {fmtCash(stake)}</button>}
+        {phase === "idle" && <button className="btn btn-gold xg-action" type="button" onClick={start}>Cast your line · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
+        {phase === "done" && <button className="btn btn-gold xg-action" type="button" onClick={start}>Fish again · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>
@@ -437,7 +437,7 @@ export function GoldRushDerbyRoom({ game }: { game: GameDef }) {
         setPhase("done");
         const won = fin === pick;
         const payout = won ? Math.round(stake * 4 * 100) / 100 : 0;
-        setMsg(won ? `${HORSES[fin].name} wins by a nose! ×4 — ${fmtCash(payout)}` : `${HORSES[fin].name} takes it. Your horse, ${HORSES[pick].name}, didn't place.`);
+        setMsg(won ? `${HORSES[fin].name} wins by a nose! ×4 — ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : `${HORSES[fin].name} takes it. Your horse, ${HORSES[pick].name}, didn't place.`);
         void room.settle(stake, payout, { pick, winner: fin, horse: HORSES[fin].name });
       }
     }, 120);
@@ -461,7 +461,7 @@ export function GoldRushDerbyRoom({ game }: { game: GameDef }) {
             </div>
           ))}
         </div>
-        {phase !== "racing" && <button className="btn btn-gold xg-action" type="button" onClick={() => void race()}>{phase === "done" ? `Race again · ${fmtCash(stake)}` : `Start the race · ${fmtCash(stake)}`}</button>}
+        {phase !== "racing" && <button className="btn btn-gold xg-action" type="button" onClick={() => void race()}>{phase === "done" ? `Race again · ${fmtMoney(stake, room.user?.currency ?? "GHS")}` : `Start the race · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>

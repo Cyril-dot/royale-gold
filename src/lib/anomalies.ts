@@ -7,19 +7,26 @@
 //       80% with 20+ rounds (possible exploit or luck — the page says
 //       "check, don't assume"). Win = payout > stake.
 //   (b) stake-jump — a player's cash stakes in the last 7 days are 5×
-//       or more their previous 7 days' stakes, and at least GH₵ 100
-//       in the last 7 days (a 5× jump from GH₵ 1 to GH₵ 5 is noise,
-//       not an anomaly — the page says the GH₵ 100 floor).
+//       or more their previous 7 days' stakes, and at least 100
+//       (in the player's fiat) in the last 7 days (a 5× jump from
+//       1 to 5 is noise, not an anomaly — the page says the 100 floor).
 //   (c) rtp-spike — a game's actual RTP in the last 7 days is 10+
 //       points above its base RTP with 50+ rounds (the same flag rule
-//       as the RTP monitor, O17, scoped to the last 7 days).
-//   (d) deposit-withdraw — a player who deposited GH₵ 1,000+ in the
-//       last 24 hours AND withdrew within 1 hour of a deposit in that
-//       window (fraud signals (c)+(e) combined into one anomaly).
+//       as the RTP monitor, O17, scoped to the last 7 days). RTP is a
+//       ratio, so blending fiats does not break it — the spike is a
+//       blended ratio across currencies.
+//   (d) deposit-withdraw — a player who deposited 1,000+ (in their
+//       fiat) in the last 24 hours AND withdrew within 1 hour of a
+//       deposit in that window (fraud signals (c)+(e) combined).
+//
+// Phase 1 country-based (Nov 2026): the 100 / 1,000 thresholds are
+// stored in GHS terms and scaled per player by conversionRate/5.
 import { prisma } from "./prisma";
 import { dec, round2 } from "./money";
 import { baseRtpFor } from "./rtp";
 import { getGame } from "./games";
+import { symbolFor } from "./country";
+import { getAllCurrencyConfigs } from "./game-config";
 
 export type AnomalyType = "win-rate" | "stake-jump" | "rtp-spike" | "deposit-withdraw";
 
@@ -43,7 +50,7 @@ export async function computeAnomalies(): Promise<{ anomalies: Anomaly[]; counts
   const prevWeekAgo = new Date(now - 14 * DAY);
   const dayAgo = new Date(now - DAY);
 
-  const [weekRounds, prevWeekRounds, weekDeposits, dayDeposits, dayWithdrawals, users] = await Promise.all([
+  const [weekRounds, prevWeekRounds, weekDeposits, dayDeposits, dayWithdrawals, users, configs] = await Promise.all([
     prisma.gameResult.findMany({
       where: { createdAt: { gte: weekAgo } },
       select: { userId: true, game: true, currency: true, stake: true, payout: true },
@@ -64,9 +71,16 @@ export async function computeAnomalies(): Promise<{ anomalies: Anomaly[]; counts
       where: { createdAt: { gte: dayAgo } },
       select: { userId: true, amount: true, createdAt: true },
     }),
-    prisma.user.findMany({ select: { id: true, name: true, email: true, phone: true } }),
+    prisma.user.findMany({ select: { id: true, name: true, email: true, phone: true, currency: true } }),
+    getAllCurrencyConfigs(),
   ]);
   const userById = new Map(users.map((u) => [u.id, u]));
+  // Phase 1 country-based (Nov 2026): per-player threshold factor.
+  const factorOf = (userId: string): number => {
+    const fiat = userById.get(userId)?.currency ?? "GHS";
+    const cfg = configs.find((c) => c.currency === fiat);
+    return (cfg?.conversionRate ?? 5) / 5;
+  };
   const anomalies: Anomaly[] = [];
 
   // (a) Win rate above 80% with 20+ rounds in the last 7 days.
@@ -96,7 +110,8 @@ export async function computeAnomalies(): Promise<{ anomalies: Anomaly[]; counts
     });
   }
 
-  // (b) Cash stakes jumped 5×+ vs the previous 7 days (min GH₵ 100 now).
+  // (b) Cash stakes jumped 5×+ vs the previous 7 days (min 100 in the
+  // player's fiat now).
   const stakeNow = new Map<string, number>();
   for (const r of weekRounds) {
     if (r.currency !== "cash") continue;
@@ -107,7 +122,7 @@ export async function computeAnomalies(): Promise<{ anomalies: Anomaly[]; counts
     stakePrev.set(r.userId, round2((stakePrev.get(r.userId) ?? 0) + dec(r.stake)));
   }
   for (const [userId, current] of stakeNow) {
-    if (current < 100) continue;
+    if (current < 100 * factorOf(userId)) continue;
     const prev = stakePrev.get(userId) ?? 0;
     if (prev <= 0) continue;
     const mult = current / prev;
@@ -122,7 +137,7 @@ export async function computeAnomalies(): Promise<{ anomalies: Anomaly[]; counts
       userName: u.name,
       game: null,
       gameName: null,
-      reason: `Staked GH₵ ${current.toFixed(2)} in the last 7 days — ${mult.toFixed(1)}× their previous 7 days (GH₵ ${prev.toFixed(2)}). Possible account takeover or a big deposit.`,
+      reason: `Staked ${symbolFor(u.currency)} ${current.toFixed(2)} in the last 7 days — ${mult.toFixed(1)}× their previous 7 days (${symbolFor(u.currency)} ${prev.toFixed(2)}). Possible account takeover or a big deposit.`,
       createdAt: new Date(now).toISOString(),
     });
   }
@@ -156,8 +171,8 @@ export async function computeAnomalies(): Promise<{ anomalies: Anomaly[]; counts
     });
   }
 
-  // (d) GH₵ 1,000+ deposited in 24h AND a withdrawal within 1 hour of
-  // a deposit in the same window.
+  // (d) 1,000+ (in the player's fiat) deposited in 24h AND a
+  // withdrawal within 1 hour of a deposit in the same window.
   const dep24 = new Map<string, { total: number; times: Date[] }>();
   for (const d of dayDeposits) {
     const row = dep24.get(d.userId) ?? { total: 0, times: [] };
@@ -167,7 +182,7 @@ export async function computeAnomalies(): Promise<{ anomalies: Anomaly[]; counts
   }
   for (const w of dayWithdrawals) {
     const dep = dep24.get(w.userId);
-    if (!dep || dep.total < 1000) continue;
+    if (!dep || dep.total < 1000 * factorOf(w.userId)) continue;
     const hit = dep.times.find((t) => {
       const gap = w.createdAt.getTime() - t.getTime();
       return gap >= 0 && gap <= 60 * 60 * 1000;
@@ -183,7 +198,7 @@ export async function computeAnomalies(): Promise<{ anomalies: Anomaly[]; counts
       userName: u.name,
       game: null,
       gameName: null,
-      reason: `Deposited GH₵ ${dep.total.toFixed(2)} in the last 24 hours and requested a GH₵ ${dec(w.amount).toFixed(2)} withdrawal within 1 hour of a deposit.`,
+      reason: `Deposited ${symbolFor(u.currency)} ${dep.total.toFixed(2)} in the last 24 hours and requested a ${symbolFor(u.currency)} ${dec(w.amount).toFixed(2)} withdrawal within 1 hour of a deposit.`,
       createdAt: w.createdAt.toISOString(),
     });
   }

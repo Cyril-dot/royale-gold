@@ -14,11 +14,14 @@ import { dec, round2 } from "./money";
 
 export interface CohortRow {
   cohort: string; // "YYYY-MM"
+  // Phase 1 country-based (Nov 2026): the fiat these money figures are
+  // in — and the cohort counts only players of this fiat.
+  fiatCurrency: string;
   players: number;
   activePct: number; // % played in the last 30 days
   totalDeposited: number;
   totalStaked: number;
-  ggr: number; // cash stakes − cash payouts (coins excluded — GH₵ only)
+  ggr: number; // cash stakes − cash payouts (coins excluded)
   avgDeposit: number; // total deposited / players
   retention: { m1: number | null; m2: number | null; m3: number | null }; // % played in month 1/2/3 after joining; null = that month has not happened yet
 }
@@ -36,17 +39,17 @@ function monthStart(cohort: string, offset: number): Date {
   return new Date(Date.UTC(y, m - 1 + offset, 1));
 }
 
-export async function cohortReport(): Promise<{ cohorts: CohortRow[]; totalPlayers: number }> {
+export async function cohortReport(fiatCurrency: string = "GHS"): Promise<{ cohorts: CohortRow[]; totalPlayers: number; fiatCurrency: string }> {
   const now = Date.now();
   const activeSince = new Date(now - 30 * DAY);
   const [users, deposits, rounds] = await Promise.all([
     prisma.user.findMany({
-      where: { role: "user" },
+      where: { role: "user", currency: fiatCurrency },
       select: { id: true, createdAt: true },
     }),
-    prisma.depositEvent.findMany({ select: { userId: true, amount: true } }),
+    prisma.depositEvent.findMany({ where: { fiatCurrency }, select: { userId: true, amount: true } }),
     prisma.gameResult.findMany({
-      where: { currency: "cash" },
+      where: { currency: "cash", fiatCurrency },
       select: { userId: true, stake: true, payout: true, createdAt: true },
     }),
   ]);
@@ -98,6 +101,7 @@ export async function cohortReport(): Promise<{ cohorts: CohortRow[]; totalPlaye
       const r3 = retentionFor(2);
       return {
         cohort,
+        fiatCurrency,
         players: players.length,
         activePct: players.length === 0 ? 0 : Math.round((active / players.length) * 100),
         totalDeposited,
@@ -107,5 +111,5 @@ export async function cohortReport(): Promise<{ cohorts: CohortRow[]; totalPlaye
         retention: { m1: r1, m2: r2, m3: r3 },
       };
     });
-  return { cohorts: out, totalPlayers: users.length };
+  return { cohorts: out, totalPlayers: users.length, fiatCurrency };
 }

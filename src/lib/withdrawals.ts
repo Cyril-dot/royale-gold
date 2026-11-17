@@ -5,6 +5,7 @@
 import { prisma } from "./prisma";
 import type { WithdrawalRiskFlag } from "./withdrawal-flags";
 import { WITHDRAWAL_OWNER_THRESHOLD, WITHDRAWAL_RISK_LABELS } from "./withdrawal-flags";
+import { getAllCurrencyConfigs, getCurrencyConfig } from "./game-config";
 
 export type { WithdrawalRiskFlag } from "./withdrawal-flags";
 export { WITHDRAWAL_OWNER_THRESHOLD, WITHDRAWAL_RISK_LABELS } from "./withdrawal-flags";
@@ -12,9 +13,21 @@ export { WITHDRAWAL_OWNER_THRESHOLD, WITHDRAWAL_RISK_LABELS } from "./withdrawal
 /** Statuses: pending -> approved | admin_approved -> approved | rejected. */
 export type WithdrawalStatus = "pending" | "admin_approved" | "approved" | "rejected";
 
-/** True when an admin's approval alone is NOT final — the owner must second it. */
-export function needsOwnerApproval(amount: number): boolean {
-  return amount > WITHDRAWAL_OWNER_THRESHOLD;
+/**
+ * True when an admin's approval alone is NOT final — the owner must second it.
+ * Phase 1 country-based (Nov 2026): the threshold is per-fiat, from
+ * CurrencyConfig (GHS 500 / NGN 50,000 seed) — a bare 500 would send
+ * almost every NGN withdrawal to the owner.
+ */
+export async function needsOwnerApproval(amount: number, fiatCurrency: string = "GHS"): Promise<boolean> {
+  const cfg = await getCurrencyConfig(fiatCurrency);
+  return amount > cfg.withdrawalOwnerThreshold;
+}
+
+/** The owner-approval threshold for a fiat (for the decide-route note). */
+export async function withdrawalOwnerThresholdFor(fiatCurrency: string = "GHS"): Promise<number> {
+  const cfg = await getCurrencyConfig(fiatCurrency);
+  return cfg.withdrawalOwnerThreshold;
 }
 
 export const WITHDRAWAL_METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
@@ -23,7 +36,9 @@ export const WITHDRAWAL_METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as co
 //   new-account       — the player joined less than 7 days ago
 //   large-vs-deposits — the amount is more than everything the player ever deposited
 //   rapid             — this is the player's 3rd (or later) request in 24 hours
-//   unusual           — a round amount (multiple of GH₵ 100) of GH₵ 1,000 or more
+//   unusual           — a round amount (multiple of 100 in the player's fiat) of 1,000 or more
+//                       (in the player's fiat — GHS terms, scaled by conversionRate/5;
+//                       Phase 1 country-based, Nov 2026)
 // (Keys + labels live in ./withdrawal-flags.ts — client-safe, so the
 // Money page can import the labels without pulling in Prisma.)
 export function withdrawalRiskFlags(opts: {
@@ -33,12 +48,16 @@ export function withdrawalRiskFlags(opts: {
   /** This request's position (1st, 2nd, 3rd…) among the player's
    *  requests in the last 24 hours — "rapid" is the 3rd or later. */
   requestsLast24h: number;
+  /** The player's fiat scale (conversionRate/5, 1 for GHS) — scales
+   * the "unusual" threshold and round step to the player's fiat. */
+  fiatScale?: number;
 }): WithdrawalRiskFlag[] {
   const flags: WithdrawalRiskFlag[] = [];
   if (Date.now() - opts.userCreatedAt.getTime() < 7 * 24 * 60 * 60 * 1000) flags.push("new-account");
   if (opts.amount > opts.totalDeposited) flags.push("large-vs-deposits");
   if (opts.requestsLast24h >= 3) flags.push("rapid");
-  if (opts.amount >= 1000 && opts.amount % 100 === 0) flags.push("unusual");
+  const scale = opts.fiatScale ?? 1;
+  if (opts.amount >= 1000 * scale && opts.amount % (100 * scale) === 0) flags.push("unusual");
   return flags;
 }
 
@@ -54,7 +73,7 @@ export async function annotateWithdrawalFlags<T extends { id: string; userId: st
   if (rows.length === 0) return out;
   const userIds = [...new Set(rows.map((r) => r.userId))];
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [deposits, recent] = await Promise.all([
+  const [deposits, recent, usersFiat, configs] = await Promise.all([
     prisma.depositEvent.groupBy({
       by: ["userId"],
       where: { userId: { in: userIds } },
@@ -68,8 +87,17 @@ export async function annotateWithdrawalFlags<T extends { id: string; userId: st
       select: { id: true, userId: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
+    // Phase 1 country-based (Nov 2026): per-player fiat for the
+    // "unusual" threshold scaling.
+    prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, currency: true } }),
+    getAllCurrencyConfigs(),
   ]);
   const depositedByUser = new Map(deposits.map((d) => [d.userId, Number(d._sum.amount ?? 0)]));
+  const fiatOf = new Map(usersFiat.map((u) => [u.id, u.currency ?? "GHS"]));
+  const scaleOf = (userId: string): number => {
+    const cfg = configs.find((c) => c.currency === (fiatOf.get(userId) ?? "GHS"));
+    return (cfg?.conversionRate ?? 5) / 5;
+  };
   const ordinalById = new Map<string, number>();
   const seenByUser = new Map<string, number>();
   for (const w of recent) {
@@ -85,6 +113,7 @@ export async function annotateWithdrawalFlags<T extends { id: string; userId: st
         amount: r.amount,
         totalDeposited: depositedByUser.get(r.userId) ?? 0,
         requestsLast24h: ordinalById.get(r.id) ?? 0,
+        fiatScale: scaleOf(r.userId),
       }),
     );
   }

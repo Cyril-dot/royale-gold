@@ -21,7 +21,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { fmtCash } from "../../lib/api";
+import { fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx } from "../../lib/store";
 import { RoomShell, useGameRoom } from "./shared";
@@ -105,7 +105,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     if (!playing || goals < 1) return;
     const m = LADDER[goals - 1];
     const pay = Math.round(stake * m * 100) / 100;
-    setMsg(`${auto ? "Five from five! " : "Cashed out — "}${goals}${goals === 1 ? " goal" : " goals"} at ×${m}: ${fmtCash(pay)}.`);
+    setMsg(`${auto ? "Five from five! " : "Cashed out — "}${goals}${goals === 1 ? " goal" : " goals"} at ×${m}: ${fmtMoney(pay, room.user?.currency ?? "GHS")}.`);
     await finish(true, pay, `×${m}`);
   }, [playing, goals, stake, finish]);
 
@@ -163,11 +163,11 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
         // directly and pass the true goals count to finish.
         const m5 = LADDER[4];
         const pay5 = Math.round(stake * m5 * 100) / 100;
-        setMsg(`Five from five! ${g} goals at ×${m5}: ${fmtCash(pay5)}.`);
+        setMsg(`Five from five! ${g} goals at ×${m5}: ${fmtMoney(pay5, room.user?.currency ?? "GHS")}.`);
         setTimeout(() => { resetActors(); void finish(true, pay5, `×${m5}`, g); }, 460);
         return;
       }
-      setMsg(`GOAL — ${aim.label}! That's ${g} on the ladder: ×${LADDER[g - 1]} = ${fmtCash(Math.round(stake * LADDER[g - 1] * 100) / 100)}. Cash out now or shoot for ×${LADDER[g]}.`);
+      setMsg(`GOAL — ${aim.label}! That's ${g} on the ladder: ×${LADDER[g - 1]} = ${fmtMoney(Math.round(stake * LADDER[g - 1] * 100) / 100, room.user?.currency ?? "GHS")}. Cash out now or shoot for ×${LADDER[g]}.`);
       setTimeout(() => { resetActors(); setBusy(false); stateRef.current.busy = false; }, 520);
     } else {
       setKeeperPose("hero");
@@ -184,7 +184,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
         ], { duration: 380, easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" });
       } catch { /* no WAAPI — the style below still lands the parry */ }
       setBallStyle({ transform: `translate(${ex}px,${ey}px) scale(.36)`, opacity: 1 });
-      setMsg(`NO GOAL — the keeper got a glove to the ${aim.label} shot and parried it. The ${fmtCash(stake)} stake is gone.`);
+      setMsg(`NO GOAL — the keeper got a glove to the ${aim.label} shot and parried it. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
       setTimeout(() => {
         resetActors();
         void finish(false, 0, "SAVED");
@@ -348,7 +348,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       stateRef.current.goals = 0;
       setSavedAt(-1);
       resetActors();
-      setMsg(`Shootout live — ${fmtCash(stake)} riding on it. Aiming ${shot.label}. First goal pays ×${LADDER[0]}.`);
+      setMsg(`Shootout live — ${fmtMoney(stake, room.user?.currency ?? "GHS")} riding on it. Aiming ${shot.label}. First goal pays ×${LADDER[0]}.`);
     }
     shoot(shot);
   };
@@ -474,7 +474,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       {playing && goals >= 1 ? (
         <div className="pn2-actions">
           <button className="btn btn-gold" type="button" onClick={() => void cashOut()} disabled={busy}>
-            Cash Out {fmtCash(cashOutAmt)}
+            Cash Out {fmtMoney(cashOutAmt, room.user?.currency ?? "GHS")}
           </button>
           <button className="btn cr-cash pn2-kick2" type="button" onClick={onKick} disabled={busy}>
             Kick!!<small>{label}</small>

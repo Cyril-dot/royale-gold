@@ -8,7 +8,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { fmtCash } from "../../lib/api";
+import { fmtMoney } from "../../lib/api";
 import { GameDef } from "../../lib/games";
 import { playSfx } from "../../lib/store";
 import { RoomShell, StakeChips, useGameRoom } from "./shared";
@@ -124,7 +124,7 @@ export function GoldenReelsRoom({ game }: { game: GameDef }) {
       else if (a === b || b === c || a === c) { mult = 1; label = "A pair — stake back."; }
       const payout = Math.round(stake * mult * 100) / 100;
       setWin(mult > 0 ? mult : null);
-      setMsg(mult > 0 ? `${label} ${fmtCash(payout)}` : "No match — spin again.");
+      setMsg(mult > 0 ? `${label} ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : "No match — spin again.");
       void room.settle(stake, payout, { reels: result, mult });
     }, 1450);
     timersRef.current.push(fin);
@@ -151,7 +151,7 @@ export function GoldenReelsRoom({ game }: { game: GameDef }) {
             <span>Any pair <b>×1</b></span><span>No match <b>×0</b></span>
           </div>
         </div>
-        <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin · ${fmtCash(stake)}`}</button>
+        <button className="btn btn-gold xg-action" type="button" onClick={() => void spin()} disabled={spinning}>{spinning ? "Spinning…" : `Spin · ${fmtMoney(stake, room.user?.currency ?? "GHS")}`}</button>
         <p className="bottle-msg xg-msg">{msg}</p>
       </div>
     </RoomShell>

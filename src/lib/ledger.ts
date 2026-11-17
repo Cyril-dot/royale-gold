@@ -29,6 +29,9 @@ export interface LedgerRow {
   // (payout - stake); stake and payout are shown separately too.
   amount: number;
   wallet: "cash" | "coins";
+  // Phase 1 country-based (Nov 2026): the fiat this row's amount is in.
+  // Totals are computed PER fiat — never sum across fiats.
+  fiatCurrency: string;
   detail: string;
   stake?: number;
   payout?: number;
@@ -49,6 +52,10 @@ export interface LedgerFilters {
   maxAmount?: number;
   userId?: string;
   limit?: number;
+  // Phase 1 country-based (Nov 2026): narrow to one fiat. When set,
+  // rows AND totals are that fiat only. When unset, every row carries
+  // its own fiatCurrency and totals are split per fiat.
+  fiatCurrency?: string;
 }
 
 function inRange(d: Date, from?: Date, to?: Date): boolean {
@@ -60,12 +67,21 @@ function inRange(d: Date, from?: Date, to?: Date): boolean {
 export async function buildLedger(opts: {
   scopeAdminId: string | null; // admin id for own-scope, null for owner-global
   filters?: LedgerFilters;
-}): Promise<{ rows: LedgerRow[]; totals: { rows: number; cashIn: number; cashOut: number } }> {
+}): Promise<{
+  rows: LedgerRow[];
+  totals: { rows: number; cashIn: number; cashOut: number };
+  // Phase 1 country-based (Nov 2026): cash in/out per fiat. `totals`
+  // is the slice for the requested fiat (or GHS when no fiat filter
+  // was given) — the per-fiat map is the honest one.
+  totalsByCurrency: Record<string, { cashIn: number; cashOut: number }>;
+}> {
   const f = opts.filters ?? {};
   const limit = Math.min(Math.max(f.limit ?? 50, 1), 100);
   const from = f.from && /^\d{4}-\d{2}-\d{2}$/.test(f.from) ? new Date(`${f.from}T00:00:00.000Z`) : undefined;
   const to = f.to && /^\d{4}-\d{2}-\d{2}$/.test(f.to) ? new Date(`${f.to}T23:59:59.999Z`) : undefined;
   const needle = (f.q ?? "").trim().toLowerCase();
+  // Phase 1: one fiat filter, applied to every source query below.
+  const fiatWhere = f.fiatCurrency ? { fiatCurrency: f.fiatCurrency.toUpperCase() } : {};
 
   // Scope: an admin sees only users they referred. The owner sees all.
   // DepositEvent.adminId and Withdrawal.adminId are stamped at creation;
@@ -113,6 +129,7 @@ export async function buildLedger(opts: {
         ...(opts.scopeAdminId ? { adminId: opts.scopeAdminId } : f.adminId ? { adminId: f.adminId } : {}),
         ...(f.method ? { method: f.method } : {}),
         ...userFilter,
+        ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
       include: { user: { select: { id: true, name: true, email: true, phone: true } } },
@@ -127,7 +144,7 @@ export async function buildLedger(opts: {
         id: `dep-${d.id}`, type: "deposit", userId: d.userId, userName: d.user.name,
         userContact: d.user.email ?? d.user.phone ?? null, adminId: d.adminId,
         adminName: d.adminId ? adminById.get(d.adminId) ?? null : null,
-        amount, wallet: "cash", detail: `Deposit via ${d.method} · commission ${dec(d.commission)} (${dec(d.pctInForce)}%)`,
+        amount, wallet: "cash", fiatCurrency: d.fiatCurrency ?? "GHS", detail: `Deposit via ${d.method} · commission ${dec(d.commission)} (${dec(d.pctInForce)}%)`,
         method: d.method, createdAt: d.createdAt.toISOString(),
       });
     }
@@ -138,6 +155,7 @@ export async function buildLedger(opts: {
     const results = await prisma.gameResult.findMany({
       where: {
         ...userFilter,
+        ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
       include: { user: { select: { id: true, name: true, email: true, phone: true, referredByAdminId: true } } },
@@ -156,6 +174,7 @@ export async function buildLedger(opts: {
         userContact: r.user.email ?? r.user.phone ?? null, adminId: r.user.referredByAdminId,
         adminName: r.user.referredByAdminId ? adminById.get(r.user.referredByAdminId) ?? null : null,
         amount: net, wallet: r.currency === "coins" ? "coins" : "cash",
+        fiatCurrency: r.fiatCurrency ?? "GHS",
         detail: `${gameName} · ${r.currency === "coins" ? "coins" : "cash"}`,
         stake, payout, createdAt: r.createdAt.toISOString(),
       });
@@ -169,6 +188,7 @@ export async function buildLedger(opts: {
         ...(opts.scopeAdminId ? { adminId: opts.scopeAdminId } : f.adminId ? { adminId: f.adminId } : {}),
         ...(f.method ? { method: f.method } : {}),
         ...userFilter,
+        ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
       include: { user: { select: { id: true, name: true, email: true, phone: true } } },
@@ -183,7 +203,7 @@ export async function buildLedger(opts: {
         id: `wd-${w.id}`, type: "withdrawal", userId: w.userId, userName: w.user.name,
         userContact: w.user.email ?? w.user.phone ?? null, adminId: w.adminId,
         adminName: w.adminId ? adminById.get(w.adminId) ?? null : null,
-        amount: -amount, wallet: "cash", detail: `Withdrawal request via ${w.method}`,
+        amount: -amount, wallet: "cash", fiatCurrency: w.fiatCurrency ?? "GHS", detail: `Withdrawal request via ${w.method}`,
         method: w.method, status: w.status, reason: w.reason ?? undefined,
         createdAt: w.createdAt.toISOString(),
       });
@@ -196,6 +216,7 @@ export async function buildLedger(opts: {
       where: {
         ...(opts.scopeAdminId ? { adminId: opts.scopeAdminId } : f.adminId ? { adminId: f.adminId } : {}),
         ...userFilter,
+        ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
       include: { user: { select: { id: true, name: true, email: true, phone: true } } },
@@ -212,6 +233,7 @@ export async function buildLedger(opts: {
         adminName: adminById.get(a.adminId) ?? null,
         amount: a.direction === "credit" ? amount : -amount,
         wallet: a.wallet === "coins" ? "coins" : "cash",
+        fiatCurrency: a.fiatCurrency ?? "GHS",
         // P1 Batch 1 (A17/A18): a bonus grant or a promo redemption is a
         // BalanceAdjustment too, but the ledger names it so it is never
         // mistaken for a manual adjustment.
@@ -226,6 +248,7 @@ export async function buildLedger(opts: {
     const conversions = await prisma.conversionEvent.findMany({
       where: {
         ...userFilter,
+        ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
       include: { user: { select: { id: true, name: true, email: true, phone: true, referredByAdminId: true } } },
@@ -241,6 +264,7 @@ export async function buildLedger(opts: {
         userContact: c.user.email ?? c.user.phone ?? null, adminId: c.user.referredByAdminId,
         adminName: c.user.referredByAdminId ? adminById.get(c.user.referredByAdminId) ?? null : null,
         amount: -amount, wallet: "cash",
+        fiatCurrency: c.fiatCurrency ?? "GHS",
         detail: `Converted ${dec(c.cashDebited)} cash -> ${c.coinsGained} coins`,
         createdAt: c.createdAt.toISOString(),
       });
@@ -256,6 +280,7 @@ export async function buildLedger(opts: {
     const payouts = await prisma.commissionPayout.findMany({
       where: {
         ...(payoutAdminId ? { adminId: payoutAdminId } : {}),
+        ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
       include: { admin: { select: { id: true, name: true, email: true, phone: true } } },
@@ -271,6 +296,7 @@ export async function buildLedger(opts: {
         userContact: p.admin.email ?? p.admin.phone ?? null, adminId: p.adminId,
         adminName: p.admin.name,
         amount: -amount, wallet: "cash",
+        fiatCurrency: p.fiatCurrency ?? "GHS",
         detail: `Commission payout via ${p.method}${p.reference ? ` · ${p.reference}` : ""}`,
         method: p.method, createdAt: p.createdAt.toISOString(),
       });
@@ -279,7 +305,17 @@ export async function buildLedger(opts: {
 
   rows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   const page = rows.slice(0, limit);
-  const cashIn = rows.filter((r) => r.wallet === "cash" && r.amount > 0).reduce((s, r) => s + r.amount, 0);
-  const cashOut = rows.filter((r) => r.wallet === "cash" && r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0);
-  return { rows: page, totals: { rows: rows.length, cashIn: Math.round(cashIn * 100) / 100, cashOut: Math.round(cashOut * 100) / 100 } };
+  // Phase 1 country-based (Nov 2026): cash in/out per fiat. Summing
+  // across fiats would be nonsense, so the map is the honest total;
+  // `totals` is the slice for the requested fiat (GHS when no filter).
+  const totalsByCurrency: Record<string, { cashIn: number; cashOut: number }> = {};
+  for (const r of rows) {
+    if (r.wallet !== "cash") continue;
+    const t = totalsByCurrency[r.fiatCurrency] ?? (totalsByCurrency[r.fiatCurrency] = { cashIn: 0, cashOut: 0 });
+    if (r.amount > 0) t.cashIn = Math.round((t.cashIn + r.amount) * 100) / 100;
+    else t.cashOut = Math.round((t.cashOut + Math.abs(r.amount)) * 100) / 100;
+  }
+  const totalsFiat = f.fiatCurrency?.toUpperCase() ?? "GHS";
+  const totals = { rows: rows.length, ...(totalsByCurrency[totalsFiat] ?? { cashIn: 0, cashOut: 0 }) };
+  return { rows: page, totals, totalsByCurrency };
 }

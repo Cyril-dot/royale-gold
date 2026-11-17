@@ -20,12 +20,16 @@ export async function GET(req: Request) {
     const from = sp.get("from");
     const to = sp.get("to");
     const limit = Math.min(Math.max(Number(sp.get("limit") ?? 50) || 50, 1), 100);
+    // Phase 1 country-based (Nov 2026): ?currency= (default GHS) — rows
+    // AND totals are in one fiat only.
+    const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
     const fromD = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? new Date(`${from}T00:00:00.000Z`) : undefined;
     const toD = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? new Date(`${to}T23:59:59.999Z`) : undefined;
 
     const rows = await prisma.depositEvent.findMany({
       where: {
         adminId,
+        fiatCurrency,
         ...(method ? { method } : {}),
         createdAt: { gte: fromD, lte: toD },
       },
@@ -48,11 +52,13 @@ export async function GET(req: Request) {
         userContact: d.user.email ?? d.user.phone ?? null,
         amount: dec(d.amount),
         method: d.method,
+        fiatCurrency: d.fiatCurrency ?? "GHS",
         pctInForce: dec(d.pctInForce),
         commission: dec(d.commission),
         createdAt: d.createdAt.toISOString(),
       })),
       totals: { deposits: filtered.length, totalAmount: Math.round(totalAmount * 100) / 100, totalCommission: Math.round(totalCommission * 100) / 100 },
+      currency: fiatCurrency,
     });
   } catch (err) {
     return toErrorResponse(err);

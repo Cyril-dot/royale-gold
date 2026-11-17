@@ -15,6 +15,12 @@
 // stamps pctInForce = the effective rule rate and commission = 0 when a
 // rule is in force (commission is earned on activity, not on the deposit
 // itself); in legacy mode it stamps the old flat % and the old commission.
+//
+// Phase 1 country-based (Nov 2026): EVERY function here takes a fiat
+// (default GHS) and filters DepositEvent + GameResult by
+// fiatCurrency. Commission is earned in the PLAYER'S fiat and must
+// never be summed across fiats — a ₦ stake and a GH₵ stake in one
+// total would be nonsense. The rollup / P&L call these per currency.
 
 import { prisma } from "./prisma";
 import { dateStr, dec, round2, todayStr, yesterdayStr } from "./money";
@@ -35,6 +41,8 @@ export interface CommissionRuleRow {
 
 export interface CommissionDay {
   date: string;
+  // Phase 1 country-based (Nov 2026): the fiat these figures are in.
+  fiatCurrency: string;
   deposits: number;
   totalAmount: number;
   totalStakes: number;
@@ -50,6 +58,8 @@ export interface CommissionDay {
 }
 
 export interface CommissionSummary {
+  // Phase 1 country-based (Nov 2026): the fiat these figures are in.
+  fiatCurrency: string;
   today: number;
   yesterday: number;
   last7d: number;
@@ -64,6 +74,8 @@ export interface DepositRow {
   userContact: string | null;
   amount: number;
   method: string;
+  // Phase 1 country-based (Nov 2026): the fiat this deposit was made in.
+  fiatCurrency: string;
   pctInForce: number;
   commission: number;
   time: string;
@@ -141,6 +153,7 @@ export async function dayCommissions(
   adminId: string,
   from?: string,
   to?: string,
+  fiatCurrency: string = "GHS",
 ): Promise<CommissionDay[]> {
   const userIds = await referredUserIds(adminId);
   const timeline = await ruleTimeline(adminId);
@@ -153,11 +166,11 @@ export async function dayCommissions(
     userIds.length === 0
       ? []
       : prisma.gameResult.findMany({
-          where: { userId: { in: userIds }, currency: "cash", createdAt: { gte: fromDate, lt: toDate } },
+          where: { userId: { in: userIds }, currency: "cash", fiatCurrency, createdAt: { gte: fromDate, lt: toDate } },
           select: { stake: true, payout: true, createdAt: true },
         }),
     prisma.depositEvent.findMany({
-      where: { adminId, createdAt: { gte: fromDate, lt: toDate } },
+      where: { adminId, fiatCurrency, createdAt: { gte: fromDate, lt: toDate } },
       select: { amount: true, commission: true, createdAt: true },
     }),
   ]);
@@ -207,6 +220,7 @@ export async function dayCommissions(
     }
     days.push({
       date,
+      fiatCurrency,
       deposits: row.deposits,
       totalAmount: row.totalAmount,
       totalStakes: row.totalStakes,
@@ -224,10 +238,10 @@ export async function dayCommissions(
  * The deposit ROWS keep their stamped commission (history), but the
  * TOTALS are recomputed by the rules engine — that is the figure the
  * commission pages show. */
-export async function depositsForAdminOn(adminId: string, date: string) {
+export async function depositsForAdminOn(adminId: string, date: string, fiatCurrency: string = "GHS") {
   const { from, to } = dayBounds(date);
   const rows = await prisma.depositEvent.findMany({
-    where: { adminId, createdAt: { gte: from, lt: to } },
+    where: { adminId, fiatCurrency, createdAt: { gte: from, lt: to } },
     include: { user: { select: { id: true, name: true, email: true, phone: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -238,11 +252,12 @@ export async function depositsForAdminOn(adminId: string, date: string) {
     userContact: r.user.email ?? r.user.phone ?? null,
     amount: dec(r.amount),
     method: r.method,
+    fiatCurrency: r.fiatCurrency ?? "GHS",
     pctInForce: dec(r.pctInForce),
     commission: dec(r.commission),
     time: r.createdAt.toISOString(),
   }));
-  const days = await dayCommissions(adminId, date, date);
+  const days = await dayCommissions(adminId, date, date, fiatCurrency);
   const d = days[0];
   const totals = {
     deposits: deposits.length,
@@ -253,13 +268,15 @@ export async function depositsForAdminOn(adminId: string, date: string) {
     model: d?.model ?? ("legacy" as const),
     rate: d?.rate ?? 0,
   };
-  return { date, deposits, totals };
+  // Phase 1 country-based (Nov 2026): the fiat these figures are in
+  // (the scoped wrapper already returns it).
+  return { date, fiatCurrency, deposits, totals };
 }
 
 /** Today / Yesterday / 7d / 30d / all-time commission for one admin —
- * all recomputed from the ledger by the rules engine. */
-export async function commissionSummary(adminId: string): Promise<CommissionSummary> {
-  const days = await dayCommissions(adminId);
+ * all recomputed from the ledger by the rules engine, in one fiat. */
+export async function commissionSummary(adminId: string, fiatCurrency: string = "GHS"): Promise<CommissionSummary> {
+  const days = await dayCommissions(adminId, undefined, undefined, fiatCurrency);
   const today = todayStr();
   const yesterday = yesterdayStr();
   const d7 = addDays(today, -6);
@@ -267,6 +284,7 @@ export async function commissionSummary(adminId: string): Promise<CommissionSumm
   const sum = (pred: (d: CommissionDay) => boolean) =>
     round2(days.filter(pred).reduce((acc, d) => acc + d.totalCommission, 0));
   return {
+    fiatCurrency,
     today: sum((d) => d.date === today),
     yesterday: sum((d) => d.date === yesterday),
     last7d: sum((d) => d.date >= d7 && d.date <= today),
@@ -276,30 +294,30 @@ export async function commissionSummary(adminId: string): Promise<CommissionSumm
 }
 
 /** Every day on which the admin earned commission, newest first. */
-export async function commissionHistoryDays(adminId: string) {
-  return dayCommissions(adminId);
+export async function commissionHistoryDays(adminId: string, fiatCurrency: string = "GHS") {
+  return dayCommissions(adminId, undefined, undefined, fiatCurrency);
 }
 
 /**
  * Commission owed to one admin over a period (inclusive dates). The
  * settlement (O5) and the P&L both read this — one source of truth.
  */
-export async function commissionOwed(adminId: string, from: string, to: string): Promise<number> {
-  const days = await dayCommissions(adminId, from, to);
+export async function commissionOwed(adminId: string, from: string, to: string, fiatCurrency: string = "GHS"): Promise<number> {
+  const days = await dayCommissions(adminId, from, to, fiatCurrency);
   return round2(days.reduce((acc, d) => acc + d.totalCommission, 0));
 }
 
-/** Commission owed to ALL admins over a period (the P&L commission line). */
-export async function totalCommissionOwed(from: string, to: string): Promise<number> {
+/** Commission owed to ALL admins over a period (the P&L commission line), in one fiat. */
+export async function totalCommissionOwed(from: string, to: string, fiatCurrency: string = "GHS"): Promise<number> {
   const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
   let total = 0;
-  for (const a of admins) total = round2(total + (await commissionOwed(a.id, from, to)));
+  for (const a of admins) total = round2(total + (await commissionOwed(a.id, from, to, fiatCurrency)));
   return total;
 }
 
-/** Amount already PAID to an admin (sum of CommissionPayout rows). */
-export async function commissionPaid(adminId: string, from?: string, to?: string): Promise<number> {
-  const where: { adminId: string; createdAt?: { gte: Date; lt: Date } } = { adminId };
+/** Amount already PAID to an admin (sum of CommissionPayout rows), in one fiat. */
+export async function commissionPaid(adminId: string, from?: string, to?: string, fiatCurrency: string = "GHS"): Promise<number> {
+  const where: { adminId: string; fiatCurrency: string; createdAt?: { gte: Date; lt: Date } } = { adminId, fiatCurrency };
   if (from && to) {
     const { from: fromDate } = dayBounds(from);
     const { to: toDate } = dayBounds(to);
@@ -313,6 +331,8 @@ export interface PlayerCommission {
   total: number;
   model: CommissionModel | "legacy" | "mixed" | "none";
   rate: number;
+  // Phase 1 country-based (Nov 2026): the fiat this total is in.
+  fiatCurrency: string;
 }
 
 /**
@@ -323,17 +343,20 @@ export interface PlayerCommission {
  * day with no rule falls back to that player's stamped deposit
  * commissions for the day. The model returned is the model of the most
  * recent active day ("mixed" when days disagree, "none" when the player
- * has no activity at all) — the UI says which one it is.
+ * has no activity at all) — the UI says which one it is. Filtered to
+ * the player's single fiat (Nov 2026).
  */
 export async function playerCommission(adminId: string, userId: string): Promise<PlayerCommission> {
   const timeline = await ruleTimeline(adminId);
+  const player = await prisma.user.findUnique({ where: { id: userId }, select: { currency: true } });
+  const fiatCurrency = player?.currency ?? "GHS";
   const [results, deposits] = await Promise.all([
     prisma.gameResult.findMany({
-      where: { userId, currency: "cash" },
+      where: { userId, currency: "cash", fiatCurrency },
       select: { stake: true, payout: true, createdAt: true },
     }),
     prisma.depositEvent.findMany({
-      where: { userId, adminId },
+      where: { userId, adminId, fiatCurrency },
       select: { commission: true, createdAt: true },
     }),
   ]);
@@ -387,14 +410,15 @@ export async function playerCommission(adminId: string, userId: string): Promise
     total,
     model: lastModel === "none" ? "none" : mixed ? "mixed" : lastModel,
     rate: lastRate,
+    fiatCurrency,
   };
 }
 
-/** Settlement for one admin over a period: owed / paid / balance. */
-export async function settlementForAdmin(adminId: string, from: string, to: string) {
-  const owed = await commissionOwed(adminId, from, to);
-  const paid = await commissionPaid(adminId, from, to);
-  return { owed, paid, balance: round2(owed - paid) };
+/** Settlement for one admin over a period: owed / paid / balance, in one fiat. */
+export async function settlementForAdmin(adminId: string, from: string, to: string, fiatCurrency: string = "GHS") {
+  const owed = await commissionOwed(adminId, from, to, fiatCurrency);
+  const paid = await commissionPaid(adminId, from, to, fiatCurrency);
+  return { owed, paid, balance: round2(owed - paid), fiatCurrency };
 }
 
 /** All commission rules (global default first, then per-admin, newest

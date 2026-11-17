@@ -12,7 +12,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { api, fmtCash, fmtCoins, GameStat, GameHistoryRow } from "../../lib/api";
+import { api, fmtMoney, fmtCoins, GameStat, GameHistoryRow } from "../../lib/api";
+import { symbolFor } from "../../lib/country";
 import { avatarFor } from "../../lib/avatar";
 import { useStore } from "../../lib/store";
 import { getGame } from "../../lib/games";
@@ -95,6 +96,23 @@ export default function AccountPage() {
   const [stats, setStats] = useState<GameStat[] | null>(null);
   const [history, setHistory] = useState<GameHistoryRow[]>([]);
   const [simStats, setSimStats] = useState<GameStat[]>([]);
+  // Phase 1 country-based (Nov 2026): the player's fiat + the GHS→fiat
+  // factor for the badge thresholds (100 / 1,000 are GHS-term numbers).
+  const fiat = user?.currency ?? "GHS";
+  const sym = symbolFor(fiat);
+  const [factor, setFactor] = useState(1);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    api<{ currencies: { currency: string; conversionRate: number }[] }>("/api/games/config")
+      .then((r) => {
+        if (cancelled) return;
+        const row = r.currencies?.find((c) => c.currency === fiat);
+        if (row) setFactor((row.conversionRate || 5) / 5);
+      })
+      .catch(() => { /* GHS defaults stay */ });
+    return () => { cancelled = true; };
+  }, [user, fiat]);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   // P1 Batch 1 (A18): promo code redeem — a bonus from any admin, in
@@ -267,15 +285,20 @@ export default function AccountPage() {
 
   const achievements = useMemo(() => {
     const t = realTotals;
+    // Phase 1 country-based (Nov 2026): the 100 / 1,000 badge bars are
+    // GHS-term numbers, scaled to the player's fiat (NGN: 10,000 /
+    // 100,000) — an NGN player is never "High Roller" for ₦1,500.
+    const bigBar = 100 * factor;
+    const rollerBar = 1000 * factor;
     return [
       { id: "win", name: "First Win", desc: "Win your first game", icon: BADGE_ICONS.win, unlocked: t.wins >= 1, progress: `${Math.min(t.wins, 1)}/1` },
       { id: "games", name: "Warming Up", desc: "Play 10 games", icon: BADGE_ICONS.games, unlocked: t.played >= 10, progress: `${Math.min(t.played, 10)}/10` },
       { id: "grind", name: "Grinder", desc: "Play 50 games", icon: BADGE_ICONS.grind, unlocked: t.played >= 50, progress: `${Math.min(t.played, 50)}/50` },
       { id: "streak", name: "Hot Streak", desc: "Win 5 in a row", icon: BADGE_ICONS.streak, unlocked: t.streak >= 5, progress: `${Math.min(t.streak, 5)}/5` },
-      { id: "big", name: "Big Win", desc: "Best win GH₵ 100+", icon: BADGE_ICONS.big, unlocked: t.bestCash >= 100, progress: `GH₵ ${Math.round(Math.min(t.bestCash, 100))} / 100` },
-      { id: "roller", name: "High Roller", desc: "Wager GH₵ 1,000+", icon: BADGE_ICONS.roller, unlocked: cashFlow.wagered >= 1000, progress: `GH₵ ${Math.round(Math.min(cashFlow.wagered, 1000))} / 1,000` },
+      { id: "big", name: "Big Win", desc: `Best win ${sym} ${bigBar.toLocaleString("en-GH")}+`, icon: BADGE_ICONS.big, unlocked: t.bestCash >= bigBar, progress: `${sym} ${Math.round(Math.min(t.bestCash, bigBar)).toLocaleString("en-GH")} / ${bigBar.toLocaleString("en-GH")}` },
+      { id: "roller", name: "High Roller", desc: `Wager ${sym} ${rollerBar.toLocaleString("en-GH")}+`, icon: BADGE_ICONS.roller, unlocked: cashFlow.wagered >= rollerBar, progress: `${sym} ${Math.round(Math.min(cashFlow.wagered, rollerBar)).toLocaleString("en-GH")} / ${rollerBar.toLocaleString("en-GH")}` },
     ];
-  }, [realTotals, cashFlow]);
+  }, [realTotals, cashFlow, factor, sym]);
 
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
 
@@ -322,7 +345,7 @@ export default function AccountPage() {
         method: "POST",
         body: JSON.stringify({ code: promoCode.trim().toUpperCase() }),
       });
-      toast(`Redeemed ${r.code} — +${r.bonusCurrency === "cash" ? `GH₵ ${r.bonusAmount.toFixed(2)}` : `${r.bonusAmount} coins`}`, "win");
+      toast(`Redeemed ${r.code} — +${r.bonusCurrency === "cash" ? fmtMoney(r.bonusAmount, fiat) : `${r.bonusAmount} coins`}`, "win");
       setPromoCode("");
       await refresh();
     } catch (ex) {
@@ -387,6 +410,9 @@ export default function AccountPage() {
           <div className="ac-who">
             <h3>{user.name}{user.role === "owner" ? " 👑" : ""}</h3>
             <p>{user.email || user.phone || "—"} · {roleLabel} · Joined {new Date(user.createdAt).toLocaleDateString("en-GB")}</p>
+            {/* Phase 1 country-based (Nov 2026): the account shows its
+                country + currency — set at register, never changeable. */}
+            <p>{user.country === "NG" ? "Nigeria" : "Ghana"} · {fiat} ({sym})</p>
             {user.referralCodeUsed && <p>Referred with code {user.referralCodeUsed}</p>}
           </div>
           <div className="ac-level">
@@ -400,7 +426,7 @@ export default function AccountPage() {
 
         {/* Wallet summary */}
         <section className="ac-wallet" aria-label="Wallet">
-          <Link className="ac-wcard" href="/wallet"><span>CASH</span><b>{Number(cash).toFixed(2)}</b><i>Wallet →</i></Link>
+          <Link className="ac-wcard" href="/wallet"><span>CASH</span><b>{fmtMoney(cash, fiat)}</b><i>Wallet →</i></Link>
           <Link className="ac-wcard" href="/wallet"><span>COINS</span><b>{fmtCoins(coins)}</b><i>Wallet →</i></Link>
           <Link className="ac-wcard" href="/wallet"><span>SIM</span><b>{fmtCoins(sim)}</b><i>Wallet →</i></Link>
         </section>
@@ -441,12 +467,12 @@ export default function AccountPage() {
               <div className="ac-stat"><span>WINS</span><b>{active.wins}</b></div>
               <div className="ac-stat"><span>WIN RATE</span><b>{Math.round(active.winRate * 100)}%</b></div>
               <div className="ac-stat"><span>BEST STREAK</span><b>{active.streak}</b></div>
-              <div className="ac-stat"><span>BEST CASH WIN</span><b className="gold">{fmtCash(active.bestCash)}</b></div>
+              <div className="ac-stat"><span>BEST CASH WIN</span><b className="gold">{fmtMoney(active.bestCash, fiat)}</b></div>
               {active.bestCoins > 0 && <div className="ac-stat"><span>BEST COIN WIN</span><b className="gold">{fmtCoins(active.bestCoins)} coins</b></div>}
               {tab === "REAL" && (
                 <>
-                  <div className="ac-stat"><span>WAGERED</span><b>{fmtCash(cashFlow.wagered)}</b></div>
-                  <div className="ac-stat"><span>WON BACK</span><b className={cashFlow.net >= 0 ? "gold" : "red"}>{fmtCash(cashFlow.won)}</b></div>
+                  <div className="ac-stat"><span>WAGERED</span><b>{fmtMoney(cashFlow.wagered, fiat)}</b></div>
+                  <div className="ac-stat"><span>WON BACK</span><b className={cashFlow.net >= 0 ? "gold" : "red"}>{fmtMoney(cashFlow.won, fiat)}</b></div>
                 </>
               )}
             </div>
@@ -464,7 +490,7 @@ export default function AccountPage() {
                 const g = getGame(s.game);
                 const name = g?.name ?? s.game;
                 const rate = s.played > 0 ? s.wins / s.played : 0;
-                const best = g?.currency === "coins" ? `${fmtCoins(s.best)} coins` : fmtCash(s.best);
+                const best = g?.currency === "coins" ? `${fmtCoins(s.best)} coins` : fmtMoney(s.best, fiat);
                 return (
                   <li key={s.game}>
                     <Link className="ac-game" href={`/games/${s.game}`}>
@@ -490,7 +516,7 @@ export default function AccountPage() {
                 const name = g?.name ?? h.game;
                 const net = h.payout - h.stake;
                 const won = net > 0;
-                const amt = h.currency === "coins" ? `${net > 0 ? "+" : "−"}${fmtCoins(Math.abs(net))} coins` : `${net > 0 ? "+" : "−"}${fmtCash(Math.abs(net))}`;
+                const amt = h.currency === "coins" ? `${net > 0 ? "+" : "−"}${fmtCoins(Math.abs(net))} coins` : `${net > 0 ? "+" : "−"}${fmtMoney(Math.abs(net), h.fiatCurrency ?? fiat)}`;
                 return (
                   <li key={h.id} className="ac-hist-row">
                     <span className={`ac-result ${won ? "win" : "lose"}`}>{won ? "WON" : "LOST"}</span>

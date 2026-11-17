@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { useStore } from "../lib/store";
+import { COUNTRIES } from "../lib/country";
 
 export default function AuthModal() {
   const { authOpen, authMode, closeAuth, openAuth, login, loginTotp, register, toast, refPrefill } = useStore();
@@ -13,6 +14,10 @@ export default function AuthModal() {
   const [contact, setContact] = useState("");
   const [pass, setPass] = useState("");
   const [ref, setRef] = useState("");
+  // Phase 1 country-based (Nov 2026): the country the account plays
+  // in. The fiat is derived from it (GH → GHS, NG → NGN) and can
+  // never be changed after register — the picker says so.
+  const [country, setCountry] = useState("GH");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   // P0 Batch 3 (A13): the login's second step — set when the password
@@ -79,7 +84,7 @@ export default function AuthModal() {
     setErr("");
     setBusy(true);
     try {
-      const r = await register(name.trim(), contact.trim(), pass, ref.trim() || undefined);
+      const r = await register(name.trim(), contact.trim(), pass, ref.trim() || undefined, country);
       toast(
         r.referredBonusCoins ? `Account created — 10 free coins + ${r.referredBonusCoins} referral coins` : "Account created — 10 free coins",
         "win"
@@ -125,6 +130,15 @@ export default function AuthModal() {
               <div className="rg48-f"><label htmlFor="rgName">Full name</label><input id="rgName" type="text" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required /></div>
               <div className="rg48-f"><label htmlFor="rgContact">Email or phone</label><input id="rgContact" type="text" placeholder="you@example.com or 0244 000 000" value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
               <div className="rg48-f"><label htmlFor="rgPass">Password</label><input id="rgPass" type="password" placeholder="Pick a password" value={pass} onChange={(e) => setPass(e.target.value)} required minLength={6} /></div>
+              <div className="rg48-f">
+                <label htmlFor="rgCountry">Country</label>
+                <select id="rgCountry" value={country} onChange={(e) => setCountry(e.target.value)} required>
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.name} ({c.currency})</option>
+                  ))}
+                </select>
+              </div>
+              <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Your country sets your currency — {country === "NG" ? "Nigerian naira (₦)" : "Ghana cedi (GH₵)"} — and can&apos;t be changed later.</p>
               <div className="rg48-f"><label htmlFor="rgRef">Referral code (optional) — worth 5 free coins</label><input id="rgRef" type="text" placeholder="e.g. RG-DEMO1" value={ref} onChange={(e) => setRef(e.target.value.toUpperCase())} /></div>
               <p className="rg48-err">{err}</p>
               <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Creating…" : "Create account · get 10 free coins"}</button>

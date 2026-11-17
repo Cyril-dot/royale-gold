@@ -10,7 +10,8 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../lib/store";
-import { api, fmtCash } from "../../lib/api";
+import { api, fmtMoney } from "../../lib/api";
+import CurrencyChips from "../../components/CurrencyChips";
 import { useAdminOverview, useAdminDashboard, useAdminSentNotifications } from "../../lib/admin-client";
 import { canAccessSection } from "../../lib/rbac";
 import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../components/AdminNav";
@@ -31,10 +32,15 @@ function AdminOverviewInner() {
   const { user, toast } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ov, err } = useAdminOverview(previewId);
+  // Phase 1 country-based (Nov 2026): the currency filter — the
+  // commission + dashboard figures are in ONE fiat only. Defaults to
+  // the admin's own currency; the chips switch it.
+  const [fiatSel, setFiatSel] = useState<string | null>(null);
+  const fiat = fiatSel ?? user?.currency ?? "GHS";
+  const { ov, err } = useAdminOverview(previewId, fiat);
   // P0 Batch 4 (A1): the enhanced dashboard — "today so far", the last
   // 7 days of deposits, and the top 5 players by total deposited.
-  const { dash, err: dashErr } = useAdminDashboard(previewId);
+  const { dash, err: dashErr } = useAdminDashboard(previewId, fiat);
   // P1 Batch 2 (A23): broadcast — one notification to all my players.
   // The form is admin-only (hidden in preview); the sent list shows
   // for the owner too.
@@ -70,7 +76,7 @@ function AdminOverviewInner() {
   const c = ov.commission;
   const latest = ov.history.slice(0, 5);
   const commissionHref = (date: string) =>
-    previewId ? `/admin/commission?preview=${previewId}&date=${date}` : `/admin/commission?date=${date}`;
+    previewId ? `/admin/commission?preview=${previewId}&date=${date}&currency=${fiat}` : `/admin/commission?date=${date}&currency=${fiat}`;
   const card = (label: string, value: string) => (
     <div className="sum-card"><span>{label}</span><b>{value}</b></div>
   );
@@ -83,14 +89,17 @@ function AdminOverviewInner() {
       </div>
       <p className="rg48-sub">{ov.admin.name} · {ov.admin.email} · {ov.admin.commissionPct}% commission{ov.admin.active ? "" : " · DEACTIVATED"}</p>
       <AdminNav />
+      {/* Phase 1 country-based (Nov 2026): one fiat at a time — the
+          figures below are in the selected currency. */}
+      <CurrencyChips value={fiat} onChange={setFiatSel} label="Commission currency" />
       <section className="admin-sec">
         <h3>Commission summary</h3>
         <div className="sum-cards">
-          {card("Today", fmtCash(c.today))}
-          {card("Yesterday", fmtCash(c.yesterday))}
-          {card("Last 7 days", fmtCash(c.last7d))}
-          {card("Last 30 days", fmtCash(c.last30d))}
-          {card("All time", fmtCash(c.allTime))}
+          {card("Today", fmtMoney(c.today, ov.currency ?? fiat))}
+          {card("Yesterday", fmtMoney(c.yesterday, ov.currency ?? fiat))}
+          {card("Last 7 days", fmtMoney(c.last7d, ov.currency ?? fiat))}
+          {card("Last 30 days", fmtMoney(c.last30d, ov.currency ?? fiat))}
+          {card("All time", fmtMoney(c.allTime, ov.currency ?? fiat))}
         </div>
       </section>
       <section className="admin-sec">
@@ -117,15 +126,15 @@ function AdminOverviewInner() {
             )}
             <div className="sum-cards">
               {card("Deposits today", String(dash.today.deposits))}
-              {card("Deposited today", fmtCash(dash.today.depositsTotal))}
+              {card("Deposited today", fmtMoney(dash.today.depositsTotal, dash.currency ?? fiat))}
               {card("New players", String(dash.today.newPlayers))}
               {card("Active players", String(dash.today.activePlayers))}
-              {card("Commission today", fmtCash(dash.today.commission))}
+              {card("Commission today", fmtMoney(dash.today.commission, dash.currency ?? fiat))}
             </div>
           </section>
           <section className="admin-sec">
-            <h3>Last 7 days — deposits (GH₵)</h3>
-            <div className="b4-chart" role="img" aria-label={`Deposits by day for the last 7 days, totalling ${fmtCash(dash.week.reduce((s, d) => s + d.total, 0))}`}>
+            <h3>Last 7 days — deposits ({dash.currency ?? fiat})</h3>
+            <div className="b4-chart" role="img" aria-label={`Deposits by day for the last 7 days, totalling ${fmtMoney(dash.week.reduce((s, d) => s + d.total, 0), dash.currency ?? fiat)}`}>
               {(() => {
                 const max = Math.max(1, ...dash.week.map((d) => d.total));
                 return dash.week.map((d) => (
@@ -153,7 +162,7 @@ function AdminOverviewInner() {
                       <tr key={p.id}>
                         <td>{i + 1}. <Link href={previewId ? `/admin/players/${p.id}?preview=${previewId}` : `/admin/players/${p.id}`}>{p.name}</Link></td>
                         <td>{p.deposits}</td>
-                        <td>{fmtCash(p.totalDeposited)}</td>
+                        <td>{fmtMoney(p.totalDeposited, dash.currency ?? fiat)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -185,7 +194,7 @@ function AdminOverviewInner() {
                   <tr key={d.date}>
                     <td>{d.date}</td>
                     <td>{d.deposits}</td>
-                    <td>{fmtCash(d.totalCommission)}</td>
+                    <td>{fmtMoney(d.totalCommission, d.fiatCurrency ?? ov.currency ?? fiat)}</td>
                     <td><Link href={commissionHref(d.date)}>View</Link></td>
                   </tr>
                 ))}
