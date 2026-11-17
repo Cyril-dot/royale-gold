@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, fmtMoney, fmtCoins } from "../../lib/api";
-import { symbolFor } from "../../lib/country";
+import { phonePlaceholder, symbolFor } from "../../lib/country";
 import { useStore } from "../../lib/store";
 
 // P0 Batch 3 (A13) — TOTP two-factor auth, opt-in per admin/owner.
@@ -175,7 +175,7 @@ export default function SettingsPage() {
           <h3>Profile</h3>
           <form onSubmit={saveProfile}>
             <div className="rg48-f"><label htmlFor="stName">Full name</label><input id="stName" type="text" value={name} onChange={(e) => setName(e.target.value)} required /></div>
-            <div className="rg48-f"><label htmlFor="stContact">Email or phone</label><input id="stContact" type="text" value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
+            <div className="rg48-f"><label htmlFor="stContact">Email or phone</label><input id="stContact" type="text" value={contact} onChange={(e) => setContact(e.target.value)} placeholder={phonePlaceholder(user.country ?? "GH")} required /></div>
             <p className="rg48-mini">One contact only. Changing it changes how you log in.</p>
             <button className="btn btn-gold" type="submit" disabled={profileBusy}>{profileBusy ? "Saving…" : "Save profile"}</button>
           </form>

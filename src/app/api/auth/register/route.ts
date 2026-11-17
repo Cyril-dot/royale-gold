@@ -64,10 +64,13 @@ export async function POST(req: Request) {
           role: "user",
           country,
           currency,
-          cashBalance: 250,
+          // Signup balances (Nov 2026): NO starting cash — a new
+          // account starts at 0.00 and deposits to play. SIM stays
+          // 1000 for demo play. Coins: 5 base; a valid referral code
+          // adds exactly 5 more (10 total) — the bonus is unchanged.
+          cashBalance: 0,
           simBalance: 1000,
-          // New accounts start with 10 coins; a valid referral code adds exactly 5.
-          coins: codeRow ? 15 : 10,
+          coins: codeRow ? 10 : 5,
           referredByAdminId: codeRow?.adminId ?? null,
           referralCodeUsed: refCode,
         },

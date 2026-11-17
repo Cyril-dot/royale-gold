@@ -34,6 +34,10 @@ export default function DepositModal() {
   // public config when the modal opens. null = not loaded yet (treated
   // as demo until it arrives, so the button never flickers gateways).
   const [gateway, setGateway] = useState<string | null>(null);
+  // Country-based min-deposit hint (Nov 2026): the player's fiat
+  // minimum from the same config call (GHS 1, NGN 100 seed) — a hint
+  // only, the server still enforces it.
+  const [minDeposit, setMinDeposit] = useState<number | null>(null);
   // Phase 2 PayTeller (Nov 2026): the email-on-file prompt for
   // phone-only GHS users (PayTeller requires customer_email).
   const [emailInput, setEmailInput] = useState("");
@@ -55,11 +59,16 @@ export default function DepositModal() {
   useEffect(() => {
     if (!depositOpen) return;
     let live = true;
-    api<{ ghMomoGateway?: string }>("/api/games/config")
-      .then((r) => { if (live) setGateway(r.ghMomoGateway ?? "demo"); })
+    api<{ ghMomoGateway?: string; currencies?: { currency: string; minDeposit: number }[] }>("/api/games/config")
+      .then((r) => {
+        if (!live) return;
+        setGateway(r.ghMomoGateway ?? "demo");
+        const row = r.currencies?.find((c) => c.currency === fiat);
+        if (row && row.minDeposit > 0) setMinDeposit(row.minDeposit);
+      })
       .catch(() => { if (live) setGateway("demo"); });
     return () => { live = false; };
-  }, [depositOpen]);
+  }, [depositOpen, fiat]);
 
   // Escape closes the modal (same fix as AuthModal, round 6).
   useEffect(() => {
@@ -143,6 +152,9 @@ export default function DepositModal() {
           <p className="sub">Cash deposits only.{refPct != null ? ` Your referring admin earns ${refPct}% commission on this deposit.` : ""}</p>
           <form onSubmit={submit}>
             <div className="rg48-f"><label htmlFor="depAmt">Amount ({sym})</label><input id="depAmt" type="number" min={1} step={1} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required /></div>
+            {minDeposit != null && (
+              <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Minimum deposit {fmtMoney(minDeposit, fiat)}.</p>
+            )}
             <div className="rg48-f"><label>Method</label>
               <div className="dep-methods">
                 {METHODS.map((m) => (

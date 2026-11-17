@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { useStore } from "../lib/store";
-import { COUNTRIES } from "../lib/country";
+import { COUNTRIES, phonePlaceholder } from "../lib/country";
 
 export default function AuthModal() {
   const { authOpen, authMode, closeAuth, openAuth, login, loginTotp, register, toast, refPrefill } = useStore();
@@ -86,7 +86,7 @@ export default function AuthModal() {
     try {
       const r = await register(name.trim(), contact.trim(), pass, ref.trim() || undefined, country);
       toast(
-        r.referredBonusCoins ? `Account created — 10 free coins + ${r.referredBonusCoins} referral coins` : "Account created — 10 free coins",
+        r.referredBonusCoins ? `Account created — 5 free coins + ${r.referredBonusCoins} referral coins` : "Account created — 5 free coins",
         "win"
       );
       closeAuth();
@@ -119,7 +119,7 @@ export default function AuthModal() {
               </form>
             ) : (
               <form onSubmit={doLogin} autoComplete="off">
-                <div className="rg48-f"><label htmlFor="liContact">Email or phone</label><input id="liContact" type="text" placeholder="you@example.com or 0244 000 000" value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
+                <div className="rg48-f"><label htmlFor="liContact">Email or phone</label><input id="liContact" type="text" placeholder={phonePlaceholder("GH")} value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
                 <div className="rg48-f"><label htmlFor="liPass">Password</label><input id="liPass" type="password" placeholder="Your password" value={pass} onChange={(e) => setPass(e.target.value)} required /></div>
                 <p className="rg48-err">{err}</p>
                 <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
@@ -128,7 +128,7 @@ export default function AuthModal() {
           ) : (
             <form onSubmit={doRegister} autoComplete="off">
               <div className="rg48-f"><label htmlFor="rgName">Full name</label><input id="rgName" type="text" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required /></div>
-              <div className="rg48-f"><label htmlFor="rgContact">Email or phone</label><input id="rgContact" type="text" placeholder="you@example.com or 0244 000 000" value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
+              <div className="rg48-f"><label htmlFor="rgContact">Email or phone</label><input id="rgContact" type="text" placeholder={phonePlaceholder(country)} value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
               <div className="rg48-f"><label htmlFor="rgPass">Password</label><input id="rgPass" type="password" placeholder="Pick a password" value={pass} onChange={(e) => setPass(e.target.value)} required minLength={6} /></div>
               <div className="rg48-f">
                 <label htmlFor="rgCountry">Country</label>
@@ -141,7 +141,7 @@ export default function AuthModal() {
               <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Your country sets your currency — {country === "NG" ? "Nigerian naira (₦)" : "Ghana cedi (GH₵)"} — and can&apos;t be changed later.</p>
               <div className="rg48-f"><label htmlFor="rgRef">Referral code (optional) — worth 5 free coins</label><input id="rgRef" type="text" placeholder="e.g. RG-DEMO1" value={ref} onChange={(e) => setRef(e.target.value.toUpperCase())} /></div>
               <p className="rg48-err">{err}</p>
-              <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Creating…" : "Create account · get 10 free coins"}</button>
+              <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Creating…" : `Create account · get ${ref.trim() ? 10 : 5} free coins`}</button>
               <p className="rg48-mini" style={{ marginTop: 10 }}>Coins are play-only: spin them in coin games and win more — they can never be withdrawn or swapped for cash.</p>
             </form>
           )}

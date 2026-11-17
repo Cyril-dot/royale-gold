@@ -64,3 +64,24 @@ export function isOfferedCountry(country: string | null | undefined): boolean {
   if (!country) return false;
   return COUNTRIES.some((c) => c.code === country.toUpperCase());
 }
+
+/** Example local phone number for a country, as shown in the
+ * email-or-phone field hint. GH numbers are 10 digits (0244 form);
+ * NG numbers are 11 digits (0803 form). Unknown countries fall back
+ * to the GH form — existing accounts are GH/GHS. */
+export function phoneExample(country: string | null | undefined): string {
+  if (!country) return "0244 000 000";
+  switch (country.toUpperCase()) {
+    case "NG":
+      return "0803 000 0000";
+    default:
+      return "0244 000 000";
+  }
+}
+
+/** Full placeholder for the email-or-phone field, following the
+ * picked country live (register) or the GH default (login, which has
+ * no country picker). */
+export function phonePlaceholder(country: string | null | undefined): string {
+  return `you@example.com or ${phoneExample(country)}`;
+}
