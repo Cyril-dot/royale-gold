@@ -8,7 +8,10 @@ import { WITHDRAWAL_OWNER_THRESHOLD, WITHDRAWAL_RISK_LABELS } from "./withdrawal
 import { getAllCurrencyConfigs, getCurrencyConfig } from "./game-config";
 
 export type { WithdrawalRiskFlag } from "./withdrawal-flags";
-export { WITHDRAWAL_OWNER_THRESHOLD, WITHDRAWAL_RISK_LABELS } from "./withdrawal-flags";
+export { WITHDRAWAL_OWNER_THRESHOLD, WITHDRAWAL_RISK_LABELS, WITHDRAWAL_METHODS } from "./withdrawal-flags";
+
+// (WITHDRAWAL_METHODS lives in ./withdrawal-flags — client-safe, so the
+// convert page renders the same list the server validates against.)
 
 /** Statuses: pending -> approved | admin_approved -> approved | rejected. */
 export type WithdrawalStatus = "pending" | "admin_approved" | "approved" | "rejected";
@@ -29,8 +32,6 @@ export async function withdrawalOwnerThresholdFor(fiatCurrency: string = "GHS"):
   const cfg = await getCurrencyConfig(fiatCurrency);
   return cfg.withdrawalOwnerThreshold;
 }
-
-export const WITHDRAWAL_METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
 // P1 Batch 1 (A15): withdrawal risk flags, computed from REAL data.
 //   new-account       — the player joined less than 7 days ago

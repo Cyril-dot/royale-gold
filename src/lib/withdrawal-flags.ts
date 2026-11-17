@@ -9,6 +9,12 @@
  * the admin Money page shows the per-fiat value from the API. */
 export const WITHDRAWAL_OWNER_THRESHOLD = 500;
 
+/** Withdrawal methods a player can request. "bank" pays to the saved
+ * bank account (Nov 2026); the rest are MoMo / card as before. Kept
+ * here (client-safe) so the convert page can render the method picker
+ * from the same list the server validates against. */
+export const WITHDRAWAL_METHODS = ["MTN", "Telecel", "AirtelTigo", "card", "bank"] as const;
+
 export type WithdrawalRiskFlag = "new-account" | "large-vs-deposits" | "rapid" | "unusual";
 
 export const WITHDRAWAL_RISK_LABELS: Record<WithdrawalRiskFlag, string> = {

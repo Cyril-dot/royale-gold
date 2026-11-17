@@ -264,6 +264,10 @@ export default function Header() {
                   <span className="htm-val coin">{fmtCoins(coins)}</span>
                 </span>
               </Link>
+              <Link href="/wallet/convert" className="htm-row" role="menuitem" onClick={() => setToolsOpen(false)}>
+                <span className="bal-coin htm-ico" aria-hidden="true">⇄</span>
+                <span className="htm-lab">Convert</span>
+              </Link>
             </>
           )}
           <button type="button" className="htm-row" role="menuitem" onClick={() => { setToolsOpen(false); setSearchOpen(true); }}>

@@ -31,7 +31,7 @@ interface CurrencyCfg {
   conversionRate: number;
 }
 
-export default function CoinConverter() {
+export default function CoinConverter({ onConverted }: { onConverted?: () => void } = {}) {
   const { user, wallet, mode, setMode, setWallet, toast, setDepositOpen } = useStore();
   const [rate, setRate] = useState(FALLBACK_RATE);
   const [text, setText] = useState(String(FALLBACK_RATE * DEFAULT_MULT));
@@ -181,6 +181,7 @@ export default function CoinConverter() {
       setSpinning(true);
       setJustConverted({ gained: r.coinsGained, debited: r.cashDebited });
       toast(`Converted ${sym}${fmtAmt(r.cashDebited)} → ${r.coinsGained} coins`, "win");
+      onConverted?.();
       if (spinTimer.current) clearTimeout(spinTimer.current);
       spinTimer.current = setTimeout(() => setSpinning(false), 950);
       if (flashTimer.current) clearTimeout(flashTimer.current);
@@ -198,10 +199,9 @@ export default function CoinConverter() {
         <div className="cv-head">
           <div>
             <h3>Convert cash to coins</h3>
-          </div>
-          <div className="cv-rate" aria-label={`Rate: ${rate} ${fiat} equals 1 coin`}>
-            <span className="cv-rate-num">{sym}{rate} = 1</span>
-            <span className="cv-rate-coin">◉ coin</span>
+            <p className="cv-rate" aria-label={`Rate: ${rate} ${fiat} equals 1 coin`}>
+              {sym}{rate} = 1 coin
+            </p>
           </div>
         </div>
 

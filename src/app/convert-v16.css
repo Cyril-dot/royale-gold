@@ -10,9 +10,10 @@
 .cv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;transform:translateZ(24px)}
 .cv-head h3{margin:0;font-size:18px;font-weight:800;letter-spacing:.01em;color:#FFF6D8}
 .cv-sub{margin:4px 0 0;font-size:13px;line-height:1.45;color:var(--muted)}
-.cv-rate{flex:none;text-align:center;background:linear-gradient(180deg,#FFD964 0%,#F2C230 52%,#D9A41C 100%);color:#070812;border-radius:12px;padding:8px 10px;box-shadow:0 2px 14px rgba(242,194,48,.35);transform:translateZ(30px)}
-.cv-rate-num{display:block;font-family:var(--font-display,Anton,sans-serif);font-size:19px;line-height:1.05;letter-spacing:.02em;white-space:nowrap}
-.cv-rate-coin{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+/* Plain rate line (Nov 2026): the old gold chip was too bulky and bold —
+   the rate is now quiet text under the heading, same muted tone as the
+   other sub-lines on the card. Value stays exact and currency-aware. */
+.cv-rate{margin:4px 0 0;font-size:13px;font-weight:400;line-height:1.45;color:var(--muted);white-space:nowrap}
 
 /* ---- Coin stage: the 3D gold coin + the counting coin total ---- */
 .cv-stage{display:flex;align-items:center;gap:16px;margin:18px 0 6px;transform:translateZ(20px)}

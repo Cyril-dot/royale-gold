@@ -14,6 +14,33 @@ import { WITHDRAWAL_METHODS } from "@/lib/withdrawals";
 // is atomic with it.
 import { evaluateWithdrawalRules } from "@/lib/risk-rules";
 
+// Nov 2026: the player's own requests, latest first — the convert page
+// lists them with their status and the account snapshot (if any).
+export async function GET() {
+  try {
+    const user = await requireAuth();
+    const rows = await prisma.withdrawal.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true, amount: true, method: true, fiatCurrency: true, status: true,
+        accountType: true, accountName: true, accountDetail: true,
+        reason: true, createdAt: true,
+      },
+    });
+    return ok({
+      withdrawals: rows.map((w) => ({
+        ...w,
+        amount: dec(w.amount),
+        createdAt: w.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
@@ -34,6 +61,21 @@ export async function POST(req: Request) {
     // Phase 1 country-based (Nov 2026): the request is in the
     // player's fiat — stamped so the queues never blend fiats.
     const fiatCurrency = fresh.currency ?? "GHS";
+    // Nov 2026: snapshot the saved withdrawal account (if any) onto
+    // the request — the admin queue shows where the money goes even if
+    // the player changes the account later. No account saved? The
+    // request still works exactly as before — never a gate.
+    const saved = await prisma.withdrawalAccount.findUnique({ where: { userId: user.id } });
+    const snapshot = saved
+      ? {
+          accountType: saved.type,
+          accountName: saved.accountName,
+          accountDetail:
+            saved.type === "bank"
+              ? `${saved.bankName ?? "Bank"} • ${saved.accountNumber ?? ""}`.trim()
+              : `${saved.network ?? "MoMo"} • ${saved.phoneNumber ?? ""}`.trim(),
+        }
+      : { accountType: null, accountName: null, accountDetail: null };
     const created = await prisma.$transaction(async (tx) => {
       const w = await tx.withdrawal.create({
         data: {
@@ -43,6 +85,7 @@ export async function POST(req: Request) {
           method,
           fiatCurrency,
           status: "pending",
+          ...snapshot,
         },
       });
       await tx.auditLog.create({
@@ -63,6 +106,9 @@ export async function POST(req: Request) {
         method: created.w.method,
         fiatCurrency: created.w.fiatCurrency,
         status: created.status,
+        accountType: created.w.accountType,
+        accountName: created.w.accountName,
+        accountDetail: created.w.accountDetail,
         createdAt: created.w.createdAt.toISOString(),
       },
       note: created.status === "held"

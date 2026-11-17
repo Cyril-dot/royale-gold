@@ -13,7 +13,6 @@ import { getGame } from "../../lib/games";
 import { useStore } from "../../lib/store";
 import WalletCard from "../../components/WalletCard";
 import CoinCard from "../../components/CoinCard";
-import CoinConverter from "../../components/CoinConverter";
 
 export default function WalletPage() {
   const { user, wallet, mode, simSession, topUpSim, openAuth, setDepositOpen } = useStore();
@@ -85,11 +84,6 @@ export default function WalletPage() {
         {mode === "SIM" && (
           <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
         )}
-        {/* Round 16: convert REAL cash to coins at the per-currency
-            rate (GHS 5 = 1 coin, NGN 500 = 1 coin seed). The deposit
-            centre above stays as-is; this section is the new work.
-            (The "coins are play-only" line lives inside the converter now.) */}
-        <CoinConverter />
         {/* Round 31: History — recent game rounds (stake out, payout in),
             the only wallet movement an existing endpoint returns. */}
         <section className="wallet-hist" aria-label="Wallet history">
