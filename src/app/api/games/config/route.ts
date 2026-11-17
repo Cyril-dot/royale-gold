@@ -11,15 +11,22 @@
 import { connection } from "next/server";
 import { ok, toErrorResponse } from "@/lib/http";
 import { getAllCurrencyConfigs, getAllGameConfigs, getPlatformSettings } from "@/lib/game-config";
+import { getSessionUser } from "@/lib/auth";
+import { getGhMomoGateway } from "@/lib/gateway-settings";
 
 export async function GET() {
   await connection();
   try {
-    const [games, settings, currencies] = await Promise.all([
+    const [games, settings, currencies, gateway] = await Promise.all([
       getAllGameConfigs(),
       getPlatformSettings(),
       getAllCurrencyConfigs(),
+      getGhMomoGateway(),
     ]);
+    // Phase 2 PayTeller (Nov 2026): the deposit UI reads the live
+    // Ghana gateway + the signed-in user's fiat from here — no new
+    // round-trip. Signed out, currency is null (the picker defaults).
+    const me = await getSessionUser().catch(() => null);
     return ok({
       globalKill: settings.globalKill,
       // P1 Batch 4 (O21): the header reads the site name from here and
@@ -32,6 +39,8 @@ export async function GET() {
       // rules (min deposit/stake, conversion rate) so the client can
       // show the right numbers for the player's fiat without auth.
       currencies: currencies.filter((c) => c.enabled),
+      currency: me?.currency ?? null,
+      ghMomoGateway: gateway,
     });
   } catch (err) {
     return toErrorResponse(err);

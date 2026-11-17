@@ -70,3 +70,6 @@
 .p1b3-flag-under{color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1)}
 .p1b3-cb{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
 .p1b3-cb input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font-family:var(--font);font-size:16px}
+
+/* Phase 2 PayTeller (Nov 2026): the webhook URL in the Gateway section. */
+.ow-gw-url{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;color:#FFF6D8}

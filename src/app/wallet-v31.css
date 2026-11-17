@@ -11,3 +11,13 @@
 .wallet-hist-txt span{font-size:12.5px;color:var(--muted,rgba(255,246,216,.7))}
 .wallet-hist-win{color:#3ED97E;white-space:nowrap;font-size:15px}
 .wallet-hist-lose{color:rgba(255,179,172,.9);white-space:nowrap;font-size:15px}
+
+/* Phase 2 PayTeller (Nov 2026): the hosted-checkout return page. */
+.pt-return{max-width:520px;margin:0 auto;text-align:center;padding:28px 0 40px}
+.pt-return h2{margin:0 0 8px}
+.pt-status{font-size:17px;font-weight:800;margin:12px 0 6px}
+.pt-status.ok{color:#3ED97E}
+.pt-status.bad{color:#FF8580}
+.pt-status .pt-amt{display:block;font-size:30px;margin-top:8px}
+.pt-note{margin:18px 0 0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+.pt-return .btn{display:inline-block;margin-top:18px;min-height:48px}

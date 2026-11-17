@@ -89,6 +89,9 @@ model User {
   adminWithdrawals Withdrawal[]       @relation("WithdrawalAdmin")
   adjustments      BalanceAdjustment[]
   adminAdjustments BalanceAdjustment[] @relation("AdjustmentAdmin")
+  // Phase 2 PayTeller (Nov 2026): the hosted-checkout payments for
+  // this player. Opposite side of PaytellerPayment.user.
+  paytellerPayments PaytellerPayment[]
   auditEntries     AuditLog[]          @relation("AuditActor")
   // P0 Batch 3 (O4): commission rules for this admin (a rule with adminId
   // null is the global default, not tied to a user). (O5) payouts received.
@@ -175,6 +178,10 @@ model DepositEvent {
   // Commission % in force at deposit time — frozen forever, never recomputed.
   pctInForce Float 
   commission Float 
+  // Phase 2 PayTeller (Nov 2026): the verified provider response for
+  // a gateway deposit (merchant_net, platform_commission,
+  // customer_total, …). Demo deposits leave this null.
+  providerPayload Json?
   createdAt  DateTime @default(now())
 
   @@index([adminId, createdAt])
@@ -487,6 +494,47 @@ model GatewaySettings {
   paytellerWebhookSecret String?
   ghMomoGateway          String   @default("demo") // "demo" | "payteller"
   updatedAt              DateTime @updatedAt
+}
+
+// Phase 2 PayTeller (Nov 2026): one row per hosted-checkout payment.
+// Reference RG-<16 hex> is PayTeller's idempotency key (unique per
+// payment; retrying it with identical details returns the original).
+// The wallet is credited with the FULL principal — the house absorbs
+// the 10% PayTeller charge (BetWins rule). merchantNet /
+// platformCommission / customerTotal / customerFee are recorded for
+// reconciliation and are NEVER the credit.
+model PaytellerPayment {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reference          String   @unique // RG-<16 hex>
+  paytellerId        String? // PayTeller's payment id (for /verify)
+  amount             Float // principal, GHS
+  fiatCurrency       String   @default("GHS")
+  merchantNet        Float?
+  platformCommission Float?
+  customerTotal      Float? // what the customer authorized (principal + 2% fee)
+  customerFee        Float? // the 2% Theteller fee
+  status             String   @default("pending") // pending|processing|successful|failed|expired
+  checkoutUrl        String?
+  expiresAt          DateTime?
+  providerPayload    Json?
+  completedAt        DateTime?
+  createdAt          DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+// Phase 2 PayTeller (Nov 2026): the webhook dedup table. The event id
+// is the primary key — the unique constraint IS the dedup (PayTeller
+// delivers at least once, 8 attempts). paymentId is a loose string
+// reference (no FK) so a stray event can still be recorded.
+model PaytellerWebhookEvent {
+  eventId    String   @id // PayTeller event id, e.g. "payment-<uuid>"
+  paymentId  String?
+  eventType  String
+  receivedAt DateTime @default(now())
 }
 
 // P0 Batch 2 (O11 global kill + O13 wallet config): the platform's
