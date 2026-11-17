@@ -20,7 +20,7 @@ export default function WalletPage() {
   // Round 31: wallet history — game rounds are the only money movement
   // retrievable without a new API (/api/games/history). Deposits and
   // conversions have no GET endpoint (and withdrawals are not tracked at
-  // all), so they cannot be listed; the caption below says so plainly.
+  // all), so they cannot be listed.
   const [history, setHistory] = useState<GameHistoryRow[] | null>(null);
   useEffect(() => {
     if (!user) return;
@@ -36,7 +36,6 @@ export default function WalletPage() {
       <main className="rg48-page-main">
         <div className="wrap">
           <h2>Wallet</h2>
-          <p>Log in to see your wallet.</p>
           <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>Log in</button>
         </div>
       </main>
@@ -95,12 +94,9 @@ export default function WalletPage() {
             the only wallet movement an existing endpoint returns. */}
         <section className="wallet-hist" aria-label="Wallet history">
           <h3>History</h3>
-          <p className="wallet-hist-cap">Recent game rounds. Deposits and conversions can’t be listed here yet — no endpoint returns them.</p>
           {history === null ? (
             <p>Loading history…</p>
-          ) : history.length === 0 ? (
-            <p>No rounds yet — play a game and it will show here.</p>
-          ) : (
+          ) : history.length === 0 ? null : (
             <div className="wallet-hist-list">
               {history.map((h) => {
                 const net = Number(h.payout || 0) - Number(h.stake || 0);

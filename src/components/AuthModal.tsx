@@ -103,7 +103,6 @@ export default function AuthModal() {
         <div className="rg48-card">
           <button className="icon-btn rg48-x" type="button" aria-label="Close" onClick={closeAuth}>✕</button>
           <h3>{tab === "login" ? <>Welcome <em>back</em></> : <>Create your <em>account</em></>}</h3>
-          <p className="sub">Log in to play coin games, track your referrals and claim your daily coins.</p>
           <div className="rg48-tabs" role="group" aria-label="Login or register">
             <button type="button" aria-pressed={tab === "login"} onClick={() => { setTab("login"); setErr(""); }}>Log in</button>
             <button type="button" aria-pressed={tab === "register"} onClick={() => { setTab("register"); setErr(""); }}>Register</button>
@@ -138,11 +137,9 @@ export default function AuthModal() {
                   ))}
                 </select>
               </div>
-              <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Your country sets your currency — {country === "NG" ? "Nigerian naira (₦)" : "Ghana cedi (GH₵)"} — and can&apos;t be changed later.</p>
               <div className="rg48-f"><label htmlFor="rgRef">Referral code (optional) — worth 5 free coins</label><input id="rgRef" type="text" placeholder="e.g. RG-DEMO1" value={ref} onChange={(e) => setRef(e.target.value.toUpperCase())} /></div>
               <p className="rg48-err">{err}</p>
               <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Creating…" : `Create account · get ${ref.trim() ? 10 : 5} free coins`}</button>
-              <p className="rg48-mini" style={{ marginTop: 10 }}>Coins are play-only: spin them in coin games and win more — they can never be withdrawn or swapped for cash.</p>
             </form>
           )}
           <p className="rg48-mini" style={{ marginTop: 12 }}>

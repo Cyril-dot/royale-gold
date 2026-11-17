@@ -430,7 +430,6 @@ export default function AccountPage() {
           <Link className="ac-wcard" href="/wallet"><span>COINS</span><b>{fmtCoins(coins)}</b><i>Wallet →</i></Link>
           <Link className="ac-wcard" href="/wallet"><span>SIM</span><b>{fmtCoins(sim)}</b><i>Wallet →</i></Link>
         </section>
-        <p className="rg48-mini">Coins are play-only — never withdrawable.</p>
 
         {/* P2 Batch 2 (O28): birthday — optional. The loyalty birthday
             bonus pays on this day, once per year, when the owner runs
@@ -439,7 +438,6 @@ export default function AccountPage() {
           <h3>Birthday</h3>
           <form onSubmit={saveBirthday}>
             <div className="rg48-f"><label htmlFor="acBirthday">Your birthday (optional)</label><input id="acBirthday" type="date" value={birthday} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setBirthday(e.target.value)} /></div>
-            <p className="rg48-mini">If the owner sets a birthday bonus, it is paid on this day once a year. Leave it blank for no birthday bonus.</p>
             <button className="btn btn-gold" type="submit" disabled={birthdayBusy}>{birthdayBusy ? "Saving…" : "Save birthday"}</button>
           </form>
         </section>
@@ -604,7 +602,6 @@ export default function AccountPage() {
         </section>
         <section className="ac-sec">
           <h3>Support</h3>
-          <p className="rg48-mini">Stuck on something? Send a ticket to your admin — they reply here, on your account.</p>
           {supportContact && (
             <p className="rg48-mini">Or reach support directly: <strong>{supportContact}</strong></p>
           )}
@@ -636,9 +633,7 @@ export default function AccountPage() {
           </div>
           {myNotifs === null ? (
             <p>Loading notifications…</p>
-          ) : myNotifs.length === 0 ? (
-            <p className="rg48-mini">No notifications yet — your admin will message you here.</p>
-          ) : (
+          ) : myNotifs.length === 0 ? null : (
             <>
               {notifUnread > 0 ? (
                 <p><button className="linklike" type="button" onClick={() => void markAllNotifsRead()}>Mark all as read</button></p>

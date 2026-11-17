@@ -149,7 +149,7 @@ export default function DepositModal() {
         <div className="rg48-card">
           <button className="icon-btn rg48-x" type="button" aria-label="Close" onClick={() => setDepositOpen(false)}>✕</button>
           <h3>Top <em>up</em></h3>
-          <p className="sub">Cash deposits only.{refPct != null ? ` Your referring admin earns ${refPct}% commission on this deposit.` : ""}</p>
+          {refPct != null && (<p className="sub">Your referring admin earns {refPct}% commission on this deposit.</p>)}
           <form onSubmit={submit}>
             <div className="rg48-f"><label htmlFor="depAmt">Amount ({sym})</label><input id="depAmt" type="number" min={1} step={1} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required /></div>
             {minDeposit != null && (
@@ -170,9 +170,6 @@ export default function DepositModal() {
                 <button className="btn btn-gold" type="button" style={{ width: "100%" }} disabled={emailBusy} onClick={() => void saveEmail()}>{emailBusy ? "Saving…" : "Save email"}</button>
                 {emailMsg && <p className="rg48-err">{emailMsg}</p>}
               </div>
-            )}
-            {paytellerActive && user?.email && (
-              <p className="sub">You pay on PayTeller&apos;s secure checkout — {fmtMoney(paytellerTotal, fiat)} in total (includes the 2% MoMo fee). Your wallet is credited the full {fmtMoney(amount, fiat)} once PayTeller confirms it.</p>
             )}
             <p className="rg48-err">{err}</p>
             <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>

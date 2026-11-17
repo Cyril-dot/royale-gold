@@ -169,10 +169,6 @@ export default function Hero() {
               <strong className="jp-val">{jackpotText}</strong>
             </div>
             <div className="online-chip"><i /><span>{onlineText}</span>&nbsp;playing now</div>
-            <div className="stage-caption">
-              <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C9 7 4 9 4 13a8 8 0 0 0 16 0c0-4-5-6-8-11z" /></svg>
-              Your croupier deals a fresh hand every few seconds
-            </div>
             <button className="btn btn-gold stage-spin" type="button" onClick={spin} disabled={spinning}>Spin the 3D slot · {fmtMoney(bet, fiat)}</button>
           </div>
         </div>

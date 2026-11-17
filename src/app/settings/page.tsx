@@ -117,7 +117,6 @@ export default function SettingsPage() {
     return (
       <main className="rg48-page-main rg23"><div className="wrap">
         <h2><em>Settings</em></h2>
-        <p>Log in to change your settings.</p>
         <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>Log in</button>
       </div></main>
     );
@@ -176,7 +175,6 @@ export default function SettingsPage() {
           <form onSubmit={saveProfile}>
             <div className="rg48-f"><label htmlFor="stName">Full name</label><input id="stName" type="text" value={name} onChange={(e) => setName(e.target.value)} required /></div>
             <div className="rg48-f"><label htmlFor="stContact">Email or phone</label><input id="stContact" type="text" value={contact} onChange={(e) => setContact(e.target.value)} placeholder={phonePlaceholder(user.country ?? "GH")} required /></div>
-            <p className="rg48-mini">One contact only. Changing it changes how you log in.</p>
             <button className="btn btn-gold" type="submit" disabled={profileBusy}>{profileBusy ? "Saving…" : "Save profile"}</button>
           </form>
         </section>
@@ -195,7 +193,6 @@ export default function SettingsPage() {
 
         <section className="admin-sec">
           <h3>Preferences</h3>
-          <p className="rg48-mini">Saved on this device only.</p>
           <div className="rg48-f"><label>Sound</label>
             <button className="btn btn-ghost" type="button" onClick={toggleMute} aria-pressed={!muted}>
               {muted ? "Sound: off — tap to turn on" : "Sound: on — tap to mute"}
@@ -232,7 +229,6 @@ export default function SettingsPage() {
           <p>Country: <b>{user.country === "NG" ? "Nigeria" : "Ghana"}</b> · Currency: <b>{user.currency ?? "GHS"} ({symbolFor(user.currency)})</b></p>
           <p>Joined: <b>{new Date(user.createdAt).toLocaleDateString("en-GB")}</b></p>
           <p>Referral code used: <b>{user.referralCodeUsed ?? "—"}</b></p>
-          <p className="rg48-mini">Your country and currency were set when you registered and can&apos;t be changed here.</p>
           <p><Link className="linklike" href="/account">Back to my account →</Link></p>
         </section>
       </div>

@@ -198,7 +198,6 @@ export default function CoinConverter() {
         <div className="cv-head">
           <div>
             <h3>Convert cash to coins</h3>
-            <p className="cv-sub">Turn your cash into coins to play the coin games.</p>
           </div>
           <div className="cv-rate" aria-label={`Rate: ${rate} ${fiat} equals 1 coin`}>
             <span className="cv-rate-num">{sym}{rate} = 1</span>
@@ -235,7 +234,6 @@ export default function CoinConverter() {
             <button className="btn btn-gold cv-switch" type="button" onClick={() => setMode("REAL")}>
               Switch to REAL
             </button>
-            <p className="cv-hint cv-sim-hint">Coins are play-only — never withdrawable.</p>
           </div>
         ) : (
           <>
@@ -279,21 +277,21 @@ export default function CoinConverter() {
               ))}
             </div>
 
-            <p className="cv-preview" aria-live="polite">
-              {justConverted ? (
-                <span className="cv-flash" key={`flash-${justConverted.gained}-${justConverted.debited}`}>
-                  {sym}{fmtAmt(justConverted.debited)} became {justConverted.gained} ◉ coins
-                </span>
-              ) : parsed >= rate ? (
-                <span>
-                  {sym}{fmtAmt(parsed)} <span className="cv-arrow">→</span> {previewCoins} ◉ coins
-                </span>
-              ) : parsed > 0 ? (
-                <span>Minimum {sym}{rate} to convert</span>
-              ) : (
-                <span>Type an amount to see your coins</span>
-              )}
-            </p>
+            {(justConverted || parsed > 0) && (
+              <p className="cv-preview" aria-live="polite">
+                {justConverted ? (
+                  <span className="cv-flash" key={`flash-${justConverted.gained}-${justConverted.debited}`}>
+                    {sym}{fmtAmt(justConverted.debited)} became {justConverted.gained} ◉ coins
+                  </span>
+                ) : parsed >= rate ? (
+                  <span>
+                    {sym}{fmtAmt(parsed)} <span className="cv-arrow">→</span> {previewCoins} ◉ coins
+                  </span>
+                ) : (
+                  <span>Minimum {sym}{rate} to convert</span>
+                )}
+              </p>
+            )}
 
             <button className="btn btn-gold cv-convert" type="button" disabled={!canConvert} onClick={convert}>
               {busy ? "Converting…" : `Convert ${sym}${fmtAmt(parsed >= rate ? parsed : rate)}`}
