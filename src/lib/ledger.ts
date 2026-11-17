@@ -132,7 +132,12 @@ export async function buildLedger(opts: {
         ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
-      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      // Select only the columns the rows below map: an unfiltered
+      // select also pulls newer columns (e.g. providerPayload) that
+      // prod may not have yet, and the whole query throws.
+      // (Prisma takes either select or include — the relations live
+      // inside select here.)
+      select: { id: true, userId: true, adminId: true, amount: true, method: true, commission: true, pctInForce: true, fiatCurrency: true, createdAt: true, user: { select: { id: true, name: true, email: true, phone: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -158,7 +163,7 @@ export async function buildLedger(opts: {
         ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, referredByAdminId: true } } },
+      select: { id: true, userId: true, game: true, currency: true, stake: true, payout: true, fiatCurrency: true, createdAt: true, user: { select: { id: true, name: true, email: true, phone: true, referredByAdminId: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -191,7 +196,7 @@ export async function buildLedger(opts: {
         ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
-      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      select: { id: true, userId: true, adminId: true, amount: true, method: true, status: true, reason: true, fiatCurrency: true, createdAt: true, user: { select: { id: true, name: true, email: true, phone: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -219,7 +224,7 @@ export async function buildLedger(opts: {
         ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
-      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      select: { id: true, userId: true, adminId: true, amount: true, direction: true, wallet: true, kind: true, reason: true, fiatCurrency: true, createdAt: true, user: { select: { id: true, name: true, email: true, phone: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -251,7 +256,7 @@ export async function buildLedger(opts: {
         ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, referredByAdminId: true } } },
+      select: { id: true, userId: true, cashDebited: true, coinsGained: true, fiatCurrency: true, createdAt: true, user: { select: { id: true, name: true, email: true, phone: true, referredByAdminId: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -283,7 +288,7 @@ export async function buildLedger(opts: {
         ...fiatWhere,
         createdAt: { gte: from, lte: to },
       },
-      include: { admin: { select: { id: true, name: true, email: true, phone: true } } },
+      select: { id: true, adminId: true, amount: true, method: true, reference: true, fiatCurrency: true, createdAt: true, admin: { select: { id: true, name: true, email: true, phone: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });

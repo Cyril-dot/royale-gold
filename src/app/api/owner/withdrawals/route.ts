@@ -25,7 +25,15 @@ export async function GET(req: Request) {
     const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
     const rows = await prisma.withdrawal.findMany({
       where: { fiatCurrency, ...(status ? { status } : {}), ...(adminId ? { adminId } : {}) },
-      include: {
+      // Select only the columns this route maps: an unfiltered select
+      // also pulls newer columns (accountType/accountName/accountDetail)
+      // that prod may not have yet, and the whole query throws.
+      // (Prisma takes either select or include — the relations live
+      // inside select here.)
+      select: {
+        id: true, userId: true, adminId: true, amount: true, method: true,
+        fiatCurrency: true, status: true, reason: true, decidedBy: true,
+        createdAt: true, decidedAt: true,
         user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } },
         admin: { select: { id: true, name: true } },
       },

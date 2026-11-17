@@ -230,7 +230,13 @@ export async function depositsForAdminOnScoped(
   const end = new Date(`${date}T23:59:59.999Z`);
   const rows = await prisma.depositEvent.findMany({
     where: { adminId: { in: scopeIds }, fiatCurrency, createdAt: { gte: start, lte: end } },
-    include: {
+    // Select only the columns the rows map: an unfiltered select also
+    // pulls newer columns (providerPayload) that prod may not have yet,
+    // and the whole query throws. (Prisma takes either select or
+    // include — the relations live inside select here.)
+    select: {
+      id: true, userId: true, amount: true, method: true, commission: true,
+      pctInForce: true, fiatCurrency: true, createdAt: true,
       user: { select: { id: true, name: true, email: true, phone: true } },
       admin: { select: { id: true, name: true } },
     },

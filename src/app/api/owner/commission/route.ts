@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     // the day's figures are in one fiat only.
     const fiatCurrency = (q.get("currency") || "GHS").toUpperCase();
     if (adminId) {
-      const admin = await prisma.user.findUnique({ where: { id: adminId } });
+      const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { id: true, name: true, role: true } });
       if (!admin || admin.role !== "admin") return fail("Admin not found", 404);
       // P1 Batch 4 (O24): the owner preview shows the admin's own view —
       // a parent admin's day detail rolls their child downlines in.
@@ -29,7 +29,13 @@ export async function GET(req: Request) {
     const end = new Date(`${date}T23:59:59.999Z`);
     const rows = await prisma.depositEvent.findMany({
       where: { createdAt: { gte: start, lte: end }, adminId: { not: null }, fiatCurrency },
-      include: {
+      // Select only the columns the grouping below maps: an unfiltered
+      // select also pulls newer columns (providerPayload) that prod may
+      // not have yet, and the whole query throws. (Prisma takes either
+      // select or include — the relations live inside select here.)
+      select: {
+        id: true, userId: true, adminId: true, amount: true, method: true,
+        commission: true, pctInForce: true, fiatCurrency: true, createdAt: true,
         user: { select: { id: true, name: true, email: true, phone: true } },
         admin: { select: { id: true, name: true } },
       },

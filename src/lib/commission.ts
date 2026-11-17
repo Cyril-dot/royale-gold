@@ -242,7 +242,11 @@ export async function depositsForAdminOn(adminId: string, date: string, fiatCurr
   const { from, to } = dayBounds(date);
   const rows = await prisma.depositEvent.findMany({
     where: { adminId, fiatCurrency, createdAt: { gte: from, lt: to } },
-    include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+    // Select only the columns the rows map: an unfiltered select also
+    // pulls newer columns (providerPayload) that prod may not have yet,
+    // and the whole query throws. (Prisma takes either select or
+    // include — the relation lives inside select here.)
+    select: { id: true, userId: true, amount: true, method: true, commission: true, pctInForce: true, fiatCurrency: true, createdAt: true, user: { select: { id: true, name: true, email: true, phone: true } } },
     orderBy: { createdAt: "desc" },
   });
   const deposits: DepositRow[] = rows.map((r) => ({

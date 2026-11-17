@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const sp = new URL(req.url).searchParams;
     const adminId = sp.get("adminId");
     if (!adminId) return fail("adminId is required");
-    const admin = await prisma.user.findUnique({ where: { id: adminId } });
+    const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { id: true, role: true } });
     if (!admin || admin.role !== "admin") return fail("Admin not found", 404);
     const method = sp.get("method") || undefined;
     const q = (sp.get("q") || "").trim().toLowerCase();
@@ -33,7 +33,15 @@ export async function GET(req: Request) {
         ...(method ? { method } : {}),
         createdAt: { gte: fromD, lte: toD },
       },
-      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      // Select only the columns the rows map: an unfiltered select also
+      // pulls newer columns (providerPayload) that prod may not have yet,
+      // and the whole query throws. (Prisma takes either select or
+      // include — the relation lives inside select here.)
+      select: {
+        id: true, userId: true, amount: true, method: true, commission: true,
+        pctInForce: true, fiatCurrency: true, createdAt: true,
+        user: { select: { id: true, name: true, email: true, phone: true } },
+      },
       orderBy: { createdAt: "desc" },
       take: 200,
     });

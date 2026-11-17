@@ -706,6 +706,9 @@ export default function OwnerPage() {
   interface OwnerWdRow { id: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; method: string; fiatCurrency: string; status: string; reason: string | null; createdAt: string; decidedAt: string | null }
   const [ownerWd, setOwnerWd] = useState<OwnerWdRow[] | null>(null);
   const [ownerWdPending, setOwnerWdPending] = useState(0);
+  // A failed withdrawals call must say so: the catch below used to
+  // set [] — a 500 then looked exactly like "no withdrawals".
+  const [ownerWdErr, setOwnerWdErr] = useState(false);
   const [ownerWdStatus, setOwnerWdStatus] = useState("");
   const [ownerRejectId, setOwnerRejectId] = useState<string | null>(null);
   const [ownerRejectReason, setOwnerRejectReason] = useState("");
@@ -719,7 +722,8 @@ export default function OwnerPage() {
       const r = await api<{ withdrawals: OwnerWdRow[]; pending: number }>(`/api/owner/withdrawals${qs ? `?${qs}` : ""}`);
       setOwnerWd(r.withdrawals);
       setOwnerWdPending(r.pending);
-    } catch { setOwnerWd([]); }
+      setOwnerWdErr(false);
+    } catch { setOwnerWd([]); setOwnerWdErr(true); }
   }, [ownerWdStatus, fiat]);
   useEffect(() => { void loadOwnerWd(); }, [loadOwnerWd]);
   const decideOwnerWd = async (w: OwnerWdRow, decision: "approve" | "reject") => {
@@ -745,6 +749,9 @@ export default function OwnerPage() {
   interface OwnerLedgerRow { id: string; type: string; userId: string; userName: string; userContact: string | null; adminId: string | null; adminName: string | null; amount: number; wallet: string; fiatCurrency: string; detail: string; status?: string; reason?: string; createdAt: string }
   const [ownerLedger, setOwnerLedger] = useState<OwnerLedgerRow[] | null>(null);
   const [ownerLedTotals, setOwnerLedTotals] = useState<{ rows: number; cashIn: number; cashOut: number } | null>(null);
+  // A failed ledger call must say so: the catch below used to set [] —
+  // a 500 then looked exactly like "no money movements".
+  const [ownerLedErr, setOwnerLedErr] = useState(false);
   const [ownerLedType, setOwnerLedType] = useState("");
   const [ownerLedQ, setOwnerLedQ] = useState("");
   const [ownerLedFrom, setOwnerLedFrom] = useState("");
@@ -763,7 +770,8 @@ export default function OwnerPage() {
       const r = await api<{ rows: OwnerLedgerRow[]; totals: { rows: number; cashIn: number; cashOut: number } }>(`/api/owner/ledger${qs ? `?${qs}` : ""}`);
       setOwnerLedger(r.rows);
       setOwnerLedTotals(r.totals);
-    } catch { setOwnerLedger([]); }
+      setOwnerLedErr(false);
+    } catch { setOwnerLedger([]); setOwnerLedErr(true); }
   }, [ownerLedType, ownerLedQ, ownerLedFrom, ownerLedTo, ownerLedAdmin, fiat]);
   useEffect(() => { void loadOwnerLedger(); }, [loadOwnerLedger]);
 
@@ -1068,6 +1076,9 @@ export default function OwnerPage() {
     topAdmins: DashboardTopAdmin[];
   }
   const [dash, setDash] = useState<DashboardStats | null>(null);
+  // A failed dashboard call must say so, never hang on "Loading…" —
+  // the whole Overview (six sections) reads from this one call.
+  const [dashErr, setDashErr] = useState(false);
   const [finOn, setFinOn] = useState<Record<FinSeries, boolean>>({ deposits: true, payouts: true, commGen: true, commPaid: true });
   const toggleFin = (s: FinSeries) => setFinOn((cur) => {
     const next = { ...cur, [s]: !cur[s] };
@@ -1076,7 +1087,7 @@ export default function OwnerPage() {
   });
   const loadDash = useCallback(async () => {
     if (!range) return;
-    try { setDash(await api<DashboardStats>(`/api/owner/dashboard-stats?currency=${fiat}&from=${range.from}&to=${range.to}`)); } catch { setDash(null); }
+    try { setDash(await api<DashboardStats>(`/api/owner/dashboard-stats?currency=${fiat}&from=${range.from}&to=${range.to}`)); setDashErr(false); } catch { setDash(null); setDashErr(true); }
   }, [fiat, range]);
   useEffect(() => { void loadDash(); }, [loadDash]);
 
@@ -1169,10 +1180,13 @@ export default function OwnerPage() {
   interface OwnerFraudAlert { id: string; severity: string; signal: string; userId: string; userName: string; userContact: string | null; reason: string; createdAt: string }
   interface OwnerFraudRollup { adminId: string | null; adminName: string; high: number; medium: number; total: number }
   const [ownerFraud, setOwnerFraud] = useState<{ alerts: OwnerFraudAlert[]; counts: { high: number; medium: number }; byAdmin: OwnerFraudRollup[] } | null>(null);
+  // A failed fraud call must say so, never hang on "Loading…" forever.
+  const [ownerFraudErr, setOwnerFraudErr] = useState(false);
   const loadOwnerFraud = useCallback(async () => {
     try {
       setOwnerFraud(await api<{ alerts: OwnerFraudAlert[]; counts: { high: number; medium: number }; byAdmin: OwnerFraudRollup[] }>("/api/owner/fraud"));
-    } catch { setOwnerFraud(null); }
+      setOwnerFraudErr(false);
+    } catch { setOwnerFraud(null); setOwnerFraudErr(true); }
   }, []);
   useEffect(() => { void loadOwnerFraud(); }, [loadOwnerFraud]);
 
@@ -1543,8 +1557,10 @@ export default function OwnerPage() {
   // tables. No stored rows, no ML model, no AI — just thresholds.
   interface AnomalyRow { id: string; type: string; severity: string; userId: string | null; userName: string | null; game: string | null; gameName: string | null; reason: string; createdAt: string }
   const [anomalies, setAnomalies] = useState<{ anomalies: AnomalyRow[]; counts: { high: number; medium: number } } | null>(null);
+  // A failed anomalies call must say so, never hang on "Loading…" forever.
+  const [anomaliesErr, setAnomaliesErr] = useState(false);
   const loadAnomalies = useCallback(async () => {
-    try { setAnomalies(await api<{ anomalies: AnomalyRow[]; counts: { high: number; medium: number } }>("/api/owner/anomalies")); } catch { setAnomalies(null); }
+    try { setAnomalies(await api<{ anomalies: AnomalyRow[]; counts: { high: number; medium: number } }>("/api/owner/anomalies")); setAnomaliesErr(false); } catch { setAnomalies(null); setAnomaliesErr(true); }
   }, []);
   useEffect(() => { void loadAnomalies(); }, [loadAnomalies]);
   // O33: multi-brand support — CONFIG records only. A brand does NOT
@@ -1589,6 +1605,15 @@ export default function OwnerPage() {
     return (
       <main className="rg48-page-main"><div className="wrap">
         <h2>Owner <em>panel</em></h2>
+        <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>Log in</button>
+      </div></main>
+    );
+  }
+  if (user.role !== "owner") {
+    return (
+      <main className="rg48-page-main"><div className="wrap">
+        <h2>Owner <em>panel</em></h2>
+        <p>This account is not the owner — log in with the owner account.</p>
         <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>Log in</button>
       </div></main>
     );
@@ -1861,7 +1886,7 @@ export default function OwnerPage() {
           <>
           <section className="admin-sec">
           <h3>Overall totals</h3>
-          {dash === null ? <p>Loading totals…</p> : (
+          {dash === null ? (dashErr ? <p className="rg48-err">Could not load totals.</p> : <p>Loading totals…</p>) : (
             <div className="sum-cards">
               <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("manage", "ow-sec-player-search")} aria-label="Users — open player search">
                 <span>Users</span><b>{dash.usersTotal.toLocaleString("en-GB")}</b>
@@ -1884,7 +1909,7 @@ export default function OwnerPage() {
 
           <section className="admin-sec">
           <h3>Financial performance · {symbolFor(fiat)}</h3>
-          {dash === null ? <p>Loading chart…</p> : dash.finChart.buckets.length === 0 || dash.finChart.buckets.every((b) => b.deposits === 0 && b.payouts === 0 && b.commGen === 0 && b.commPaid === 0) ? (
+          {dash === null ? (dashErr ? <p className="rg48-err">Could not load chart.</p> : <p>Loading chart…</p>) : dash.finChart.buckets.length === 0 || dash.finChart.buckets.every((b) => b.deposits === 0 && b.payouts === 0 && b.commGen === 0 && b.commPaid === 0) ? (
             <p>No activity in this range.</p>
           ) : (
             <>
@@ -1934,7 +1959,7 @@ export default function OwnerPage() {
 
           <section className="admin-sec">
           <h3>User growth</h3>
-          {dash === null ? <p>Loading chart…</p> : dash.growthChart.buckets.length === 0 || dash.growthChart.buckets.every((b) => b.newUsers === 0) ? (
+          {dash === null ? (dashErr ? <p className="rg48-err">Could not load chart.</p> : <p>Loading chart…</p>) : dash.growthChart.buckets.length === 0 || dash.growthChart.buckets.every((b) => b.newUsers === 0) ? (
             <p>No activity in this range.</p>
           ) : (
             <>
@@ -1958,7 +1983,7 @@ export default function OwnerPage() {
 
           <section className="admin-sec">
           <h3>Recent activity</h3>
-          {dash === null ? <p>Loading activity…</p> : dash.activity.length === 0 ? (
+          {dash === null ? (dashErr ? <p className="rg48-err">Could not load activity.</p> : <p>Loading activity…</p>) : dash.activity.length === 0 ? (
             <p>No activity yet.</p>
           ) : (
             <div>
@@ -1977,7 +2002,7 @@ export default function OwnerPage() {
 
           <section className="admin-sec">
           <h3>Deposits — last 7 days</h3>
-          {dash === null ? <p>Loading chart…</p> : (
+          {dash === null ? (dashErr ? <p className="rg48-err">Could not load chart.</p> : <p>Loading chart…</p>) : (
             <div className="p1b3-bars" aria-label="Deposits per day, last 7 days">
               {dash.deposits7d.map((d) => {
                 const max = Math.max(0, ...dash.deposits7d.map((x) => x.total));
@@ -1996,7 +2021,7 @@ export default function OwnerPage() {
 
           <section className="admin-sec">
           <h3>Top admins</h3>
-          {dash === null ? <p>Loading admins…</p> : dash.topAdmins.length === 0 ? (
+          {dash === null ? (dashErr ? <p className="rg48-err">Could not load admins.</p> : <p>Loading admins…</p>) : dash.topAdmins.length === 0 ? (
             <p>No commission earned yet.</p>
           ) : (
             <div>
@@ -2114,7 +2139,7 @@ export default function OwnerPage() {
               <button key={s} type="button" className={ownerWdStatus === s ? "on" : ""} onClick={() => setOwnerWdStatus(s)}>{s === "admin_approved" ? "Awaiting owner" : s[0].toUpperCase() + s.slice(1)}</button>
             ))}
           </div>
-          {ownerWd === null ? <p>Loading withdrawals…</p> : ownerWd.length === 0 ? (
+          {ownerWd === null ? <p>Loading withdrawals…</p> : ownerWdErr ? <p className="rg48-err">Could not load withdrawals.</p> : ownerWd.length === 0 ? (
             <p>No withdrawal requests.</p>
           ) : (
             <div className="wd-list">
@@ -2382,7 +2407,7 @@ export default function OwnerPage() {
               <div className="sum-card"><span>Cash out</span><b>{fmtMoney(ownerLedTotals.cashOut, fiat)}</b></div>
             </div>
           )}
-          {ownerLedger === null ? <p>Loading ledger…</p> : ownerLedger.length === 0 ? (
+          {ownerLedger === null ? <p>Loading ledger…</p> : ownerLedErr ? <p className="rg48-err">Could not load ledger.</p> : ownerLedger.length === 0 ? (
             <p>No money movements yet.</p>
           ) : (
             <div className="ledger-list">
@@ -2655,7 +2680,7 @@ export default function OwnerPage() {
         {owTab === "reports" && (
           <section className="admin-sec">
           <h3>Fraud console</h3>
-          {ownerFraud === null ? <p>Loading fraud console…</p> : (
+          {ownerFraud === null ? (ownerFraudErr ? <p className="rg48-err">Could not load fraud console.</p> : <p>Loading fraud console…</p>) : (
             <>
               <div className="sum-cards">
                 <div className="sum-card"><span>High</span><b>{ownerFraud.counts.high}</b></div>
@@ -3428,7 +3453,7 @@ export default function OwnerPage() {
         {owTab === "reports" && (
           <section className="admin-sec">
           <h3>Anomaly alerts</h3>
-          {anomalies === null ? <p>Loading anomalies…</p> : (
+          {anomalies === null ? (anomaliesErr ? <p className="rg48-err">Could not load anomaly alerts.</p> : <p>Loading anomalies…</p>) : (
             <>
               <div className="sum-cards">
                 <div className="sum-card"><span>High</span><b>{anomalies.counts.high}</b></div>

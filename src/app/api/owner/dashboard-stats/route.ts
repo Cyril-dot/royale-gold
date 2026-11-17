@@ -206,13 +206,18 @@ export async function GET(req: Request) {
           where: { fiatCurrency },
           orderBy: { createdAt: "desc" },
           take: 10,
-          include: { user: { select: { name: true } } },
+          // Select only the columns the activity feed maps: an
+          // unfiltered select also pulls newer columns (providerPayload)
+          // that prod may not have yet, and the whole query throws.
+          // (Prisma takes either select or include — the relation lives
+          // inside select here.)
+          select: { amount: true, method: true, createdAt: true, user: { select: { name: true } } },
         }),
         prisma.withdrawal.findMany({
           where: { fiatCurrency },
           orderBy: { createdAt: "desc" },
           take: 10,
-          include: { user: { select: { name: true } } },
+          select: { amount: true, status: true, createdAt: true, user: { select: { name: true } } },
         }),
         prisma.user.findMany({
           where: { role: "user", currency: fiatCurrency },
@@ -224,7 +229,7 @@ export async function GET(req: Request) {
           where: { fiatCurrency },
           orderBy: { createdAt: "desc" },
           take: 10,
-          include: { admin: { select: { name: true } } },
+          select: { amount: true, method: true, createdAt: true, admin: { select: { name: true } } },
         }),
         prisma.depositEvent.findMany({
           where: { fiatCurrency, createdAt: { gte: weekFrom } },

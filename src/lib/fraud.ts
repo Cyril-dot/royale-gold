@@ -53,7 +53,12 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
     // (a) open withdrawals (last 30 days) with their players.
     prisma.withdrawal.findMany({
       where: { userId: { in: userIds }, status: { in: ["pending", "admin_approved"] }, createdAt: { gte: monthAgo } },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, createdAt: true, currency: true } } },
+      // Select only the columns the signals map: an unfiltered select
+      // also pulls newer columns (accountType/accountName/accountDetail)
+      // that prod may not have yet, and the whole query throws.
+      // (Prisma takes either select or include — the relation lives
+      // inside select here.)
+      select: { id: true, userId: true, amount: true, method: true, createdAt: true, user: { select: { id: true, name: true, email: true, phone: true, createdAt: true, currency: true } } },
       orderBy: { createdAt: "desc" },
     }),
     // (b) every withdrawal request in the last 24 hours.
@@ -80,7 +85,7 @@ export async function computeFraudAlerts(userIds: string[]): Promise<FraudAlert[
     // (e) withdrawals in the last 7 days.
     prisma.withdrawal.findMany({
       where: { userId: { in: userIds }, createdAt: { gte: weekAgo } },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, currency: true } } },
+      select: { id: true, userId: true, amount: true, method: true, createdAt: true, user: { select: { id: true, name: true, email: true, phone: true, currency: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.user.findMany({
