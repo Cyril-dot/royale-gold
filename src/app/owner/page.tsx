@@ -13,6 +13,7 @@ import CurrencyChips from "../../components/CurrencyChips";
 import type { CurrencyConfigShape } from "../../lib/game-config";
 import { useStore } from "../../lib/store";
 import { copyText, todayStr } from "../../lib/admin-client";
+import { round2 } from "../../lib/money";
 import { ALL_GAMES } from "../../lib/games";
 import { ADMIN_SECTIONS, ADMIN_SECTION_LABELS, type AdminSection } from "../../lib/rbac";
 
@@ -559,6 +560,100 @@ const ACT_VERB: Record<string, string> = {
   commission: "Commission paid",
 };
 
+// PRIME Phase 1 (Nov 2026): global date-range selector. Presets resolve
+// to UTC [from, to] (inclusive); the previous equivalent period is the
+// same length immediately before `from`. Reporting timezone stays UTC
+// (TODO decision 4 — not settled here). Pure helpers of their inputs;
+// the component resolves them in an effect, never during render.
+type RangePreset = "today" | "yesterday" | "7d" | "30d" | "week" | "lastweek" | "month" | "lastmonth" | "year" | "custom";
+const RANGE_PRESETS: { id: RangePreset; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "yesterday", label: "Yesterday" },
+  { id: "7d", label: "Last 7 days" },
+  { id: "30d", label: "Last 30 days" },
+  { id: "week", label: "This week" },
+  { id: "lastweek", label: "Last week" },
+  { id: "month", label: "This month" },
+  { id: "lastmonth", label: "Last month" },
+  { id: "year", label: "This year" },
+  { id: "custom", label: "Custom" },
+];
+function addDaysStr(date: string, n: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function rangeForPreset(p: RangePreset, today: string, cFrom: string, cTo: string): { from: string; to: string } {
+  const monday = (d: string): string => {
+    const dt = new Date(`${d}T00:00:00Z`);
+    return addDaysStr(d, -((dt.getUTCDay() + 6) % 7));
+  };
+  switch (p) {
+    case "yesterday": return { from: addDaysStr(today, -1), to: addDaysStr(today, -1) };
+    case "7d": return { from: addDaysStr(today, -6), to: today };
+    case "30d": return { from: addDaysStr(today, -29), to: today };
+    case "week": return { from: monday(today), to: today };
+    case "lastweek": { const m = monday(today); return { from: addDaysStr(m, -7), to: addDaysStr(m, -1) }; }
+    case "month": return { from: `${today.slice(0, 8)}01`, to: today };
+    case "lastmonth": {
+      const first = `${today.slice(0, 8)}01`;
+      const last = addDaysStr(first, -1);
+      return { from: `${last.slice(0, 8)}01`, to: last };
+    }
+    case "year": return { from: `${today.slice(0, 4)}-01-01`, to: today };
+    case "custom": {
+      let from = cFrom || today;
+      let to = cTo || today;
+      if (to > today) to = today;
+      if (from > to) from = to;
+      return { from, to };
+    }
+    default: return { from: today, to: today };
+  }
+}
+const PREV_LABEL: Record<Exclude<RangePreset, "custom">, string> = {
+  today: "yesterday",
+  yesterday: "day before",
+  "7d": "previous 7 days",
+  "30d": "previous 30 days",
+  week: "last week",
+  lastweek: "week before",
+  month: "last month",
+  lastmonth: "month before",
+  year: "last year",
+};
+function fmtDay(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+function fmtRangeDates(r: { from: string; to: string }): string {
+  if (r.from === r.to) return fmtDay(r.from);
+  const f = new Date(`${r.from}T00:00:00Z`);
+  const t = new Date(`${r.to}T00:00:00Z`);
+  if (f.getUTCFullYear() === t.getUTCFullYear() && f.getUTCMonth() === t.getUTCMonth())
+    return `${f.getUTCDate()}–${t.getUTCDate()} ${t.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}`;
+  return `${fmtDay(r.from)} – ${fmtDay(r.to)}`;
+}
+/** Neutral previous-period comparison: absolute + %, never coloured
+ *  as good/bad (for "paid out", up is not good). */
+function cmpLine(cur: number, prev: number, label: string, money: boolean, fiat: string): string {
+  const diff = round2(cur - prev);
+  const sign = diff > 0 ? "+" : diff < 0 ? "−" : "±";
+  const abs = money ? fmtMoney(Math.abs(diff), fiat) : Math.abs(diff).toLocaleString("en-GB");
+  const pct = prev === 0 ? (cur === 0 ? "0%" : "new") : `${sign}${Math.abs(Math.round(((cur - prev) / prev) * 100))}%`;
+  return `${sign}${abs} (${pct}) vs ${label}`;
+}
+
+// Financial performance chart series (PRIME Phase 1): toggleable, all
+// on by default; at least one stays on. Codes keep the per-bucket
+// value string short at 390px.
+type FinSeries = "deposits" | "payouts" | "commGen" | "commPaid";
+const FIN_SERIES: { id: FinSeries; label: string; code: string }[] = [
+  { id: "deposits", label: "Deposits", code: "D" },
+  { id: "payouts", label: "Payouts", code: "P" },
+  { id: "commGen", label: "Comm generated", code: "G" },
+  { id: "commPaid", label: "Comm paid", code: "C" },
+];
+
 export default function OwnerPage() {
   const { user, openAuth, toast } = useStore();
   const [admins, setAdmins] = useState<AdminRow[]>([]);
@@ -592,6 +687,36 @@ export default function OwnerPage() {
   };
   const [tab, setTab] = useState<"per-day" | "rollup">("per-day");
   const [owTab, setOwTab] = useState<OwTab>("overview");
+  // PRIME Phase 1: global date range — page-level state, resolved in
+  // an effect (never during render), drives the dashboard fetch and
+  // persists across tab switches.
+  const [rangePreset, setRangePreset] = useState<RangePreset>("today");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null);
+  useEffect(() => {
+    setRange(rangeForPreset(rangePreset, todayStr(), customFrom, customTo));
+  }, [rangePreset, customFrom, customTo]);
+  const pickPreset = (p: RangePreset) => {
+    setRangePreset(p);
+    if (p === "custom") {
+      const t = todayStr();
+      setCustomFrom((cur) => cur || addDaysStr(t, -6));
+      setCustomTo((cur) => cur || t);
+    }
+  };
+  const rangeLen = range ? Math.round((new Date(`${range.to}T00:00:00Z`).getTime() - new Date(`${range.from}T00:00:00Z`).getTime()) / 86400000) + 1 : 1;
+  const prevLabel = rangePreset === "custom" ? `previous ${rangeLen} day${rangeLen === 1 ? "" : "s"}` : PREV_LABEL[rangePreset];
+  const rangeWord = rangePreset === "today" ? "today" : rangePreset === "yesterday" ? "yesterday" : "in range";
+  // PRIME Phase 1: KPI drill-down — a tile switches tab, then the
+  // effect scrolls to the target section once it has rendered.
+  const [drillAnchor, setDrillAnchor] = useState<string | null>(null);
+  const drillTo = (tab: OwTab, anchor: string) => { setOwTab(tab); setDrillAnchor(anchor); };
+  useEffect(() => {
+    if (!drillAnchor) return;
+    document.getElementById(drillAnchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setDrillAnchor(null);
+  }, [owTab, drillAnchor]);
   const [dayAdmins, setDayAdmins] = useState<OwnerDayAdmin[] | null>(null);
   const [dayTotals, setDayTotals] = useState<{ deposits: number; totalAmount: number; totalCommission: number } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -944,20 +1069,37 @@ export default function OwnerPage() {
   interface DashboardTopAdmin {
     adminId: string; adminName: string; earned: number; paid: number; unpaid: number;
   }
+  interface FinChartBucket {
+    label: string; from: string; to: string;
+    deposits: number; depositsCount: number;
+    payouts: number; payoutsCount: number;
+    commGen: number; commPaid: number;
+  }
+  interface GrowthBucket { label: string; from: string; to: string; newUsers: number; cumulative: number }
   interface DashboardStats {
     currency: string; date: string;
-    usersTotal: number; usersToday: number;
-    depositedTotal: number; depositedToday: number;
-    paidOutTotal: number; paidOutToday: number;
-    commissionToday: number;
+    from: string; to: string; prevFrom: string; prevTo: string;
+    usersTotal: number; usersToday: number; usersRange: number; usersPrev: number;
+    depositedTotal: number; depositedToday: number; depositedRange: number; depositedPrev: number;
+    paidOutTotal: number; paidOutToday: number; paidOutRange: number; paidOutPrev: number;
+    commissionToday: number; commissionRange: number; commissionPrev: number;
+    finChart: { grouping: "daily" | "weekly" | "monthly"; buckets: FinChartBucket[] };
+    growthChart: { grouping: "daily" | "weekly" | "monthly"; buckets: GrowthBucket[] };
     activity: DashboardActivity[];
     deposits7d: { date: string; total: number }[];
     topAdmins: DashboardTopAdmin[];
   }
   const [dash, setDash] = useState<DashboardStats | null>(null);
+  const [finOn, setFinOn] = useState<Record<FinSeries, boolean>>({ deposits: true, payouts: true, commGen: true, commPaid: true });
+  const toggleFin = (s: FinSeries) => setFinOn((cur) => {
+    const next = { ...cur, [s]: !cur[s] };
+    if (!Object.values(next).some(Boolean)) return cur; // keep at least one series on
+    return next;
+  });
   const loadDash = useCallback(async () => {
-    try { setDash(await api<DashboardStats>(`/api/owner/dashboard-stats?currency=${fiat}`)); } catch { setDash(null); }
-  }, [fiat]);
+    if (!range) return;
+    try { setDash(await api<DashboardStats>(`/api/owner/dashboard-stats?currency=${fiat}&from=${range.from}&to=${range.to}`)); } catch { setDash(null); }
+  }, [fiat, range]);
   useEffect(() => { void loadDash(); }, [loadDash]);
 
   // Payouts tab (Nov 2026): the people owed commission each day.
@@ -1709,6 +1851,22 @@ export default function OwnerPage() {
           <div className="ow-strip-titles"><h2>Owner panel</h2><small>Platform-wide control</small></div>
           <span className="ow-strip-role">Owner</span>
         </div>
+        {/* PRIME Phase 1: global date range — visible on every tab,
+            page-level state, drives the dashboard figures + charts. */}
+        <div className="ow-range" role="group" aria-label="Date range">
+          {RANGE_PRESETS.map((p) => (
+            <button key={p.id} type="button" aria-pressed={rangePreset === p.id} className={`ow-ptab${rangePreset === p.id ? " ow-ptab-on" : ""}`} onClick={() => pickPreset(p.id)}>{p.label}</button>
+          ))}
+        </div>
+        {range && (
+          <p className="ow-range-label">{RANGE_PRESETS.find((p) => p.id === rangePreset)?.label} · {fmtRangeDates(range)}</p>
+        )}
+        {rangePreset === "custom" && (
+          <div className="ow-range-custom">
+            <label>From <input type="date" value={customFrom} max={todayStr()} onChange={(e) => setCustomFrom(e.target.value)} aria-label="Custom range start" /></label>
+            <label>To <input type="date" value={customTo} max={todayStr()} onChange={(e) => setCustomTo(e.target.value)} aria-label="Custom range end" /></label>
+          </div>
+        )}
         <nav className="ow-ptabs" aria-label="Owner panel sections">
           {OWNER_TABS.map((t) => (
             <button key={t.id} type="button" role="tab" aria-selected={owTab === t.id} className={`ow-ptab${owTab === t.id ? " ow-ptab-on" : ""}`} onClick={() => setOwTab(t.id)}>{t.label}</button>
@@ -1727,11 +1885,100 @@ export default function OwnerPage() {
           <h3>Overall totals</h3>
           {dash === null ? <p>Loading totals…</p> : (
             <div className="sum-cards">
-              <div className="sum-card"><span>Users</span><b>{dash.usersTotal.toLocaleString("en-GB")}</b><span className="ow-dash-today">+{dash.usersToday} today</span></div>
-              <div className="sum-card"><span>Total deposited</span><b>{fmtMoney(dash.depositedTotal, fiat)}</b><span className="ow-dash-today">+{fmtMoney(dash.depositedToday, fiat)} today</span></div>
-              <div className="sum-card"><span>Total paid out</span><b>{fmtMoney(dash.paidOutTotal, fiat)}</b><span className="ow-dash-today">+{fmtMoney(dash.paidOutToday, fiat)} today</span></div>
-              <div className="sum-card"><span>Commission to pay today</span><b>{fmtMoney(dash.commissionToday, fiat)}</b></div>
+              <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("manage", "ow-sec-player-search")} aria-label="Users — open player search">
+                <span>Users</span><b>{dash.usersTotal.toLocaleString("en-GB")}</b>
+                <span className="ow-dash-today">+{dash.usersRange.toLocaleString("en-GB")} {rangeWord}</span>
+                <span className="ow-dash-prev">{cmpLine(dash.usersRange, dash.usersPrev, prevLabel, false, fiat)}</span>
+              </button>
+              <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("finance", "ow-sec-ledger")} aria-label="Total deposited — open ledger">
+                <span>Total deposited</span><b>{fmtMoney(dash.depositedTotal, fiat)}</b>
+                <span className="ow-dash-today">+{fmtMoney(dash.depositedRange, fiat)} {rangeWord}</span>
+                <span className="ow-dash-prev">{cmpLine(dash.depositedRange, dash.depositedPrev, prevLabel, true, fiat)}</span>
+              </button>
+              <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("finance", "ow-sec-withdrawals")} aria-label="Total paid out — open withdrawals">
+                <span>Total paid out</span><b>{fmtMoney(dash.paidOutTotal, fiat)}</b>
+                <span className="ow-dash-today">+{fmtMoney(dash.paidOutRange, fiat)} {rangeWord}</span>
+                <span className="ow-dash-prev">{cmpLine(dash.paidOutRange, dash.paidOutPrev, prevLabel, true, fiat)}</span>
+              </button>
+              <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("payouts", "ow-sec-payouts")} aria-label="Commission to pay — open payouts">
+                <span>Commission to pay today</span><b>{fmtMoney(dash.commissionRange, fiat)}</b>
+                <span className="ow-dash-prev">{cmpLine(dash.commissionRange, dash.commissionPrev, prevLabel, true, fiat)}</span>
+              </button>
             </div>
+          )}
+          </section>
+
+          <section className="admin-sec">
+          <h3>Financial performance · {symbolFor(fiat)}</h3>
+          {dash === null ? <p>Loading chart…</p> : dash.finChart.buckets.length === 0 ? (
+            <p>No data in this range.</p>
+          ) : (
+            <>
+              <div className="ow-fin-toggles" role="group" aria-label="Chart series">
+                {FIN_SERIES.map((s) => (
+                  <button key={s.id} type="button" aria-pressed={finOn[s.id]} className={`ow-fin-toggle${finOn[s.id] ? " ow-fin-on" : ""}`} onClick={() => toggleFin(s.id)}>
+                    <span className={`ow-fin-dot ow-fin-${s.id}`} aria-hidden="true" />{s.label}
+                  </button>
+                ))}
+              </div>
+              <p className="ow-fin-legend">Each series scaled to its own max · {dash.finChart.grouping === "daily" ? "daily" : dash.finChart.grouping === "weekly" ? "weekly" : "monthly"}</p>
+              <div className="ow-fin-bars" aria-label="Financial performance">
+                {(() => {
+                  const maxOf = (f: (b: FinChartBucket) => number) => Math.max(0, ...dash.finChart.buckets.map(f));
+                  const maxD = maxOf((b) => b.deposits);
+                  const maxP = maxOf((b) => b.payouts);
+                  const maxG = maxOf((b) => b.commGen);
+                  const maxC = maxOf((b) => b.commPaid);
+                  const pct = (v: number, m: number) => (m > 0 && v > 0 ? Math.round((v / m) * 100) : 0);
+                  return dash.finChart.buckets.map((b) => {
+                    const vals: string[] = [];
+                    if (finOn.deposits) vals.push(`D ${b.deposits.toLocaleString("en-GB")}`);
+                    if (finOn.payouts) vals.push(`P ${b.payouts.toLocaleString("en-GB")}`);
+                    if (finOn.commGen) vals.push(`G ${b.commGen.toLocaleString("en-GB")}`);
+                    if (finOn.commPaid) vals.push(`C ${b.commPaid.toLocaleString("en-GB")}`);
+                    return (
+                      <div key={b.from} className="ow-fin-row">
+                        <span className="p1b3-bar-label">{b.label}</span>
+                        <span className="ow-fin-mid">
+                          <span className="ow-fin-stack">
+                            {finOn.deposits && <span className="ow-fin-track"><span className="ow-fin-fill ow-fin-deposits" style={{ width: `${pct(b.deposits, maxD)}%` }} /></span>}
+                            {finOn.payouts && <span className="ow-fin-track"><span className="ow-fin-fill ow-fin-payouts" style={{ width: `${pct(b.payouts, maxP)}%` }} /></span>}
+                            {finOn.commGen && <span className="ow-fin-track"><span className="ow-fin-fill ow-fin-commGen" style={{ width: `${pct(b.commGen, maxG)}%` }} /></span>}
+                            {finOn.commPaid && <span className="ow-fin-track"><span className="ow-fin-fill ow-fin-commPaid" style={{ width: `${pct(b.commPaid, maxC)}%` }} /></span>}
+                          </span>
+                          <span className="ow-fin-counts">{b.depositsCount} deposits · {b.payoutsCount} payouts</span>
+                        </span>
+                        <b className="ow-fin-val">{vals.join(" · ")}</b>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </>
+          )}
+          </section>
+
+          <section className="admin-sec">
+          <h3>User growth</h3>
+          {dash === null ? <p>Loading chart…</p> : dash.growthChart.buckets.length === 0 ? (
+            <p>No data in this range.</p>
+          ) : (
+            <>
+              <p className="ow-fin-legend">New registrations · cumulative users</p>
+              <div className="p1b3-bars" aria-label="User growth">
+                {dash.growthChart.buckets.map((b) => {
+                  const max = Math.max(0, ...dash.growthChart.buckets.map((x) => x.newUsers));
+                  const w = max > 0 && b.newUsers > 0 ? Math.round((b.newUsers / max) * 100) : 0;
+                  return (
+                    <div key={b.from} className="p1b3-bar-row">
+                      <span className="p1b3-bar-label">{b.label}</span>
+                      <span className="p1b3-bar-track"><span className="p1b3-bar-fill" style={{ width: `${w}%` }} /></span>
+                      <b className="p1b3-bar-val">+{b.newUsers} · {b.cumulative.toLocaleString("en-GB")}</b>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
           </section>
 
@@ -1850,7 +2097,7 @@ export default function OwnerPage() {
         )}
 
         {owTab === "manage" && (
-          <section className="admin-sec">
+          <section className="admin-sec" id="ow-sec-player-search">
           <h3>Player search</h3>
           <form className="b4-search" onSubmit={runPlayerSearch}>
             <input type="search" placeholder="Search players…" value={searchQ} onChange={(e) => setSearchQ(e.target.value)} aria-label="Search players by name, email or phone" />
@@ -1885,7 +2132,7 @@ export default function OwnerPage() {
         )}
 
         {owTab === "finance" && (
-          <section className="admin-sec">
+          <section className="admin-sec" id="ow-sec-withdrawals">
           <h3>Withdrawals{ownerWdPending > 0 ? ` (${ownerWdPending} pending)` : ""}</h3>
           <div className="money-chips" role="group" aria-label="Filter by status">
             <button type="button" className={!ownerWdStatus ? "on" : ""} onClick={() => setOwnerWdStatus("")}>All</button>
@@ -1972,7 +2219,7 @@ export default function OwnerPage() {
         )}
 
         {owTab === "finance" && (
-          <section className="admin-sec ow-commission">
+          <section className="admin-sec ow-commission" id="ow-sec-commission">
           <h3>Commission</h3>
           <div className="ow-tabs" role="tablist" aria-label="Commission views">
             <button type="button" role="tab" id="ow-tab-per-day" aria-selected={tab === "per-day"} aria-controls="ow-panel-per-day" className={`ow-tab${tab === "per-day" ? " ow-tab-active" : ""}`} onClick={() => setTab("per-day")}>Per-day</button>
@@ -2129,7 +2376,7 @@ export default function OwnerPage() {
         )}
 
         {owTab === "finance" && (
-          <section className="admin-sec">
+          <section className="admin-sec" id="ow-sec-ledger">
           <h3>Ledger</h3>
           <div className="money-filters">
             <label className="players-search">
@@ -2783,7 +3030,7 @@ export default function OwnerPage() {
           <CurrencyChips value={fiat} onChange={setFiatSel} label="Owner currency" />
         )}
         {owTab === "payouts" && (
-          <section className="admin-sec">
+          <section className="admin-sec" id="ow-sec-payouts">
           <h3>Payouts</h3>
           {payouts && (
             <div className="ow-paydays" role="group" aria-label="Recent days">
