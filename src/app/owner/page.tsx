@@ -1367,7 +1367,6 @@ export default function OwnerPage() {
     return (
       <main className="rg48-page-main"><div className="wrap">
         <h2>Owner <em>panel</em></h2>
-        <p>Log in as the owner to see this panel.</p>
         <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>Log in</button>
       </div></main>
     );
@@ -1676,7 +1675,6 @@ export default function OwnerPage() {
 
         <section className="admin-sec">
           <h3>Player search</h3>
-          <p className="rg48-sub">Every player on the platform — search by name, email, or phone.</p>
           <form className="b4-search" onSubmit={runPlayerSearch}>
             <input type="search" placeholder="Search players…" value={searchQ} onChange={(e) => setSearchQ(e.target.value)} aria-label="Search players by name, email or phone" />
             <button className="btn btn-gold" type="submit" disabled={searchBusy}>{searchBusy ? "Searching…" : "Search"}</button>
@@ -1949,7 +1947,6 @@ export default function OwnerPage() {
 
         <section className="admin-sec">
           <h3>Ledger</h3>
-          <p className="rg48-sub">Every money movement, platform-wide — deposits, bets, withdrawals, adjustments, conversions. Built only from rows the tables actually hold.</p>
           <div className="money-filters">
             <label className="players-search">
               <input type="search" placeholder="Search by player or contact" value={ownerLedQ} onChange={(e) => setOwnerLedQ(e.target.value)} aria-label="Search ledger" />
@@ -2005,7 +2002,6 @@ export default function OwnerPage() {
 
         <section className="admin-sec">
           <h3>Profit &amp; loss</h3>
-          <p className="rg48-sub">Gross gaming revenue, deposits, approved withdrawals, commissions owed, and net profit — all from the real tables, nothing invented.</p>
           <div className="money-chips" role="group" aria-label="P&L period">
             {(["today", "week", "month", "custom"] as const).map((p) => (
               <button key={p} type="button" className={pnlPreset === p ? "on" : ""} onClick={() => setPnlPreset(p)}>
@@ -2067,7 +2063,6 @@ export default function OwnerPage() {
 
         <section className="admin-sec">
           <h3>Payment methods</h3>
-          <p className="rg48-sub">Which deposit methods are live for {fiat}, and their per-method limits. The PayTeller gateway section below decides whether Ghana MoMo is demo or real — switch the currency above to edit another fiat&apos;s methods.</p>
           {ownerPay === null ? <p>Loading payment methods…</p> : (
             <div className="ow-games">
               {ownerPay.map((m) => (
@@ -2083,7 +2078,6 @@ export default function OwnerPage() {
             always credited the full amount. */}
         <section className="admin-sec">
           <h3>PayTeller gateway</h3>
-          <p className="rg48-sub">Ghana MoMo through PayTeller hosted checkout. Paste the 4 keys from PayTeller Settings, test the connection, then flip the switch.</p>
           <OwnerGatewaySection />
         </section>
 
@@ -2245,7 +2239,6 @@ export default function OwnerPage() {
             per-admin rollups. */}
         <section className="admin-sec">
           <h3>Fraud console</h3>
-          <p className="rg48-sub">The same live signals as the admin fraud pages, computed over every player. Tap a player to open their detail.</p>
           {ownerFraud === null ? <p>Loading fraud console…</p> : (
             <>
               <div className="sum-cards">
@@ -2282,7 +2275,6 @@ export default function OwnerPage() {
                   ))}
                 </div>
               )}
-              <p className="ow-day-cap">Failed-login monitoring is not available — logins are not written to the audit log, so there is no real data to count failed attempts from.</p>
             </>
           )}
         </section>
@@ -2379,7 +2371,6 @@ export default function OwnerPage() {
             images, no links. */}
         <section className="admin-sec">
           <h3>Announcements</h3>
-          <p className="rg48-sub">Text-only banners on the homepage — no images, no links. An announcement shows while it is active and inside its dates: “all” for everyone (including signed-out visitors), “players” for signed-in players, “admins” for admins. A player can dismiss a banner for the rest of their session.</p>
           <form className="owner-add ann-form" onSubmit={createAnnouncement}>
             <input type="text" placeholder="Title" value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} required minLength={1} maxLength={120} />
             <input type="text" placeholder="Message" value={annBody} onChange={(e) => setAnnBody(e.target.value)} required minLength={1} maxLength={1000} />
@@ -2669,7 +2660,6 @@ export default function OwnerPage() {
             the verify result — not a step-by-step animation. */}
         <section className="admin-sec">
           <h3>Game replays</h3>
-          <p className="rg48-sub">The 50 most recent rounds, platform-wide. Open one to see the round&apos;s full outcome — and, for crash rounds, the provably-fair verify (crash point recomputed from the revealed seed + SHA-256 hash check). Replays show the outcome + the verify result, not a step-by-step animation: there is no per-bet event log to replay from.</p>
           {replays === null ? <p>Loading replays…</p> : replays.length === 0 ? (
             <p>No rounds yet.</p>
           ) : (
@@ -2945,7 +2935,6 @@ export default function OwnerPage() {
             model, no AI — just thresholds on the real data. */}
         <section className="admin-sec">
           <h3>Anomaly alerts</h3>
-          <p className="rg48-sub">Rule-based anomaly detection — no AI model, no machine learning, just thresholds on the real data, computed live every time this section loads. A win-rate flag can be luck, not an exploit — check, don&apos;t assume.</p>
           {anomalies === null ? <p>Loading anomalies…</p> : (
             <>
               <div className="sum-cards">
