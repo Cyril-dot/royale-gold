@@ -20,13 +20,13 @@
    Same visual language as the rest of the owner panel: stat tiles,
    tab-style pills, dark inputs with gold borders. Amounts stay Outfit
    bold, never Anton. Inputs are 16px (no iOS zoom); buttons 44px. */
-.ow-killbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 14px;padding:12px;border:1px solid var(--line,rgba(255,246,216,.14));border-radius:12px;background:rgba(4,6,13,.5)}
+.ow-killbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 14px;padding:12px 0;border:0;border-radius:0;background:transparent}
 .ow-killbar b{display:block;font-size:15px}
 .ow-killbar span{font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
 .btn-danger{background:#E5322D;border-color:#E5322D;color:#FFF6D8}
 .btn-danger:disabled{opacity:.5}
 .ow-games{display:flex;flex-direction:column;gap:10px;margin-top:12px}
-.ow-game-row{padding:12px;border:1px solid var(--line,rgba(255,246,216,.14));border-radius:12px;background:rgba(4,6,13,.5)}
+.ow-game-row{padding:12px 0;border:0;border-radius:0;background:transparent}
 .ow-game-killed{border-color:rgba(229,50,45,.6)}
 .ow-game-hidden{opacity:.75}
 .ow-game-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -41,7 +41,7 @@
 .ow-game-econ label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
 .ow-game-econ input{width:100%;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font-family:var(--font);font-weight:800;font-size:16px}
 .ow-game-econ .btn{align-self:end;min-height:44px}
-.ow-pay-row{padding:12px;border:1px solid var(--line,rgba(255,246,216,.14));border-radius:12px;background:rgba(4,6,13,.5)}
+.ow-pay-row{padding:12px 0;border:0;border-radius:0;background:transparent}
 .ow-pay-off{opacity:.75}
 .ow-wallet{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px;align-items:end}
 .ow-wallet label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
@@ -79,7 +79,7 @@
    mirrors msport's admin-panels.css (14px card padding, 12px gaps,
    90px+ bottom padding so the last card clears the fixed dock). */
 .ow-page.rg48-page-main{padding-bottom:96px}
-.ow-page .admin-sec{padding:14px;margin:0 0 12px;border-radius:16px}
+.ow-page .admin-sec{padding:16px 0;margin:0 0 20px;border:0;border-radius:0;background:transparent;box-shadow:none}
 .ow-strip{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:linear-gradient(135deg,#141828,#241a05);border:1px solid rgba(242,194,48,.35);color:#FFF6D8}
 .ow-strip-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#3ED97E;box-shadow:0 0 0 0 rgba(62,217,126,.5);animation:ow-pulse 2.4s ease-out infinite}
 @keyframes ow-pulse{70%{box-shadow:0 0 0 9px rgba(62,217,126,0)}100%{box-shadow:0 0 0 0 rgba(62,217,126,0)}}
@@ -95,3 +95,17 @@
   .ow-ptab:hover{border-color:rgba(242,194,48,.6);color:#FFF6D8}
   .ow-ptab-on:hover{color:#231600}
 }
+
+/* --- Owner panel flat pass (Nov 2026, his order: remove the card
+   backgrounds and sub borders) ---
+   Section cards, stat tiles, inner rows and table hairlines go flat —
+   content sits directly on the page background, separated by spacing
+   (20px between sections) instead of boxes. Scoped under .ow-page so
+   the admin panel (which shares globals.css / admin-players.css) is
+   untouched. Strip, pill nav, currency chips, status pills, inputs,
+   buttons and the bar-chart tracks keep their own styling. */
+.ow-page .sum-card{background:transparent;border:0;border-radius:0;box-shadow:none;padding:4px 0}
+.ow-page .fraud-row{background:transparent;border:0;border-radius:0;box-shadow:none;padding:12px 0}
+.ow-page .wd-row{border-top:0}
+.ow-page .code-row{border-top:0}
+.ow-page .dep-table th,.ow-page .dep-table td{border-top:0}
