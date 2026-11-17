@@ -131,3 +131,13 @@
   .ow-payday:hover{border-color:rgba(242,194,48,.6);color:#FFF6D8}
   .ow-payday-on:hover{color:#231600}
 }
+
+/* --- Overview feed (Nov 2026): activity + top-admin rows. Flat like
+   the rest of the panel — no background, no border, spacing only.
+   Names truncate (long names stay on one line); amounts never wrap. */
+.ow-act-row{display:flex;align-items:center;gap:10px;padding:10px 0}
+.ow-act-rank{flex:none;width:22px;font-weight:800;color:var(--gold,#F2C230);font-size:15px}
+.ow-act-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ow-act-main b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ow-act-sub{font-size:12px;color:var(--muted,rgba(255,246,216,.7))}
+.ow-act-amt{flex:none;font-weight:800;white-space:nowrap}

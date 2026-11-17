@@ -538,6 +538,27 @@ const OWNER_TABS: { id: OwTab; label: string }[] = [
   { id: "settings", label: "Settings" },
 ];
 
+// Overview activity feed (Nov 2026): relative time ("2h ago"). Pure
+// function of the timestamp; the feed only renders after the client
+// fetch, so there is no server/client mismatch.
+function relTime(iso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return iso.slice(0, 10);
+}
+
+const ACT_VERB: Record<string, string> = {
+  deposit: "Deposited",
+  withdrawal: "Withdrawal",
+  signup: "Joined",
+  commission: "Commission paid",
+};
+
 export default function OwnerPage() {
   const { user, openAuth, toast } = useStore();
   const [admins, setAdmins] = useState<AdminRow[]>([]);
@@ -916,12 +937,22 @@ export default function OwnerPage() {
 
   // Overview dashboard (Nov 2026): the 7-stat dashboard — one call,
   // per selected fiat, reloaded with the currency chips.
+  interface DashboardActivity {
+    kind: "deposit" | "withdrawal" | "signup" | "commission";
+    name: string; amount: number | null; detail: string | null; at: string;
+  }
+  interface DashboardTopAdmin {
+    adminId: string; adminName: string; earned: number; paid: number; unpaid: number;
+  }
   interface DashboardStats {
     currency: string; date: string;
     usersTotal: number; usersToday: number;
     depositedTotal: number; depositedToday: number;
     paidOutTotal: number; paidOutToday: number;
     commissionToday: number;
+    activity: DashboardActivity[];
+    deposits7d: { date: string; total: number }[];
+    topAdmins: DashboardTopAdmin[];
   }
   const [dash, setDash] = useState<DashboardStats | null>(null);
   const loadDash = useCallback(async () => {
@@ -1691,6 +1722,7 @@ export default function OwnerPage() {
         )}
 
         {owTab === "overview" && (
+          <>
           <section className="admin-sec">
           <h3>Overall totals</h3>
           {dash === null ? <p>Loading totals…</p> : (
@@ -1702,6 +1734,65 @@ export default function OwnerPage() {
             </div>
           )}
           </section>
+
+          <section className="admin-sec">
+          <h3>Recent activity</h3>
+          {dash === null ? <p>Loading activity…</p> : dash.activity.length === 0 ? (
+            <p>No activity yet.</p>
+          ) : (
+            <div>
+              {dash.activity.map((a, i) => (
+                <div key={`${a.kind}-${a.at}-${i}`} className="ow-act-row">
+                  <div className="ow-act-main">
+                    <b>{a.name}</b>
+                    <span className="ow-act-sub">{ACT_VERB[a.kind] ?? a.kind}{a.detail ? ` · ${a.detail}` : ""} · {relTime(a.at)}</span>
+                  </div>
+                  {a.amount !== null && <b className="ow-act-amt">{fmtMoney(a.amount, fiat)}</b>}
+                </div>
+              ))}
+            </div>
+          )}
+          </section>
+
+          <section className="admin-sec">
+          <h3>Deposits — last 7 days</h3>
+          {dash === null ? <p>Loading chart…</p> : (
+            <div className="p1b3-bars" aria-label="Deposits per day, last 7 days">
+              {dash.deposits7d.map((d) => {
+                const max = Math.max(0, ...dash.deposits7d.map((x) => x.total));
+                const w = max > 0 && d.total > 0 ? Math.round((d.total / max) * 100) : 0;
+                return (
+                  <div key={d.date} className="p1b3-bar-row">
+                    <span className="p1b3-bar-label">{d.date.slice(5)}</span>
+                    <span className="p1b3-bar-track"><span className="p1b3-bar-fill" style={{ width: `${w}%` }} /></span>
+                    <b className="p1b3-bar-val">{fmtMoney(d.total, fiat)}</b>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          </section>
+
+          <section className="admin-sec">
+          <h3>Top admins</h3>
+          {dash === null ? <p>Loading admins…</p> : dash.topAdmins.length === 0 ? (
+            <p>No commission earned yet.</p>
+          ) : (
+            <div>
+              {dash.topAdmins.map((t, i) => (
+                <div key={t.adminId} className="ow-act-row">
+                  <span className="ow-act-rank">{i + 1}</span>
+                  <div className="ow-act-main">
+                    <b>{t.adminName}</b>
+                    <span className="ow-act-sub">{t.unpaid > 0 ? `Paid ${fmtMoney(t.paid, fiat)} · ${fmtMoney(t.unpaid, fiat)} owing` : `Fully paid · ${fmtMoney(t.paid, fiat)}`}</span>
+                  </div>
+                  <b className="ow-act-amt">{fmtMoney(t.earned, fiat)}</b>
+                </div>
+              ))}
+            </div>
+          )}
+          </section>
+          </>
         )}
 
         {owTab === "manage" && (
