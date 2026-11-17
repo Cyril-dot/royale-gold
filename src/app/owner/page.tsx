@@ -13,7 +13,6 @@ import CurrencyChips from "../../components/CurrencyChips";
 import type { CurrencyConfigShape } from "../../lib/game-config";
 import { useStore } from "../../lib/store";
 import { copyText, todayStr } from "../../lib/admin-client";
-import { round2 } from "../../lib/money";
 import { ALL_GAMES } from "../../lib/games";
 import { ADMIN_SECTIONS, ADMIN_SECTION_LABELS, type AdminSection } from "../../lib/rbac";
 
@@ -611,17 +610,6 @@ function rangeForPreset(p: RangePreset, today: string, cFrom: string, cTo: strin
     default: return { from: today, to: today };
   }
 }
-const PREV_LABEL: Record<Exclude<RangePreset, "custom">, string> = {
-  today: "yesterday",
-  yesterday: "day before",
-  "7d": "previous 7 days",
-  "30d": "previous 30 days",
-  week: "last week",
-  lastweek: "week before",
-  month: "last month",
-  lastmonth: "month before",
-  year: "last year",
-};
 function fmtDay(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -632,15 +620,6 @@ function fmtRangeDates(r: { from: string; to: string }): string {
   if (f.getUTCFullYear() === t.getUTCFullYear() && f.getUTCMonth() === t.getUTCMonth())
     return `${f.getUTCDate()}–${t.getUTCDate()} ${t.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}`;
   return `${fmtDay(r.from)} – ${fmtDay(r.to)}`;
-}
-/** Neutral previous-period comparison: absolute + %, never coloured
- *  as good/bad (for "paid out", up is not good). */
-function cmpLine(cur: number, prev: number, label: string, money: boolean, fiat: string): string {
-  const diff = round2(cur - prev);
-  const sign = diff > 0 ? "+" : diff < 0 ? "−" : "±";
-  const abs = money ? fmtMoney(Math.abs(diff), fiat) : Math.abs(diff).toLocaleString("en-GB");
-  const pct = prev === 0 ? (cur === 0 ? "0%" : "new") : `${sign}${Math.abs(Math.round(((cur - prev) / prev) * 100))}%`;
-  return `${sign}${abs} (${pct}) vs ${label}`;
 }
 
 // Financial performance chart series (PRIME Phase 1): toggleable, all
@@ -690,7 +669,9 @@ export default function OwnerPage() {
   // PRIME Phase 1: global date range — page-level state, resolved in
   // an effect (never during render), drives the dashboard fetch and
   // persists across tab switches.
-  const [rangePreset, setRangePreset] = useState<RangePreset>("today");
+  // PRIME Phase 1 fix (Nov 2026): default to Last 7 days — Today is
+  // usually empty, which left the finance + growth charts blank.
+  const [rangePreset, setRangePreset] = useState<RangePreset>("7d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
@@ -705,9 +686,6 @@ export default function OwnerPage() {
       setCustomTo((cur) => cur || t);
     }
   };
-  const rangeLen = range ? Math.round((new Date(`${range.to}T00:00:00Z`).getTime() - new Date(`${range.from}T00:00:00Z`).getTime()) / 86400000) + 1 : 1;
-  const prevLabel = rangePreset === "custom" ? `previous ${rangeLen} day${rangeLen === 1 ? "" : "s"}` : PREV_LABEL[rangePreset];
-  const rangeWord = rangePreset === "today" ? "today" : rangePreset === "yesterday" ? "yesterday" : "in range";
   // PRIME Phase 1: KPI drill-down — a tile switches tab, then the
   // effect scrolls to the target section once it has rendered.
   const [drillAnchor, setDrillAnchor] = useState<string | null>(null);
@@ -1887,22 +1865,18 @@ export default function OwnerPage() {
             <div className="sum-cards">
               <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("manage", "ow-sec-player-search")} aria-label="Users — open player search">
                 <span>Users</span><b>{dash.usersTotal.toLocaleString("en-GB")}</b>
-                <span className="ow-dash-today">+{dash.usersRange.toLocaleString("en-GB")} {rangeWord}</span>
-                <span className="ow-dash-prev">{cmpLine(dash.usersRange, dash.usersPrev, prevLabel, false, fiat)}</span>
+                <span className="ow-dash-today">+{dash.usersToday} today</span>
               </button>
               <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("finance", "ow-sec-ledger")} aria-label="Total deposited — open ledger">
                 <span>Total deposited</span><b>{fmtMoney(dash.depositedTotal, fiat)}</b>
-                <span className="ow-dash-today">+{fmtMoney(dash.depositedRange, fiat)} {rangeWord}</span>
-                <span className="ow-dash-prev">{cmpLine(dash.depositedRange, dash.depositedPrev, prevLabel, true, fiat)}</span>
+                <span className="ow-dash-today">+{fmtMoney(dash.depositedToday, fiat)} today</span>
               </button>
               <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("finance", "ow-sec-withdrawals")} aria-label="Total paid out — open withdrawals">
                 <span>Total paid out</span><b>{fmtMoney(dash.paidOutTotal, fiat)}</b>
-                <span className="ow-dash-today">+{fmtMoney(dash.paidOutRange, fiat)} {rangeWord}</span>
-                <span className="ow-dash-prev">{cmpLine(dash.paidOutRange, dash.paidOutPrev, prevLabel, true, fiat)}</span>
+                <span className="ow-dash-today">+{fmtMoney(dash.paidOutToday, fiat)} today</span>
               </button>
               <button type="button" className="sum-card ow-tile-btn" onClick={() => drillTo("payouts", "ow-sec-payouts")} aria-label="Commission to pay — open payouts">
-                <span>Commission to pay today</span><b>{fmtMoney(dash.commissionRange, fiat)}</b>
-                <span className="ow-dash-prev">{cmpLine(dash.commissionRange, dash.commissionPrev, prevLabel, true, fiat)}</span>
+                <span>Commission to pay today</span><b>{fmtMoney(dash.commissionToday, fiat)}</b>
               </button>
             </div>
           )}
@@ -1910,8 +1884,8 @@ export default function OwnerPage() {
 
           <section className="admin-sec">
           <h3>Financial performance · {symbolFor(fiat)}</h3>
-          {dash === null ? <p>Loading chart…</p> : dash.finChart.buckets.length === 0 ? (
-            <p>No data in this range.</p>
+          {dash === null ? <p>Loading chart…</p> : dash.finChart.buckets.length === 0 || dash.finChart.buckets.every((b) => b.deposits === 0 && b.payouts === 0 && b.commGen === 0 && b.commPaid === 0) ? (
+            <p>No activity in this range.</p>
           ) : (
             <>
               <div className="ow-fin-toggles" role="group" aria-label="Chart series">
@@ -1960,8 +1934,8 @@ export default function OwnerPage() {
 
           <section className="admin-sec">
           <h3>User growth</h3>
-          {dash === null ? <p>Loading chart…</p> : dash.growthChart.buckets.length === 0 ? (
-            <p>No data in this range.</p>
+          {dash === null ? <p>Loading chart…</p> : dash.growthChart.buckets.length === 0 || dash.growthChart.buckets.every((b) => b.newUsers === 0) ? (
+            <p>No activity in this range.</p>
           ) : (
             <>
               <p className="ow-fin-legend">New registrations · cumulative users</p>

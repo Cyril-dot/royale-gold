@@ -79,6 +79,16 @@
    mirrors msport's admin-panels.css (14px card padding, 12px gaps,
    90px+ bottom padding so the last card clears the fixed dock). */
 .ow-page.rg48-page-main{padding-bottom:96px}
+/* PRIME Phase 1 fix (Nov 2026): the base .wrap leaves only 14px at
+   phone width, so the strip, pills and headings sat on the screen
+   edge. The owner panel gets a real 20px inset on every width. */
+.ow-page .wrap{width:min(1280px,calc(100% - 40px))}
+/* PRIME Phase 1 fix (Nov 2026, his order: lines to separate things) —
+   hairlines BETWEEN things only. Flat still stands: no card
+   backgrounds, no borders around anything, no boxes. The line is the
+   separation — same --line hairline the pills already use. */
+.ow-page .admin-sec + .admin-sec{border-top:1px solid var(--line,rgba(255,246,216,.14))}
+.ow-page .ow-ptabs{border-top:1px solid var(--line,rgba(255,246,216,.14));border-bottom:1px solid var(--line,rgba(255,246,216,.14))}
 .ow-page .admin-sec{padding:16px 0;margin:0 0 20px;border:0;border-radius:0;background:transparent;box-shadow:none}
 .ow-strip{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:linear-gradient(135deg,#141828,#241a05);border:1px solid rgba(242,194,48,.35);color:#FFF6D8}
 .ow-strip-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#3ED97E;box-shadow:0 0 0 0 rgba(62,217,126,.5);animation:ow-pulse 2.4s ease-out infinite}
@@ -142,19 +152,19 @@
 .ow-act-sub{font-size:12px;color:var(--muted,rgba(255,246,216,.7))}
 .ow-act-amt{flex:none;font-weight:800;white-space:nowrap}
 
-/* --- PRIME Phase 1 (Nov 2026): global date range + KPI comparisons
-   + financial / growth charts. Same flat RG language: range pills reuse
-   .ow-ptab, KPI tiles are buttons that look exactly like the old tiles,
-   charts reuse .p1b3-bars. Comparison lines are neutral (no good/bad
-   colour — for "paid out", up is not good). Series dots: deposits gold,
-   payouts soft red, commission generated green, commission paid muted. */
+/* --- PRIME Phase 1 (Nov 2026): global date range + financial /
+   growth charts. Same flat RG language: range pills reuse .ow-ptab,
+   KPI tiles are buttons that look exactly like the old tiles, charts
+   reuse .p1b3-bars. (The KPI comparison lines were removed at his
+   order, Nov 2026 — tiles show the today sub-line only.) Series dots:
+   deposits gold, payouts soft red, commission generated green,
+   commission paid muted. */
 .ow-range{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .ow-range::-webkit-scrollbar{display:none}
 .ow-range-label{margin:0 0 12px;font-size:12px;color:var(--muted,rgba(255,246,216,.7))}
 .ow-range-custom{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
 .ow-range-custom label{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--muted,rgba(255,246,216,.7))}
 .ow-range-custom input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:8px 10px;font-family:var(--font);font-size:16px}
-.ow-page .sum-card span.ow-dash-prev{display:block;font-size:12px;color:var(--muted,rgba(255,246,216,.7));margin-top:2px}
 button.ow-tile-btn{font:inherit;color:inherit;text-align:left;background:transparent;border:0;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 button.ow-tile-btn:active{transform:scale(.97)}
 button.ow-tile-btn:focus-visible{outline:2px solid var(--gold,#F2C230);outline-offset:2px}
