@@ -26,10 +26,7 @@ import "./admin-players.css";
 import { StoreProvider } from "../lib/store";
 import { ANTI_CLONE_EARLY_SCRIPT } from "../lib/anti-clone";
 import AntiCloneGuard from "../components/AntiCloneGuard";
-import Header from "../components/Header";
-import Dock from "../components/Dock";
-import AuthModal from "../components/AuthModal";
-import DepositModal from "../components/DepositModal";
+import StaffChrome from "../components/StaffChrome";
 import Toasts from "../components/Toasts";
 
 const anton = Anton({ weight: "400", subsets: ["latin"], variable: "--font-display" });
@@ -90,12 +87,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: ANTI_CLONE_EARLY_SCRIPT }} />
         <StoreProvider>
           <AntiCloneGuard />
-          <Header />
           <Toasts />
-          {children}
-          <Dock />
-          <AuthModal />
-          <DepositModal />
+          {/* StaffChrome hides the player Header/Dock/AuthModal/DepositModal
+              on /admin* and /owner* (audit §3.10). Player routes unchanged. */}
+          <StaffChrome>{children}</StaffChrome>
         </StoreProvider>
       </body>
     </html>

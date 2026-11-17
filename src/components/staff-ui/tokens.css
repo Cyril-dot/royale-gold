@@ -1,0 +1,1653 @@
+/* ==========================================================================
+   Royale Gold — staff tokens + staff-ui component styles (Phase 1)
+   --------------------------------------------------------------------------
+   LOCKED tokens from Phase 0 audit §5 (v48.css:102-124, carried verbatim).
+   Dark-only (decision D3). One accent. Amounts Outfit bold, tabular.
+   --------------------------------------------------------------------------
+   SCOPING — READ THIS BEFORE EDITING:
+   Every rule below lives under `.staff`. The root layout still imports the
+   legacy staff CSS globally, and Next.js does NOT unload a stylesheet
+   when you navigate away (see node_modules/next/dist/docs, CSS guide),
+   so a bare `.st-btn` rule here would leak onto player pages after a
+   staff visit. The `.staff` wrapper (admin/layout.tsx, owner/layout.tsx)
+   is the only thing that activates these styles. Never write a bare
+   element/class selector in this file. Never use :root for staff tokens.
+   ========================================================================== */
+
+/* ---- Locked tokens (audit §5) ---- */
+.staff {
+  color-scheme: dark;
+  --bg: #070812;
+  --felt: #0c2b22;
+  --felt-deep: #081f18;
+  --steel: #141828;
+  --steel-2: #1c2138;
+  --gold: #f2c230;
+  --gold-2: #ffd964;
+  --gold-deep: #9a7410;
+  --ink: #fff6d8;
+  --muted: #b2b69f;
+  --faint: #8a8f7c;
+  --red: #e5322d;
+  --err-text: #ff8580; /* small error text — red #E5322D is 4.59:1, too low */
+  --ok: #3ed97e;
+  --warn: #ffa94d;
+  --line: rgba(255, 246, 216, 0.14);
+  --line-gold: rgba(242, 194, 48, 0.45);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --r: 18px;
+  --r-s: 12px;
+  --disp: "Anton", Impact, sans-serif;
+  --font: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* Type scale (audit §5) */
+  --fs-title: 20px;
+  --fs-h3: 18px;
+  --fs-body: 14px;
+  --fs-meta: 12px;
+  --fs-label: 11px;
+  /* Spacing scale: 4 / 8 / 12 / 16 / 20 / 24 / 32 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  /* Motion (audit §5): press feedback only, 100-160ms ease-out */
+  --ease-out: ease-out;
+  --press: 120ms var(--ease-out);
+  /* Z-index (audit §5) */
+  --z-dock: 40;
+  --z-header: 50;
+  --z-drawer: 80;
+  --z-dialog: 90;
+  --z-toast: 100;
+}
+
+/* ---- Scoped base (mobile-native skill baseline, staff only) ---- */
+.staff,
+.staff * {
+  box-sizing: border-box;
+}
+.staff {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  min-height: 100dvh;
+}
+.staff a {
+  color: inherit;
+}
+.staff button,
+.staff [role="button"] {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: inherit;
+}
+.staff :focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+@media (hover: hover) and (pointer: fine) {
+  /* All :hover rules in this file live inside this query — touch never
+     gets a stuck hover state (mobile-native §1). */
+  .staff .st-btn:hover {
+    filter: brightness(1.08);
+  }
+  .staff .st-btn-ghost:hover,
+  .staff .st-chip:hover,
+  .staff .st-nav-item:hover {
+    background: rgba(242, 194, 48, 0.08);
+  }
+  .staff .st-table tbody tr[data-clickable="true"]:hover td {
+    background: rgba(242, 194, 48, 0.06);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .staff *,
+  .staff *::before,
+  .staff *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .staff .st-skeleton {
+    animation: none;
+  }
+}
+
+/* ---- Money: Outfit bold, tabular figures (audit §5) ---- */
+.staff .st-amount {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.staff .st-mono {
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* ==========================================================================
+   Button — primary / secondary / ghost / danger + loading + IconButton
+   44px min target, :active scale .97, hover gated (see top of file).
+   ========================================================================== */
+.staff .st-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    transform var(--press),
+    background var(--press),
+    filter var(--press);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.staff .st-btn:active {
+  transform: scale(0.97);
+}
+.staff .st-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+.staff .st-btn-primary {
+  background: linear-gradient(180deg, var(--gold-2), #d9a41c);
+  color: #231600;
+}
+.staff .st-btn-secondary {
+  background: var(--steel);
+  border-color: var(--line-gold);
+  color: var(--gold-2);
+}
+.staff .st-btn-ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink);
+}
+.staff .st-btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+.staff .st-btn-sm {
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.staff .st-btn-block {
+  width: 100%;
+}
+.staff .st-btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: st-spin 0.7s linear infinite;
+  flex: none;
+}
+@keyframes st-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.staff .st-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 18px;
+  cursor: pointer;
+  transition:
+    transform var(--press),
+    background var(--press);
+  flex: none;
+}
+.staff .st-icon-btn:active {
+  transform: scale(0.96);
+}
+
+/* ==========================================================================
+   Badge / StatusPill — status is NEVER colour-alone: icon + text always.
+   ========================================================================== */
+.staff .st-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.staff .st-badge .st-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.staff .st-badge-paid,
+.staff .st-badge-ok {
+  background: rgba(62, 217, 126, 0.14);
+  color: var(--ok);
+  border-color: rgba(62, 217, 126, 0.4);
+}
+.staff .st-badge-pending {
+  background: rgba(242, 194, 48, 0.14);
+  color: var(--gold-2);
+  border-color: var(--line-gold);
+}
+.staff .st-badge-rejected,
+.staff .st-badge-danger {
+  background: rgba(229, 50, 45, 0.16);
+  color: var(--err-text);
+  border-color: rgba(229, 50, 45, 0.5);
+}
+.staff .st-badge-held,
+.staff .st-badge-warn {
+  background: rgba(255, 169, 77, 0.14);
+  color: var(--warn);
+  border-color: rgba(255, 169, 77, 0.45);
+}
+.staff .st-badge-muted {
+  background: var(--steel);
+  color: var(--muted);
+  border-color: var(--line);
+}
+.staff .st-badge-info {
+  background: rgba(242, 194, 48, 0.1);
+  color: var(--gold-2);
+  border-color: var(--line);
+}
+
+/* ==========================================================================
+   Inputs — 16px font (no iOS zoom), labelled, error state.
+   ========================================================================== */
+.staff .st-input,
+.staff .st-select,
+.staff .st-textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 12px;
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line-gold);
+  border-radius: 10px;
+}
+.staff .st-input::placeholder,
+.staff .st-textarea::placeholder {
+  color: var(--faint);
+}
+.staff .st-input[aria-invalid="true"],
+.staff .st-select[aria-invalid="true"],
+.staff .st-textarea[aria-invalid="true"] {
+  border-color: var(--red);
+}
+.staff .st-input:disabled,
+.staff .st-select:disabled {
+  opacity: 0.5;
+}
+.staff .st-select {
+  appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23F2C230' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+.staff .st-textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.staff .st-amount-input {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* FormField — label above input + hint + error, one component. */
+.staff .st-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.staff .st-field-label {
+  font-size: var(--fs-label);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.staff .st-field-hint {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.staff .st-field-error {
+  font-size: var(--fs-meta);
+  color: var(--err-text);
+  font-weight: 700;
+}
+.staff .st-field-required {
+  color: var(--err-text);
+}
+
+/* DateRange — two date inputs + preset chips, stacked on phone. */
+.staff .st-daterange {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.staff .st-daterange .st-field {
+  /* The label is the flex item here — the input must NOT grow, or a
+     column-flex label stretches a date input to the row height (was 140px). */
+  flex: 1 1 140px;
+}
+.staff .st-daterange .st-input {
+  flex: none;
+}
+
+/* ==========================================================================
+   Card — flat by default (transparent + hairline separator, the owner
+   flat language). One card language for both panels (audit §6).
+   ========================================================================== */
+.staff .st-card {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  padding: 20px 0;
+}
+.staff .st-card:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.staff .st-card-boxed {
+  background: var(--steel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px;
+}
+.staff .st-card-title {
+  margin: 0 0 12px;
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  line-height: 1.3;
+}
+.staff .st-card-sub {
+  margin: -8px 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* KPI tile — value (Outfit bold, tabular) + label + sub-line + delta. */
+.staff .st-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (min-width: 768px) {
+  .staff .st-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.staff .st-kpi {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--steel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform var(--press);
+  min-width: 0;
+}
+.staff .st-kpi:active {
+  transform: scale(0.98);
+}
+.staff .st-kpi-static {
+  cursor: default;
+}
+.staff .st-kpi-label {
+  display: block;
+  font-size: var(--fs-label);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.staff .st-kpi-value {
+  display: block;
+  /* Fluid: a 7-figure amount must fit a half-width tile on a 360px phone
+     without breaking mid-number (was wrapping as "GH₵66,200.0 / 0"). */
+  font-size: clamp(1.125rem, 5.2vw, 1.375rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: var(--gold-2);
+  overflow-wrap: normal;
+}
+.staff .st-kpi-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.staff .st-kpi-delta {
+  font-weight: 800;
+}
+.staff .st-kpi-delta-up {
+  color: var(--ok);
+}
+.staff .st-kpi-delta-down {
+  color: var(--err-text);
+}
+
+/* Chip / FilterChip — removable filter chips with counts. */
+.staff .st-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.staff .st-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform var(--press),
+    background var(--press);
+}
+.staff .st-chip:active {
+  transform: scale(0.97);
+}
+.staff .st-chip-on {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #231600;
+}
+.staff .st-chip-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+.staff .st-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.staff .st-chip-on .st-chip-x {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+/* ==========================================================================
+   Skeleton / EmptyState / ErrorState
+   ========================================================================== */
+.staff .st-skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--steel) 25%, var(--steel-2) 50%, var(--steel) 75%);
+  background-size: 200% 100%;
+  animation: st-shimmer 1.4s ease infinite;
+  color: transparent !important;
+  pointer-events: none;
+}
+@keyframes st-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.staff .st-skeleton-line {
+  height: 16px;
+  margin: 8px 0;
+}
+.staff .st-skeleton-title {
+  height: 24px;
+  width: 55%;
+}
+.staff .st-skeleton-card {
+  height: 96px;
+}
+.staff .st-state {
+  padding: 24px 16px;
+  text-align: center;
+  border-top: 1px solid var(--line);
+}
+.staff .st-state:first-child {
+  border-top: 0;
+}
+.staff .st-state-icon {
+  font-size: 28px;
+  line-height: 1;
+  display: block;
+  margin-bottom: 10px;
+}
+.staff .st-state-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.staff .st-state-text {
+  margin: 0 auto 14px;
+  max-width: 420px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.staff .st-state .st-btn {
+  margin: 0 auto;
+}
+.staff .st-error-text {
+  color: var(--err-text);
+}
+
+/* CopyButton + MaskedValue */
+.staff .st-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform var(--press),
+    background var(--press);
+  white-space: nowrap;
+}
+.staff .st-copy-btn:active {
+  transform: scale(0.97);
+}
+.staff .st-copy-btn-done {
+  color: var(--ok);
+  border-color: rgba(62, 217, 126, 0.45);
+}
+.staff .st-masked {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.staff .st-masked-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.staff .st-masked-note {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* ==========================================================================
+   Segmented / Tabs — Chuks's rule (22:49): a tab is something you CLICK
+   and it SHOWS THE PAGE. Tabs are LINKS to real routes (deep-linkable,
+   Back works) — never state that reveals a hidden section on one page.
+   Segmented is a CHOICE control (demo fixture / filter), not navigation.
+   Both are keyboard-operable (arrow keys move, Enter/Space selects).
+   ========================================================================== */
+.staff .st-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px;
+  margin: 0 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.staff .st-tabs::-webkit-scrollbar {
+  display: none;
+}
+.staff .st-tab {
+  flex: none;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: transform var(--press);
+}
+.staff .st-tab:active {
+  transform: scale(0.97);
+}
+.staff .st-tab[aria-selected="true"] {
+  color: var(--gold-2);
+  border-bottom-color: var(--gold);
+}
+.staff .st-tab-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+.staff .st-segmented {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--steel);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.staff .st-segmented::-webkit-scrollbar {
+  display: none;
+}
+.staff .st-segmented .st-tab {
+  border-bottom: 0;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 8px 14px;
+}
+.staff .st-segmented .st-tab[aria-selected="true"] {
+  background: var(--gold);
+  color: #231600;
+}
+
+/* ==========================================================================
+   AppShell — desktop sidebar + phone top bar / drawer / bottom bar.
+   Main: max 1280px, edge padding 20px (14px ≤480px), bottom clearance
+   96px owner / 120px admin ≤760px so the last card clears the dock.
+   ========================================================================== */
+.staff .st-shell {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+.staff .st-sidebar {
+  display: none;
+}
+.staff .st-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.staff .st-topbar-title {
+  font-family: var(--disp);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.staff .st-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex: none;
+}
+.staff .st-role-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #231600;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.staff .st-main {
+  width: min(1280px, 100%);
+  margin: 0 auto;
+  padding: 20px 14px calc(96px + env(safe-area-inset-bottom, 0px));
+}
+.staff .st-bottombar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-dock);
+  display: flex;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.staff .st-bottombar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: 8px 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  min-width: 0;
+}
+.staff .st-bottombar-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.staff .st-bottombar-item[aria-current="page"] {
+  color: var(--gold-2);
+}
+.staff .st-bottombar-item[aria-current="page"] .st-bottombar-dot {
+  background: var(--gold);
+}
+.staff .st-bottombar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+@media (min-width: 761px) {
+  .staff .st-sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 264px;
+    z-index: var(--z-header);
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+    padding: 20px 12px calc(20px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .staff .st-sidebar-brand {
+    font-family: var(--disp);
+    font-size: 20px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--gold-2);
+    margin: 0 8px 4px;
+  }
+  .staff .st-sidebar-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 8px 20px;
+  }
+  .staff .st-shell-with-sidebar .st-main-wrap {
+    margin-left: 264px;
+  }
+  .staff .st-shell-with-sidebar .st-topbar {
+    position: sticky;
+  }
+  .staff .st-main {
+    padding: 24px 20px 48px;
+  }
+  .staff .st-bottombar,
+  .staff .st-topbar-menu-btn {
+    display: none;
+  }
+}
+.staff .st-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.staff .st-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: left;
+  width: 100%;
+  transition: background var(--press);
+}
+.staff .st-nav-item[aria-current="page"] {
+  background: rgba(242, 194, 48, 0.14);
+  color: var(--gold-2);
+}
+.staff .st-nav-item-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: var(--gold);
+  color: #231600;
+  border-radius: 999px;
+  padding: 2px 8px;
+  flex: none;
+}
+/* Drawer (phone slide-over) */
+.staff .st-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  background: rgba(0, 0, 0, 0.6);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.staff .st-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--z-drawer);
+  width: min(300px, 84vw);
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(20px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: st-drawer-in 160ms var(--ease-out);
+}
+@keyframes st-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.staff .st-drawer-close {
+  margin: 0 0 12px auto;
+  display: flex;
+}
+
+/* Preview banner — "Previewing as <admin> — read-only" + Exit (audit §4.1). */
+.staff .st-preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: rgba(242, 194, 48, 0.14);
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r-s);
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.staff .st-preview-banner .st-btn {
+  margin-left: auto;
+}
+
+/* PageHeader + Breadcrumbs */
+.staff .st-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.staff .st-crumbs a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.staff .st-crumbs li + li::before {
+  content: "/";
+  margin-right: 6px;
+  color: var(--faint);
+}
+.staff .st-crumbs [aria-current="page"] {
+  color: var(--ink);
+  font-weight: 700;
+}
+.staff .st-pagehead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+.staff .st-pagehead-main {
+  flex: 1;
+  min-width: 200px;
+}
+.staff .st-pagehead-title {
+  font-family: var(--disp);
+  font-size: var(--fs-title);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0;
+  line-height: 1.2;
+}
+.staff .st-pagehead-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.staff .st-pagehead-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.staff .st-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  margin-bottom: 4px;
+}
+
+/* Sheet — mobile bottom sheet */
+.staff .st-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  background: rgba(0, 0, 0, 0.6);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.staff .st-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-drawer);
+  max-height: 86dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--steel);
+  border-top: 1px solid var(--line-gold);
+  border-radius: 20px 20px 0 0;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  animation: st-sheet-in 160ms var(--ease-out);
+}
+@keyframes st-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.staff .st-sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  margin: 0 auto 12px;
+}
+.staff .st-sheet-title {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 800;
+}
+@media (min-width: 761px) {
+  .staff .st-sheet {
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(560px, calc(100vw - 48px));
+    max-height: 86dvh;
+    border-radius: var(--r);
+    border: 1px solid var(--line-gold);
+    animation: none;
+  }
+  .staff .st-sheet-handle {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   DataTable — server-driven shape; ≤760px renders as CardList, never a
+   squeezed desktop table. Sticky header, 7-figure amounts, long emails
+   and names without clipping (overflow-wrap + tabular amounts).
+   ========================================================================== */
+.staff .st-table-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.staff .st-table-search {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.staff .st-table-search .st-input {
+  flex: 1;
+  min-width: 200px;
+}
+.staff .st-table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--line);
+}
+.staff .st-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.staff .st-table th,
+.staff .st-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+  min-width: 0;
+}
+.staff .st-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.staff .st-table th .st-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.staff .st-table td {
+  overflow-wrap: anywhere;
+}
+.staff .st-table .st-cell-primary {
+  font-weight: 800;
+  color: var(--ink);
+}
+.staff .st-table .st-cell-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.staff .st-table-row-expand td {
+  background: var(--steel);
+  font-size: 13px;
+  color: var(--muted);
+}
+.staff .st-row-actions {
+  position: relative;
+  display: inline-block;
+}
+.staff .st-row-actions-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  min-width: 180px;
+  background: var(--steel-2);
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r-s);
+  padding: 6px;
+  box-shadow: var(--shadow);
+}
+.staff .st-row-actions-menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.staff .st-row-actions-menu button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* CardList — the phone fallback for DataTable (≤760px). */
+.staff .st-cardlist {
+  display: none;
+}
+.staff .st-cardlist-row {
+  border-top: 1px solid var(--line);
+  padding: 14px 2px;
+}
+.staff .st-cardlist-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.staff .st-cardlist-title {
+  font-weight: 800;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.staff .st-cardlist-amount {
+  font-size: 16px;
+  color: var(--gold-2);
+  flex: none;
+}
+.staff .st-cardlist-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.staff .st-cardlist-more {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+}
+.staff .st-cardlist-more dt {
+  color: var(--faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.staff .st-cardlist-more dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.staff .st-cardlist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+@media (max-width: 760px) {
+  .staff .st-table-wrap {
+    display: none;
+  }
+  .staff .st-cardlist {
+    display: block;
+  }
+}
+
+/* Pagination */
+.staff .st-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.staff .st-pagination-info {
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+}
+.staff .st-pagination .st-select {
+  width: auto;
+  min-height: 40px;
+}
+
+/* ==========================================================================
+   Charts — hand-rolled SVG (zero new dependency, decision D5).
+   Labelled axes, readable at 360px, tap value, table alternative.
+   ========================================================================== */
+.staff .st-chart {
+  width: 100%;
+}
+.staff .st-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.staff .st-chart-bar {
+  cursor: pointer;
+}
+.staff .st-chart-bar:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 1px;
+}
+.staff .st-chart-axis {
+  font-size: 11px;
+  fill: var(--muted);
+}
+.staff .st-chart-value {
+  font-size: 12px;
+  font-weight: 800;
+  fill: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.staff .st-chart-tip {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--gold-2);
+  font-weight: 700;
+  min-height: 20px;
+}
+.staff .st-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+  list-style: none;
+  padding: 0;
+}
+.staff .st-chart-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.staff .st-chart-table-toggle {
+  margin-top: 8px;
+}
+.staff .st-chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+.staff .st-chart-table th,
+.staff .st-chart-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.staff .st-chart-table th {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ==========================================================================
+   Dialog / ConfirmDialog — focus-trapped modal; typed-reason variant.
+   ========================================================================== */
+.staff .st-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+.staff .st-dialog {
+  width: 100%;
+  max-width: 560px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--steel);
+  border-top: 1px solid var(--line-gold);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 761px) {
+  .staff .st-dialog-backdrop {
+    align-items: center;
+    padding: 24px;
+  }
+  .staff .st-dialog {
+    border: 1px solid var(--line-gold);
+    border-radius: var(--r);
+    padding: 24px;
+  }
+}
+.staff .st-dialog-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 800;
+}
+.staff .st-dialog-body {
+  font-size: 14px;
+  color: var(--muted);
+}
+.staff .st-dialog-body p {
+  margin: 0 0 10px;
+}
+.staff .st-dialog-facts {
+  margin: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  font-size: 14px;
+}
+.staff .st-dialog-facts dt {
+  color: var(--faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  align-self: center;
+}
+.staff .st-dialog-facts dd {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.staff .st-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.staff .st-dialog-actions .st-btn {
+  flex: 1 1 140px;
+}
+@media (min-width: 761px) {
+  .staff .st-dialog-actions .st-btn {
+    flex: 0 1 auto;
+  }
+}
+
+/* ==========================================================================
+   Toast — text + kind + optional Undo + optional audit link.
+   ========================================================================== */
+.staff .st-toast-host {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+@media (min-width: 761px) {
+  .staff .st-toast-host {
+    left: auto;
+    right: 24px;
+    width: min(420px, calc(100vw - 48px));
+  }
+}
+.staff .st-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--steel-2);
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r-s);
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+.staff .st-toast-win {
+  border-color: rgba(62, 217, 126, 0.5);
+}
+.staff .st-toast-lose {
+  border-color: rgba(229, 50, 45, 0.5);
+}
+.staff .st-toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.staff .st-toast-undo {
+  flex: none;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  background: transparent;
+  color: var(--gold-2);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.staff .st-toast-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+/* ==========================================================================
+   CommandPalette — ⌘K / long-press search.
+   ========================================================================== */
+.staff .st-cmdk-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12dvh 12px 12px;
+}
+.staff .st-cmdk {
+  width: min(560px, 100%);
+  max-height: 70dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--steel);
+  border: 1px solid var(--line-gold);
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.staff .st-cmdk-input {
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 16px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.staff .st-cmdk-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  list-style: none;
+  margin: 0;
+}
+.staff .st-cmdk-group {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 10px 10px 4px;
+}
+.staff .st-cmdk-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.staff .st-cmdk-item[aria-selected="true"] {
+  background: rgba(242, 194, 48, 0.14);
+  color: var(--gold-2);
+}
+.staff .st-cmdk-item-sub {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  flex: none;
+}
+.staff .st-cmdk-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.staff .st-cmdk-hint {
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* ---- Demo-page helpers (owner/ui-demo only) ---- */
+.staff .st-demo-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+@media (min-width: 768px) {
+  .staff .st-demo-grid-2 {
+    grid-template-columns: 1fr 1fr;
+    gap: 0 32px;
+  }
+}
+.staff .st-demo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+.staff .st-demo-note {
+  font-size: 12px;
+  color: var(--faint);
+  margin: 8px 0;
+}
+.staff .st-demo-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--line-gold);
+  color: var(--gold-2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+.staff .st-demo-section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+}
