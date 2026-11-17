@@ -208,7 +208,6 @@ function AdminOverviewInner() {
           the sent list shows for the owner too. In-app only. */}
       <section className="admin-sec">
         <h3>Notify all my players</h3>
-        <p className="rg48-sub">Send one message to every player you referred — it shows on their account page. In-app only, no email or SMS.</p>
         {!previewId && user.role === "admin" ? (
           <form className="pd-note-form" onSubmit={submitBroadcast}>
             <input type="text" placeholder="Title — e.g. Weekend bonus is live" value={bcTitle} onChange={(e) => setBcTitle(e.target.value)} aria-label="Broadcast title" maxLength={120} />
