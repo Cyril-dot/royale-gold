@@ -99,6 +99,25 @@ export async function GET(req: Request) {
     const fiatCurrency = (sp.get("currency") || "GHS").toUpperCase();
     const today = todayStr();
     const stripStart = addDays(today, -13);
+    // Phase 3: optional calendar window (?from=&to=, max 62 days,
+    // default the current month) and per-admin payout history
+    // (?adminId=, latest 30 rows). Both are additive — callers that
+    // pass neither get exactly the old payload plus `calendar`.
+    const fromParam = sp.get("from");
+    const toParam = sp.get("to");
+    let calFrom = fromParam && DAY_RE.test(fromParam) ? fromParam : `${today.slice(0, 8)}01`;
+    let calTo = toParam && DAY_RE.test(toParam) ? toParam : today;
+    if (calFrom > calTo) {
+      const t = calFrom;
+      calFrom = calTo;
+      calTo = t;
+    }
+    const spanDays =
+      Math.round(
+        (new Date(`${calTo}T00:00:00Z`).getTime() - new Date(`${calFrom}T00:00:00Z`).getTime()) / 86400000,
+      ) + 1;
+    if (spanDays > 62) return fail("Calendar range must be 62 days or fewer");
+    const adminIdParam = sp.get("adminId") || undefined;
 
     const admins = await prisma.user.findMany({
       where: { role: "admin" },
@@ -127,12 +146,14 @@ export async function GET(req: Request) {
       byAdmin.set(p.adminId, list);
     }
 
-    // Owed per admin per strip day, from the same rules-engine calc as
-    // the Commission viewer (one dayCommissions call per admin covers
-    // the whole 14-day window).
+    // Owed per admin per day, from the same rules-engine calc as the
+    // Commission viewer (one dayCommissions call per admin covers the
+    // union of the 14-day strip and the calendar window).
+    const rangeStart = stripStart < calFrom ? stripStart : calFrom;
+    const rangeEnd = today > calTo ? today : calTo;
     const owedByAdminDay = new Map<string, Map<string, number>>();
     for (const a of admins) {
-      const days = await dayCommissions(a.id, stripStart, today, fiatCurrency);
+      const days = await dayCommissions(a.id, rangeStart, rangeEnd, fiatCurrency);
       const m = new Map<string, number>();
       for (const d of days) m.set(d.date, round2(d.totalCommission));
       owedByAdminDay.set(a.id, m);
@@ -151,6 +172,42 @@ export async function GET(req: Request) {
         });
       return { date: d, hasOwed, allPaid };
     });
+
+    // Calendar window (Phase 3): one summary per day in the requested
+    // range, same owed/paid rule as the strip. The page renders it as a
+    // month grid (or a list) beyond the 14-day strip.
+    const calDates: string[] = [];
+    for (let d = calFrom; d <= calTo; d = addDays(d, 1)) calDates.push(d);
+    const calendar = calDates.map((d) => {
+      const owedAdmins = admins.filter((a) => (owedByAdminDay.get(a.id)?.get(d) ?? 0) > 0);
+      const hasOwed = owedAdmins.length > 0;
+      const owed = round2(owedAdmins.reduce((s, a) => s + (owedByAdminDay.get(a.id)?.get(d) ?? 0), 0));
+      const paid = round2(owedAdmins.reduce((s, a) => s + paidForDay(byAdmin.get(a.id) ?? [], d).paid, 0));
+      const allPaid =
+        hasOwed &&
+        owedAdmins.every((a) => paidForDay(byAdmin.get(a.id) ?? [], d).paid >= (owedByAdminDay.get(a.id)?.get(d) ?? 0));
+      return { date: d, owed, paid, people: owedAdmins.length, allPaid, hasOwed };
+    });
+
+    // Per-admin payout history (Phase 3, only when ?adminId= is passed):
+    // the latest CommissionPayout rows for that admin in this fiat —
+    // the commission-center view in Payouts Details.
+    const historyRows = adminIdParam
+      ? await prisma.commissionPayout.findMany({
+          where: { adminId: adminIdParam, fiatCurrency },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+          select: {
+            id: true,
+            amount: true,
+            method: true,
+            reference: true,
+            periodFrom: true,
+            periodTo: true,
+            createdAt: true,
+          },
+        })
+      : [];
 
     // People owed on the selected day (owed > 0 only).
     const owedIds = admins.filter((a) => (owedByAdminDay.get(a.id)?.get(day) ?? 0) > 0).map((a) => a.id);
@@ -202,7 +259,27 @@ export async function GET(req: Request) {
       paidCount: people.filter((p) => p.status === "paid").length,
       rejectedCount: people.filter((p) => p.status === "rejected").length,
     };
-    return ok({ day, currency: fiatCurrency, people, days, totals });
+    return ok({
+      day,
+      currency: fiatCurrency,
+      people,
+      days,
+      totals,
+      calendar: { from: calFrom, to: calTo, days: calendar },
+      ...(adminIdParam
+        ? {
+            history: historyRows.map((r) => ({
+              id: r.id,
+              amount: dec(r.amount),
+              method: r.method,
+              reference: r.reference,
+              periodFrom: r.periodFrom,
+              periodTo: r.periodTo,
+              createdAt: r.createdAt.toISOString(),
+            })),
+          }
+        : {}),
+    });
   } catch (err) {
     return toErrorResponse(err);
   }
@@ -211,8 +288,11 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const owner = await requireRole("owner");
-    const body = await readJson<{ day?: string; adminId?: string; action?: string; currency?: string }>(req);
+    const body = await readJson<{ day?: string; adminId?: string; action?: string; currency?: string; reason?: string }>(req);
     if (!body) return fail("Invalid JSON body");
+    // Phase 3: an optional reason for the rejected action — recorded in
+    // the audit detail. Additive; callers that omit it behave as before.
+    const reason = (body.reason ?? "").trim().slice(0, 200);
     const day = body.day ?? todayStr();
     if (!DAY_RE.test(day)) return fail("day must be YYYY-MM-DD");
     const adminId = (body.adminId ?? "").trim();
@@ -294,7 +374,7 @@ export async function POST(req: Request) {
             actorId: owner.id,
             action: "commission.payout-rejected",
             targetId: adminId,
-            detail: `Rejected ${admin.name}'s ${owed.toFixed(2)} ${fiatCurrency} commission for ${day} via Payouts tab`,
+            detail: `Rejected ${admin.name}'s ${owed.toFixed(2)} ${fiatCurrency} commission for ${day} via Payouts tab${reason ? ` — ${reason}` : ""}`,
           },
         });
       });

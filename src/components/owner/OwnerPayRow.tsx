@@ -1,5 +1,15 @@
+// OwnerPayRow (Phase 3 restyle) — one payment method's enable toggle +
+// min/max deposit, staff-ui throughout. The toggle posts immediately
+// (reversible in one tap, same as before); Save only posts fields that
+// changed. No confirm dialog: this is a reversible config toggle, not
+// a money movement — the gateway flip (which reroutes live money) is
+// the one that confirms.
 import { useState } from "react";
 import { symbolFor } from "../../lib/country";
+import { Card } from "../staff-ui/Card";
+import { Button } from "../staff-ui/Button";
+import { Badge } from "../staff-ui/Badge";
+import { FormField, AmountInput } from "../staff-ui/Form";
 
 export function OwnerPayRow({ m, onSave }: {
   m: { method: string; enabled: boolean; minDeposit: number | null; maxDeposit: number | null; fiatCurrency: string; gateway?: string | null };
@@ -19,25 +29,27 @@ export function OwnerPayRow({ m, onSave }: {
     try { await onSave(m.method, patch); } finally { setBusy(false); }
   };
   return (
-    <div className={`ow-pay-row${!m.enabled ? " ow-pay-off" : ""}`}>
-      <div className="ow-game-head">
-        <b>{m.method}</b>
-        {!m.enabled && <span className="ow-game-flag bad">DISABLED</span>}
-      </div>
-      <div className="ow-game-toggles">
-        <button
-          type="button"
-          className={`btn btn-sm ${m.enabled ? "btn-gold" : "btn-ghost"}`}
-          disabled={busy}
-          onClick={() => void onSave(m.method, { enabled: !m.enabled })}
-          aria-pressed={m.enabled}
-        >{m.enabled ? "Enabled" : "Disabled"}</button>
-      </div>
-      <div className="ow-game-econ">
-        <label>Min deposit ({symbolFor(m.fiatCurrency ?? "GHS")}) <input type="number" min={0} step={0.01} value={minDep} onChange={(e) => setMinDep(e.target.value)} placeholder="Platform min" aria-label={`${m.method} minimum deposit`} /></label>
-        <label>Max deposit ({symbolFor(m.fiatCurrency ?? "GHS")}) <input type="number" min={0} step={0.01} value={maxDep} onChange={(e) => setMaxDep(e.target.value)} placeholder="No cap" aria-label={`${m.method} maximum deposit`} /></label>
-        <button className="btn btn-gold btn-sm" type="button" disabled={busy} onClick={() => void save()}>Save</button>
-      </div>
-    </div>
+    <Card title={m.method}>
+      {!m.enabled ? <Badge variant="muted">Disabled</Badge> : null}
+      {m.gateway ? <Badge variant="info">{m.gateway}</Badge> : null}
+      <Button
+        variant={m.enabled ? "primary" : "secondary"}
+        size="sm"
+        disabled={busy}
+        onClick={() => void onSave(m.method, { enabled: !m.enabled })}
+        aria-pressed={m.enabled}
+      >
+        {m.enabled ? "Enabled" : "Disabled"}
+      </Button>
+      <FormField label={`Min deposit (${symbolFor(m.fiatCurrency ?? "GHS")})`}>
+        <AmountInput value={minDep} onChange={(e) => setMinDep(e.target.value)} placeholder="Platform min" aria-label={`${m.method} minimum deposit`} />
+      </FormField>
+      <FormField label={`Max deposit (${symbolFor(m.fiatCurrency ?? "GHS")})`}>
+        <AmountInput value={maxDep} onChange={(e) => setMaxDep(e.target.value)} placeholder="No cap" aria-label={`${m.method} maximum deposit`} />
+      </FormField>
+      <Button variant="primary" size="sm" loading={busy} onClick={() => void save()}>
+        Save
+      </Button>
+    </Card>
   );
 }

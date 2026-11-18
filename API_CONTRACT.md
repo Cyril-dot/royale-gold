@@ -406,6 +406,52 @@ stored); withdrawals-over-threshold uses the per-fiat
 the P&L handler; `activePlayersRange`/`activePlayersPrev` are distinct
 players with a deposit or a game round in the period (that fiat).
 
+### POST /api/owner/reveal (owner, Phase 3 — brief §7.2 item 3)
+Returns ONE unmasked value and writes an audit entry (`data.reveal`,
+actor = the owner, target = the id passed, detail names the kind —
+never the value itself). Kinds are whitelisted; gateway secrets are
+never revealable (the gateway API only ever returns last-4). Phase 5
+reuses this route for the admin side by adding an admin-guarded kind.
+```json
+// request
+{ "kind": "withdrawal-account" | "user-contact" | "payout-account", "id": "<id>" }
+// withdrawal-account (id = withdrawal id): the payout account snapshot
+// saved on the withdrawal. 503 (not 500) when the withdrawal-account
+// columns do not exist in the database yet (rg-withdrawal-account.sql
+// unrun) — the owner list deliberately never selects those columns.
+{ "ok": true, "kind": "withdrawal-account", "id": "...",
+  "value": { "accountType": "momo", "accountName": "Kwame Mensah", "accountDetail": "0244123456" } }
+// user-contact (id = user id): that player's email + phone.
+{ "ok": true, "kind": "user-contact", "id": "...",
+  "value": { "name": "Kwame Mensah", "email": "k@example.com", "phone": "0244123456" } }
+// payout-account (id = admin id): the admin's saved payout account +
+// contact, one call for the whole Payouts Details view.
+{ "ok": true, "kind": "payout-account", "id": "...",
+  "value": { "adminName": "Royale Admin", "email": "a@example.com", "phone": "0244123456",
+    "account": { "type": "momo", "bankName": null, "accountNumber": null,
+      "network": "MTN", "phoneNumber": "0244123456", "accountName": "Royale Admin" } } }
+```
+404 when the withdrawal / user / admin does not exist (or the user is
+not an admin for `payout-account`); 400 for an unknown kind or a
+missing id.
+
+### GET /api/owner/payouts?day=YYYY-MM-DD&currency=GHS (owner, Phase 3)
+As before (`day`, `people`, 14-day `days` strip, `totals`) PLUS:
+- `calendar: { "from", "to", "days": [ { "date", "owed", "paid",
+  "people", "allPaid", "hasOwed" } ] }` — one summary per day in the
+  requested window. `?from=&to=` set the window (max 62 days, default
+  the current month); `days` (the 14-day strip) is unchanged.
+- `?adminId=` adds `history` — that admin's latest 30 CommissionPayout
+  rows in this fiat (newest first): `{ "id", "amount", "method",
+  "reference", "periodFrom", "periodTo", "createdAt" }`.
+
+### POST /api/owner/payouts (owner, Phase 3)
+As before (`{ day, adminId, action, currency }`) PLUS an optional
+`reason` (max 200 chars) on the `rejected` action — recorded in the
+`commission.payout-rejected` audit detail. Paid stays DERIVED (sum of
+payout rows covering the day; PAID when paid ≥ owed) and REJECTED stays
+a zero-amount marker row — no status column (see the route header).
+
 ---
 
 ## Rewards

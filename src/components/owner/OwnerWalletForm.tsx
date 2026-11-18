@@ -1,4 +1,10 @@
+// OwnerWalletForm (Phase 3 restyle) — the platform wallet rules, staff-ui
+// throughout. Same fields, same save (only changed fields are posted).
+// Labels stay GH₵: these are the GHS platform values (the server syncs
+// the GHS currency row with them); NGN values live in Currency settings.
 import { useState } from "react";
+import { Button } from "../staff-ui/Button";
+import { FormField, AmountInput } from "../staff-ui/Form";
 
 export function OwnerWalletForm({ w, onSave }: {
   w: { cashMinDeposit: number; cashMinStake: number; coinMinStake: number; conversionRate: number; coinsWithdrawable: boolean };
@@ -26,24 +32,25 @@ export function OwnerWalletForm({ w, onSave }: {
     try { await onSave(patch); } finally { setBusy(false); }
   };
   return (
-    <div className="ow-wallet">
-      <label>Cash min deposit (GH₵)
-        <input type="number" min={0} step={0.01} value={dep} onChange={(e) => setDep(e.target.value)} aria-label="Cash minimum deposit" />
-      </label>
-      <label>Cash min stake (GH₵)
-        <input type="number" min={0.01} step={0.01} value={stake} onChange={(e) => setStake(e.target.value)} aria-label="Cash minimum stake" />
-      </label>
-      <label>Coin min stake (coins)
-        <input type="number" min={1} step={1} value={coin} onChange={(e) => setCoin(e.target.value)} aria-label="Coin minimum stake" />
-      </label>
-      <label>Conversion rate (GH₵ = 1 coin)
-        <input type="number" min={1} step={0.01} value={rate} onChange={(e) => setRate(e.target.value)} aria-label="Conversion rate" />
-      </label>
-      <label className="ow-check">
-        <input type="checkbox" checked={wd} onChange={(e) => setWd(e.target.checked)} />
-        Coins are withdrawable
-      </label>
-      <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void save()}>Save wallet config</button>
+    <div>
+      <FormField label="Cash min deposit (GH₵)">
+        <AmountInput value={dep} onChange={(e) => setDep(e.target.value)} aria-label="Cash minimum deposit" />
+      </FormField>
+      <FormField label="Cash min stake (GH₵)">
+        <AmountInput value={stake} onChange={(e) => setStake(e.target.value)} aria-label="Cash minimum stake" />
+      </FormField>
+      <FormField label="Coin min stake (coins)">
+        <AmountInput value={coin} onChange={(e) => setCoin(e.target.value)} aria-label="Coin minimum stake" />
+      </FormField>
+      <FormField label="Conversion rate (GH₵ = 1 coin)">
+        <AmountInput value={rate} onChange={(e) => setRate(e.target.value)} aria-label="Conversion rate" />
+      </FormField>
+      <FormField label="Coins are withdrawable">
+        <input type="checkbox" checked={wd} onChange={(e) => setWd(e.target.checked)} aria-label="Coins are withdrawable" />
+      </FormField>
+      <Button variant="primary" loading={busy} onClick={() => void save()}>
+        Save wallet config
+      </Button>
     </div>
   );
 }

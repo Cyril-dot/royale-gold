@@ -1235,7 +1235,11 @@
   cursor: pointer;
 }
 .staff .st-table td {
-  overflow-wrap: anywhere;
+  /* break-word, not anywhere: amounts (GH₵120.00) and masked emails
+     must not split mid-number/mid-word on desktop — the column widens
+     (or the wrap scrolls) instead. Long unbroken strings still break
+     when they genuinely exceed the line. */
+  overflow-wrap: break-word;
 }
 .staff .st-table .st-cell-primary {
   font-weight: 800;
@@ -1246,7 +1250,7 @@
   font-size: 12px;
   color: var(--muted);
   font-weight: 400;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .staff .st-table-row-expand td {
   background: var(--steel);
@@ -1739,4 +1743,122 @@
   flex-wrap: wrap;
   gap: 8px;
   margin: 0 0 20px;
+}
+
+/* ==========================================================================
+   Payout calendar (Phase 3) — month grid, one cell per UTC day.
+   Gold border = owed, green border = all paid, plain = nobody owed.
+   The selected day gets the gold outline. 7 columns fit 360px (each
+   cell ~44px wide, amounts wrap to two lines).
+   ========================================================================== */
+.staff .st-cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.staff .st-cal-head {
+  font-size: 10px;
+  color: var(--faint);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 0;
+}
+.staff .st-cal-day {
+  min-height: 54px;
+  padding: 6px 4px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.staff .st-cal-day .st-cal-amt {
+  font-weight: 800;
+  font-size: 11px;
+}
+.staff .st-cal-owed {
+  border-color: var(--line-gold);
+}
+.staff .st-cal-paid {
+  border-color: rgba(62, 217, 126, 0.55);
+}
+.staff .st-cal-on {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.staff .st-cal-empty {
+  visibility: hidden;
+}
+.staff .st-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.staff .st-cal-nav b {
+  flex: 1;
+  text-align: center;
+}
+
+/* Payout day strip (Phase 3) — the 14-day strip, mirrored from the
+   legacy .ow-payday styles (owner-commission.css) so the restyled
+   Payouts page no longer depends on a legacy staff file. Gold border =
+   owed, green border = all paid, filled = selected. */
+.staff .st-paydays {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  margin-bottom: 4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.staff .st-paydays::-webkit-scrollbar {
+  display: none;
+}
+.staff .st-payday {
+  flex: none;
+  min-height: 44px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 194, 48, 0.25);
+  background: var(--steel);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+.staff .st-payday-owed {
+  border-color: rgba(242, 194, 48, 0.6);
+  color: var(--gold-2);
+}
+.staff .st-payday-paid {
+  border-color: rgba(62, 217, 126, 0.5);
+  color: var(--ok);
+}
+.staff .st-payday-on {
+  background: linear-gradient(180deg, #ffd964, #d9a41c);
+  border-color: var(--gold-2);
+  color: #231600;
+}
+@media (hover: hover) and (pointer: fine) {
+  .staff .st-payday:hover {
+    border-color: rgba(242, 194, 48, 0.6);
+    color: var(--ink);
+  }
+  .staff .st-payday-on:hover {
+    color: #231600;
+  }
 }
