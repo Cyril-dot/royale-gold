@@ -38,6 +38,10 @@ export default function DepositModal() {
   // minimum from the same config call (GHS 1, NGN 100 seed) — a hint
   // only, the server still enforces it.
   const [minDeposit, setMinDeposit] = useState<number | null>(null);
+  // Fixed deposit amount (Nov 2026, owner feature): when the owner has
+  // fixed this fiat's deposit amount, every deposit must be exactly
+  // that amount — the input locks to it (server-enforced too).
+  const [fixedDeposit, setFixedDeposit] = useState<number | null>(null);
   // Phase 2 PayTeller (Nov 2026): the email-on-file prompt for
   // phone-only GHS users (PayTeller requires customer_email).
   const [emailInput, setEmailInput] = useState("");
@@ -59,12 +63,18 @@ export default function DepositModal() {
   useEffect(() => {
     if (!depositOpen) return;
     let live = true;
-    api<{ ghMomoGateway?: string; currencies?: { currency: string; minDeposit: number }[] }>("/api/games/config")
+    api<{ ghMomoGateway?: string; currencies?: { currency: string; minDeposit: number; fixedDepositAmount?: number | null }[] }>("/api/games/config")
       .then((r) => {
         if (!live) return;
         setGateway(r.ghMomoGateway ?? "demo");
         const row = r.currencies?.find((c) => c.currency === fiat);
         if (row && row.minDeposit > 0) setMinDeposit(row.minDeposit);
+        // Fixed amount: lock the modal to it when set (null = OFF).
+        // Fetched fresh every time the modal opens, so an owner change
+        // mid-session shows up on the next open.
+        const fixed = row?.fixedDepositAmount ?? null;
+        setFixedDeposit(fixed !== null && fixed > 0 ? fixed : null);
+        if (fixed !== null && fixed > 0) setAmount(fixed);
       })
       .catch(() => { if (live) setGateway("demo"); });
     return () => { live = false; };
@@ -151,10 +161,12 @@ export default function DepositModal() {
           <h3>Top <em>up</em></h3>
           {refPct != null && (<p className="sub">Your referring admin earns {refPct}% commission on this deposit.</p>)}
           <form onSubmit={submit}>
-            <div className="rg48-f"><label htmlFor="depAmt">Amount ({sym})</label><input id="depAmt" type="number" min={1} step={1} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required /></div>
-            {minDeposit != null && (
+            <div className="rg48-f"><label htmlFor="depAmt">Amount ({sym})</label><input id="depAmt" type="number" min={1} step={1} value={amount} onChange={(e) => setAmount(Number(e.target.value))} required disabled={fixedDeposit !== null} /></div>
+            {fixedDeposit !== null ? (
+              <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Fixed deposit {fmtMoney(fixedDeposit, fiat)} — every deposit is this amount.</p>
+            ) : minDeposit != null ? (
               <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Minimum deposit {fmtMoney(minDeposit, fiat)}.</p>
-            )}
+            ) : null}
             <div className="rg48-f"><label>Method</label>
               <div className="dep-methods">
                 {METHODS.map((m) => (

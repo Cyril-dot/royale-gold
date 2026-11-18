@@ -15,6 +15,9 @@ import { applyDepositPromotions } from "@/lib/promotions";
 // P2 Batch 2 (O31): automated risk rules — evaluated AFTER the
 // deposit lands (best-effort; a rule failure never fails the deposit).
 import { evaluateDepositRules } from "@/lib/risk-rules";
+// Fixed deposit amount (Nov 2026, owner feature) — server-side
+// enforcement, see the check below.
+import { enforceFixedDeposit } from "@/lib/fixed-deposit";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -68,6 +71,12 @@ export async function POST(req: Request) {
     if (pm.maxDeposit != null && amount > pm.maxDeposit) {
       return fail(`Maximum deposit via ${method} is ${sym} ${round2(pm.maxDeposit).toFixed(2)}`);
     }
+    // Fixed deposit amount (Nov 2026, owner feature): when the owner
+    // has fixed this fiat's deposit amount, every deposit must be
+    // exactly that amount — no other amount is allowed. Enforced here,
+    // server-side; the modal only locks the UI.
+    const fixedErr = await enforceFixedDeposit(amount, fiatCurrency);
+    if (fixedErr) return fail(fixedErr);
 
     // P1 Batch 1 (A20): per-player daily deposit max.
     const limitErr = await checkDepositLimit(user.id, amount, fiatCurrency);

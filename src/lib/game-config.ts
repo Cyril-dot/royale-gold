@@ -14,6 +14,7 @@ import { prisma } from "./prisma";
 import { getGame, ALL_GAMES, type GameDef } from "./games";
 import { dec, round2 } from "./money";
 import { symbolFor } from "./country";
+import { getAllFixedDeposits } from "./fixed-deposit";
 import type { Prisma } from "@prisma/client";
 
 /** Deposit methods the demo cashier accepts (same list as the deposit route). */
@@ -74,14 +75,20 @@ export interface CurrencyConfigShape {
   decayStep: number; // LIVE win-chance decay step for this fiat
   withdrawalOwnerThreshold: number; // withdrawals above this need the owner too
   enabled: boolean;
+  // Fixed deposit amount (Nov 2026): null = OFF (any amount >= min
+  // deposit). Set = every deposit in this fiat must be exactly this
+  // amount (server-enforced, src/lib/fixed-deposit.ts). Populated by
+  // getCurrencyConfig / getAllCurrencyConfigs from the FixedDeposit
+  // table (P2022-safe — null when the table does not exist yet).
+  fixedDepositAmount: number | null;
 }
 
 /** Seed defaults — the owner panel can change every one of these. */
 export const CURRENCY_DEFAULTS: Record<string, CurrencyConfigShape> = {
-  GHS: { currency: "GHS", symbol: "GH₵", minDeposit: 1, minStake: 1, conversionRate: 5, decayStep: 100, withdrawalOwnerThreshold: 500, enabled: true },
+  GHS: { currency: "GHS", symbol: "GH₵", minDeposit: 1, minStake: 1, conversionRate: 5, decayStep: 100, withdrawalOwnerThreshold: 500, enabled: true, fixedDepositAmount: null },
   // NGN seed values are 100x the GHS ones (same "effort") — Chuks sets
   // his own numbers in the owner panel; these are NOT the 7UP limits.
-  NGN: { currency: "NGN", symbol: "₦", minDeposit: 100, minStake: 100, conversionRate: 500, decayStep: 10000, withdrawalOwnerThreshold: 50000, enabled: true },
+  NGN: { currency: "NGN", symbol: "₦", minDeposit: 100, minStake: 100, conversionRate: 500, decayStep: 10000, withdrawalOwnerThreshold: 50000, enabled: true, fixedDepositAmount: null },
 };
 
 function currencyRowToShape(row: {
@@ -103,6 +110,8 @@ function currencyRowToShape(row: {
     decayStep: dec(row.decayStep),
     withdrawalOwnerThreshold: dec(row.withdrawalOwnerThreshold),
     enabled: row.enabled,
+    // Fixed amount is merged by the getters below (separate table).
+    fixedDepositAmount: null,
   };
 }
 
@@ -119,36 +128,51 @@ export async function getCurrencyConfig(
 ): Promise<CurrencyConfigShape> {
   const code = (currency || "GHS").toUpperCase();
   const row = await prisma.currencyConfig.findUnique({ where: { currency: code } });
-  if (row) return currencyRowToShape(row);
-  const def = CURRENCY_DEFAULTS[code];
-  if (def) {
-    if (code === "GHS" && settings) {
-      return { ...def, minDeposit: settings.cashMinDeposit, minStake: settings.cashMinStake, conversionRate: settings.conversionRate };
+  let base: CurrencyConfigShape;
+  if (row) {
+    base = currencyRowToShape(row);
+  } else {
+    const def = CURRENCY_DEFAULTS[code];
+    if (def) {
+      base =
+        code === "GHS" && settings
+          ? { ...def, minDeposit: settings.cashMinDeposit, minStake: settings.cashMinStake, conversionRate: settings.conversionRate }
+          : { ...def };
+    } else {
+      base = {
+        currency: code,
+        symbol: symbolFor(code),
+        minDeposit: 1,
+        minStake: 1,
+        conversionRate: 5,
+        decayStep: 100,
+        withdrawalOwnerThreshold: 500,
+        enabled: true,
+        fixedDepositAmount: null,
+      };
     }
-    return { ...def };
   }
-  return {
-    currency: code,
-    symbol: symbolFor(code),
-    minDeposit: 1,
-    minStake: 1,
-    conversionRate: 5,
-    decayStep: 100,
-    withdrawalOwnerThreshold: 500,
-    enabled: true,
-  };
+  // Fixed deposit amount (Nov 2026): merged from the FixedDeposit
+  // table — P2022-safe, so a prod DB without the table yet reads OFF.
+  const fixed = await getAllFixedDeposits();
+  return { ...base, fixedDepositAmount: fixed[code] ?? null };
 }
 
 /** Every known currency row (seed rows included), for the owner editor. */
 export async function getAllCurrencyConfigs(): Promise<CurrencyConfigShape[]> {
   const rows = await prisma.currencyConfig.findMany({ orderBy: { currency: "asc" } });
   const byCode = new Map(rows.map((r) => [r.currency, currencyRowToShape(r)]));
+  const fixed = await getAllFixedDeposits();
+  const attach = (s: CurrencyConfigShape): CurrencyConfigShape => ({
+    ...s,
+    fixedDepositAmount: fixed[s.currency.toUpperCase()] ?? null,
+  });
   const out: CurrencyConfigShape[] = [];
   for (const code of Object.keys(CURRENCY_DEFAULTS)) {
-    out.push(byCode.get(code) ?? { ...CURRENCY_DEFAULTS[code] });
+    out.push(attach(byCode.get(code) ?? { ...CURRENCY_DEFAULTS[code] }));
   }
   for (const [code, shape] of byCode) {
-    if (!CURRENCY_DEFAULTS[code]) out.push(shape);
+    if (!CURRENCY_DEFAULTS[code]) out.push(attach(shape));
   }
   return out;
 }

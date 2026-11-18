@@ -15,6 +15,7 @@ import { Skeleton, ErrorState, EmptyState } from "../../../../components/staff-u
 import { OwnerPayRow } from "../../../../components/owner/OwnerPayRow";
 import { OwnerWalletForm } from "../../../../components/owner/OwnerWalletForm";
 import { OwnerCurrencyConfig } from "../../../../components/owner/OwnerCurrencyConfig";
+import { OwnerFixedDeposit } from "../../../../components/owner/OwnerFixedDeposit";
 import { OwnerGatewaySection } from "../../../../components/owner/OwnerGatewaySection";
 import { useOwnerFetch } from "../../../../components/owner/useOwnerFetch";
 
@@ -85,6 +86,10 @@ export default function OwnerGatewayPage() {
 
       <Card title="Currency settings">
         <OwnerCurrencyConfig />
+      </Card>
+
+      <Card title="Fixed deposit amount">
+        <OwnerFixedDeposit />
       </Card>
     </div>
   );

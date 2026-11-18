@@ -508,6 +508,15 @@ model CurrencyConfig {
   updatedAt                DateTime @updatedAt
 }
 
+// Fixed deposit amount (Nov 2026, owner feature) — see schema.prisma
+// for the full note. Separate table so a missing table in prod degrades
+// to OFF instead of 500ing every CurrencyConfig read.
+model FixedDeposit {
+  currency  String   @id // "GHS" | "NGN" | ...
+  amount    Float
+  updatedAt DateTime @updatedAt
+}
+
 // Phase 1 country-based (Nov 2026): gateway credentials + the Ghana
 // MoMo gateway toggle. Created NOW so Phase 2 (PayTeller) has
 // somewhere to write — the PayTeller fields stay EMPTY this phase.

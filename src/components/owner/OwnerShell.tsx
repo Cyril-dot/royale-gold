@@ -54,6 +54,7 @@ export const OWNER_NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/owner/reports", label: "Audit log" },
       { href: "/owner/reports/bi", label: "BI & cohorts" },
+      { href: "/owner/reports/analytics", label: "Analytics" },
       { href: "/owner/reports/risk", label: "Risk" },
     ],
   },

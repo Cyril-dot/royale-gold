@@ -17,6 +17,9 @@ import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { getCurrencyConfig, getPaymentMethodConfig } from "@/lib/game-config";
 import { checkDepositLimit } from "@/lib/limits";
 import { getGhMomoGateway } from "@/lib/gateway-settings";
+// Fixed deposit amount (Nov 2026, owner feature) — server-side
+// enforcement, see the check below.
+import { enforceFixedDeposit } from "@/lib/fixed-deposit";
 import {
   createPayment,
   PaytellerError,
@@ -64,6 +67,13 @@ export async function POST(req: Request) {
     if (amount < currencyCfg.minDeposit) {
       return fail(`Minimum PayTeller deposit is GH₵ ${currencyCfg.minDeposit.toFixed(2)}`);
     }
+    // Fixed deposit amount (Nov 2026, owner feature): when the owner
+    // has fixed the GHS deposit amount, a PayTeller checkout may only
+    // start for exactly that amount. Deliberately NOT enforced again
+    // at credit time (webhook / status poll): by then the customer has
+    // already paid, and rejecting a paid payment would strand money.
+    const fixedErr = await enforceFixedDeposit(amount, "GHS");
+    if (fixedErr) return fail(fixedErr);
     try {
       toAmountString(amount);
     } catch {

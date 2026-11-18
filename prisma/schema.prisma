@@ -366,7 +366,7 @@ model AuditLog {
   id        String   @id @default(cuid())
   actorId   String
   actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send" | "promotion.create" | "promotion.grant" | "promotion.cashback" | "promotion.toggle" | "announcement.create" | "announcement.toggle" | "platform.settings" | "kyc.settings" | "ticket.reassign" | "admin.parent.set" | "campaign.send" | "tournament.create" | "tournament.end" | "player.break" | "vip.tier.set"
+  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send" | "promotion.create" | "promotion.grant" | "promotion.cashback" | "promotion.toggle" | "announcement.create" | "announcement.toggle" | "platform.settings" | "kyc.settings" | "ticket.reassign" | "admin.parent.set" | "campaign.send" | "tournament.create" | "tournament.end" | "player.break" | "vip.tier.set" | "deposit.fixed_amount"
   targetId  String?
   detail    String?
   createdAt DateTime @default(now())
@@ -513,6 +513,22 @@ model CurrencyConfig {
   withdrawalOwnerThreshold Decimal  @default(500) @db.Decimal(12, 2)
   enabled                  Boolean  @default(true)
   updatedAt                DateTime @updatedAt
+}
+
+// Fixed deposit amount (Nov 2026, owner feature): when a row exists
+// for a fiat, EVERY deposit in that fiat must be exactly `amount` —
+// no other amount is allowed (server-enforced in the demo cashier +
+// PayTeller create; the DepositModal locks to it). No row = OFF
+// (current behaviour: any amount >= min deposit). Separate table on
+// purpose: prod Neon will not have it until Chuks runs
+// rg-fixed-deposit.sql, and a missing column on CurrencyConfig would
+// 500 every getCurrencyConfig read site-wide — a missing table here
+// degrades to OFF (getFixedDepositAmount catches P2022) and only the
+// set endpoint 503s.
+model FixedDeposit {
+  currency  String   @id // "GHS" | "NGN" | ...
+  amount    Decimal  @db.Decimal(12, 2)
+  updatedAt DateTime @updatedAt
 }
 
 // Phase 1 country-based (Nov 2026): gateway credentials + the Ghana

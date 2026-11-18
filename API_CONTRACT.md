@@ -94,6 +94,11 @@ several accounts resolves to nobody — those users sign in by email.
 If the user was referred, the referring admin's **current** `commissionPct`
 is frozen as `pctInForce` and `commission = amount × pct / 100` (2dp) is
 stored on the deposit event. Later % changes never rewrite it.
+When the owner has set a fixed deposit amount for the fiat
+(`POST /api/owner/fixed-deposit`), deposits of any other amount are
+rejected (400: "Deposits are fixed at GH₵X for now"); the same check
+runs in `POST /api/wallet/payteller/create` (never at credit time —
+money already paid must never be rejected).
 
 ---
 
@@ -491,6 +496,55 @@ As before (`{ day, adminId, action, currency }`) PLUS an optional
 `commission.payout-rejected` audit detail. Paid stays DERIVED (sum of
 payout rows covering the day; PAID when paid ≥ owed) and REJECTED stays
 a zero-amount marker row — no status column (see the route header).
+
+### POST /api/owner/fixed-deposit (owner, Nov 2026 — fixed deposit amount)
+Sets (or clears) ONE fixed deposit amount per fiat. When set, every
+deposit in that fiat must be exactly that amount — enforced server-side
+in the demo cashier + PayTeller create, and the DepositModal locks to
+it. Null/empty = OFF (any amount ≥ min deposit). Audit-logged
+(`deposit.fixed_amount`). The value is stored in its own `FixedDeposit`
+table (not a CurrencyConfig column) so a prod database without the
+table degrades to OFF instead of 500ing every currency-config read —
+run `rg-fixed-deposit.sql` in Neon before setting one live.
+```json
+// request — amount: null (or omitted) = clear = OFF
+{ "currency": "GHS", "amount": 50 }
+// response 200
+{ "currency": "GHS", "fixedDepositAmount": 50 }
+// clear — response 200
+{ "currency": "GHS", "fixedDepositAmount": null }
+```
+400 for a bad currency code or an amount ≤ 0 / not 2dp. 503 when the
+`FixedDeposit` table does not exist yet (run `rg-fixed-deposit.sql`).
+`GET /api/owner/currency-config` now carries `fixedDepositAmount:
+number | null` per currency, and `GET /api/games/config` carries it
+too (the DepositModal reads it there).
+
+### GET /api/owner/analytics?from=2026-11-01&to=2026-11-30&currency=GHS (owner, Nov 2026)
+Income vs losses + when income rises, per fiat, UTC days (range
+defaults to this month through today, max 92 days). Per-game figures
+reuse `revenueBreakdown` — the same figures the BI page shows.
+```json
+{ "from": "2026-11-01", "to": "2026-11-30", "fiatCurrency": "GHS",
+  "totals": { "deposits": 66200, "depositsCount": 12, "paidOut": 0,
+    "paidOutCount": 0, "gamePayouts": 0, "ggrCash": 0, "netPosition": 66200 },
+  "daily": [ { "date": "2026-11-01", "deposits": 500, "depositsCount": 2,
+    "payoutsOut": 120, "net": 380, "ggr": 40 } ],
+  "hourly": [ { "hour": 0, "deposits": 0, "count": 0 } ],
+  "bestDay": { "date": "2026-11-17", "deposits": 12000 },
+  "trend": { "depositsPct": 12.5, "payoutsPct": null, "direction": "rising" },
+  "byGameCash": [ { "game": "penalty", "name": "Penalty Shoot Out",
+    "rounds": 10, "stakes": 500, "payouts": 300, "ggr": 200 } ],
+  "byGameCoins": [ { "game": "mines", "name": "Mines",
+    "rounds": 4, "stakes": 40, "payouts": 25, "ggr": 15 } ] }
+```
+`paidOut` = approved withdrawals only (status `approved`, day = the
+request's createdAt UTC day — approval ≠ payment, no money moves on
+a decision). `payoutsOut` = `paidOut` + cash game payouts.
+`netPosition` = deposits − payouts out — cash flow, NEVER labelled
+profit. `ggrCash` = cash stakes − cash payouts. `depositsPct` is the %
+change vs the previous period of the same length (null when the
+previous period had no deposits and this one does — "new").
 
 ---
 
