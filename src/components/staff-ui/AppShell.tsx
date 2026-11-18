@@ -13,6 +13,13 @@ export interface NavItem {
   label: string;
   /** Pending count badge (e.g. withdrawals awaiting review). */
   count?: number;
+  /** Bottom-bar only: opens the navigation drawer instead of navigating. */
+  action?: "drawer";
+}
+
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
 }
 
 export interface PreviewInfo {
@@ -25,6 +32,7 @@ export function AppShell({
   brandSub,
   roleLabel,
   navItems,
+  navGroups,
   bottomItems,
   preview,
   onSearch,
@@ -34,6 +42,9 @@ export function AppShell({
   brandSub: string;
   roleLabel: string;
   navItems: NavItem[];
+  /** Grouped sidebar nav (label + items). When given, the sidebar and
+   *  drawer render groups; navItems is still the fallback. */
+  navGroups?: NavGroup[];
   bottomItems: NavItem[];
   preview?: PreviewInfo | null;
   /** ⌘K / search trigger — the CommandPalette wires itself to this. */
@@ -63,22 +74,37 @@ export function AppShell({
 
   const navList = (items: NavItem[]) => (
     <ul className="st-nav-list">
-      {items.map((item) => (
-        <li key={item.href}>
-          <Link
-            href={item.href}
-            className="st-nav-item"
-            aria-current={isActive(item.href) ? "page" : undefined}
-            onClick={() => setDrawerOpen(false)}
-          >
-            {item.label}
-            {typeof item.count === "number" && item.count > 0 ? (
-              <span className="st-nav-item-count">{item.count}</span>
-            ) : null}
-          </Link>
-        </li>
-      ))}
+      {items
+        .filter((item) => item.action !== "drawer")
+        .map((item) => (
+          <li key={item.href}>
+            <Link
+              href={item.href}
+              className="st-nav-item"
+              aria-current={isActive(item.href) ? "page" : undefined}
+              onClick={() => setDrawerOpen(false)}
+            >
+              {item.label}
+              {typeof item.count === "number" && item.count > 0 ? (
+                <span className="st-nav-item-count">{item.count}</span>
+              ) : null}
+            </Link>
+          </li>
+        ))}
     </ul>
+  );
+
+  const nav = navGroups ? (
+    <>
+      {navGroups.map((g) => (
+        <div key={g.label}>
+          <p className="st-nav-group">{g.label}</p>
+          {navList(g.items)}
+        </div>
+      ))}
+    </>
+  ) : (
+    navList(navItems)
   );
 
   return (
@@ -86,7 +112,7 @@ export function AppShell({
       <aside className="st-sidebar" aria-label="Staff navigation">
         <p className="st-sidebar-brand">{brandTitle}</p>
         <p className="st-sidebar-sub">{brandSub}</p>
-        {navList(navItems)}
+        {nav}
       </aside>
 
       <div className="st-main-wrap">
@@ -120,17 +146,30 @@ export function AppShell({
         <main className="st-main">{children}</main>
 
         <nav className="st-bottombar" aria-label="Staff sections">
-          {bottomItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="st-bottombar-item"
-              aria-current={isActive(item.href) ? "page" : undefined}
-            >
-              <span className="st-bottombar-dot" aria-hidden="true" />
-              <span>{item.label}</span>
-            </Link>
-          ))}
+          {bottomItems.map((item) =>
+            item.action === "drawer" ? (
+              <button
+                key={item.href}
+                type="button"
+                className="st-bottombar-item"
+                aria-expanded={drawerOpen}
+                onClick={() => setDrawerOpen(true)}
+              >
+                <span className="st-bottombar-dot" aria-hidden="true" />
+                <span>{item.label}</span>
+              </button>
+            ) : (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="st-bottombar-item"
+                aria-current={isActive(item.href) ? "page" : undefined}
+              >
+                <span className="st-bottombar-dot" aria-hidden="true" />
+                <span>{item.label}</span>
+              </Link>
+            ),
+          )}
         </nav>
       </div>
 
@@ -153,7 +192,7 @@ export function AppShell({
             </button>
             <p className="st-sidebar-brand">{brandTitle}</p>
             <p className="st-sidebar-sub">{brandSub}</p>
-            {navList(navItems)}
+            {nav}
           </div>
         </>
       ) : null}

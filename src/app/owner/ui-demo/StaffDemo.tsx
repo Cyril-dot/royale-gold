@@ -1,10 +1,12 @@
 // Staff UI demo — every component in its states, incl. adversarial fixtures.
-// All figures are SAMPLE unless tagged LIVE (the few real prod figures from
-// 17 Nov 2026: Users 8, Total deposited GH₵66,200.00, GGR GH₵5,529.38).
-// Demo data is never presented as real.
+// All figures are SAMPLE unless tagged LIVE — the LIVE tiles read the real
+// figures from /api/owner/dashboard-stats on load (Phase 2 fix: they
+// were a hardcoded 17 Nov snapshot before). Demo data is never
+// presented as real.
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "../../../lib/api";
 import {
   AppShell,
   PageHeader,
@@ -39,6 +41,7 @@ import {
   CommandPalette,
   useCommandPaletteHotkey,
   CHART_COLORS,
+  fmtStaffInt,
   fmtStaffMoney,
   maskPhone,
   type NavItem,
@@ -79,6 +82,39 @@ const DEMO_SECTIONS = [
   { id: "toast", label: "Toasts" },
   { id: "fixtures", label: "Adversarial fixtures" },
 ];
+
+interface LiveStats {
+  usersTotal: number;
+  usersToday: number;
+  depositedTotal: number;
+  depositedToday: number;
+  paidOutTotal: number;
+  paidOutToday: number;
+  commissionToday: number;
+}
+
+/** The LIVE tiles — real figures from /api/owner/dashboard-stats
+ *  (GHS totals + today), loaded on mount. Never hardcoded: the 17 Nov
+ *  snapshot they replaced went stale the day after Phase 1 landed. */
+function LiveTiles() {
+  const [s, setS] = useState<LiveStats | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    api<LiveStats>("/api/owner/dashboard-stats?currency=GHS")
+      .then(setS)
+      .catch(() => setErr(true));
+  }, []);
+  if (err) return <p className="rg48-err">Could not load live figures.</p>;
+  if (!s) return <Skeleton lines={2} />;
+  return (
+    <div className="st-kpi-grid">
+      <KpiTile label="Users" value={fmtStaffInt(s.usersTotal)} sub={`+${s.usersToday} today · LIVE`} />
+      <KpiTile label="Total deposited" value={fmtStaffMoney(s.depositedTotal, "GHS")} sub={`+${fmtStaffMoney(s.depositedToday, "GHS")} today · LIVE`} />
+      <KpiTile label="Total paid out" value={fmtStaffMoney(s.paidOutTotal, "GHS")} sub="approved only · LIVE" />
+      <KpiTile label="Commission today" value={fmtStaffMoney(s.commissionToday, "GHS")} sub="LIVE" />
+    </div>
+  );
+}
 
 interface WdRow {
   id: string;
@@ -198,7 +234,7 @@ export default function StaffDemo({ ownerName }: { ownerName: string }) {
     >
       <PageHeader
         title="Staff UI demo"
-        sub="Every staff-ui component in its states. All figures below are SAMPLE unless tagged LIVE. Demo only — never linked from the player site. The sidebar links point at the Phase 2 routes and 404 until Phase 2 lands."
+        sub="Every staff-ui component in its states. All figures below are SAMPLE unless tagged LIVE. Demo only — never linked from the player site. The sidebar links point at the Phase 2 owner routes."
         crumbs={[
           { label: "Owner", href: "/owner" },
           { label: "UI demo" },
@@ -297,12 +333,7 @@ export default function StaffDemo({ ownerName }: { ownerName: string }) {
       </Card>
 
       <Card title="Cards & KPIs" id="kpis">
-        <div className="st-kpi-grid">
-          <KpiTile label="Users" value="8" sub="+0 today · LIVE" />
-          <KpiTile label="Total deposited" value="GH₵66,200.00" sub="+GH₵0.00 today · LIVE" />
-          <KpiTile label="Total paid out" value="GH₵0.00" sub="approved only · LIVE" />
-          <KpiTile label="Commission today" value="GH₵0.00" sub="LIVE" />
-        </div>
+        <LiveTiles />
         <div className="st-demo-row" style={{ marginTop: 16 }}>
           <div style={{ flex: 1, minWidth: 220 }}>
             <KpiTile label="Deposits (sample)" value="GH₵12,480.00" sub="+18% vs prev. 7 days" delta="+18%" deltaUp />
@@ -313,7 +344,7 @@ export default function StaffDemo({ ownerName }: { ownerName: string }) {
             <Sparkline values={[300, 900, 500, 1400, 800, 1100, 600]} color={CHART_COLORS.redText} />
           </div>
         </div>
-        <p className="st-demo-note">LIVE tiles are the real 17 Nov figures. Sample tiles carry deltas; Prime tiles keep the today sub-line only. Tile deep links land with the routes in Phase 2.</p>
+        <p className="st-demo-note">LIVE tiles read the real figures from the dashboard-stats endpoint on load. Sample tiles carry deltas; Prime tiles keep the today sub-line only.</p>
       </Card>
 
       <Card title="Loading, empty & error states" id="states">

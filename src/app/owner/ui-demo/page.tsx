@@ -21,12 +21,12 @@ export default async function UiDemoPage() {
   const user = await getSessionUser();
   if (!user || user.role !== "owner") {
     return (
-      <main className="st-main">
+      <div>
         <ErrorState
           title="Owner only."
           text="This demo of the staff component library is visible to the owner account only. Log in as the owner to open it."
         />
-      </main>
+      </div>
     );
   }
   return <StaffDemo ownerName={user.name} />;

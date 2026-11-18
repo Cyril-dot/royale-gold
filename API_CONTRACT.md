@@ -382,6 +382,30 @@ plus `"admin": { "id", "name" }`). Without `adminId`: all admins that day:
   "totals": { "deposits": 1, "totalAmount": 100, "totalCommission": 10 } }
 ```
 
+### GET /api/owner/command-center?currency=GHS&from=2026-11-11&to=2026-11-17 (owner, Phase 2)
+Everything `GET /api/owner/dashboard-stats` returns for the same range
+(KPIs + deltas vs previous period + finChart + growthChart + activity +
+deposits7d + topAdmins — computed by calling that handler in-process,
+never recomputed here) PLUS the alert strip and pending counts:
+```json
+{ "...dashboard-stats fields...",
+  "alerts": [ { "id": "gateway-no-keys", "severity": "high",
+    "label": "PayTeller has no keys — Ghana MoMo cannot take live payments.",
+    "href": "/owner/finance/gateway" } ],
+  "pending": { "withdrawalsPending": 0, "withdrawalsAwaitingOwner": 0,
+    "withdrawalsOverThreshold": 0, "payoutsDueAdmins": 0,
+    "payoutsDueAmount": 0, "kycPending": 0, "ticketsOpen": 0,
+    "fraudHigh": 0, "fraudMedium": 0, "anomaliesHigh": 0,
+    "anomaliesMedium": 0 } }
+```
+`from`/`to` default to the last 7 days, same as dashboard-stats.
+`payoutsDueAmount` is today's unpaid commission (recomputed, never
+stored); withdrawals-over-threshold uses the per-fiat
+`withdrawalOwnerThreshold` from the currency config.
+`ggrRange`/`ggrPrev` are cash GGR (stakes − payouts, GameResult) from
+the P&L handler; `activePlayersRange`/`activePlayersPrev` are distinct
+players with a deposit or a game round in the period (that fiat).
+
 ---
 
 ## Rewards

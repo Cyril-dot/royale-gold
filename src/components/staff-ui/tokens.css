@@ -409,6 +409,87 @@
   color: var(--muted);
 }
 
+/* Owner range bar — PRIME global range + currency, above the content. */
+.staff .st-rangebar {
+  margin-bottom: 16px;
+}
+.staff .st-rangebar-label {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.staff .st-rangebar-custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+.staff .st-rangebar-custom label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.staff .st-rangebar-custom .st-input {
+  width: auto;
+}
+/* Alert strip rows + queue rows (links that look like list rows). */
+.staff .st-alert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 2px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14px;
+}
+.staff .st-alert-row:first-of-type {
+  border-top: 0;
+}
+.staff a.st-queue-row {
+  display: block;
+  color: var(--ink);
+  text-decoration: none;
+}
+/* Chart series toggles (Command Center finance chart). */
+.staff .st-chart-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.staff .st-chart-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.staff .st-chart-toggle-on {
+  color: var(--ink);
+  border-color: var(--line-gold);
+  background: rgba(242, 194, 48, 0.08);
+}
+.staff .st-chart-toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.staff .st-legacy-link {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
 /* KPI tile — value (Outfit bold, tabular) + label + sub-line + delta. */
 .staff .st-kpi-grid {
   display: grid;
@@ -856,6 +937,14 @@
   .staff .st-topbar-menu-btn {
     display: none;
   }
+}
+.staff .st-nav-group {
+  margin: 14px 12px 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
 }
 .staff .st-nav-list {
   display: flex;

@@ -18,10 +18,14 @@ export function CommandPalette({
   open,
   onClose,
   actions,
+  onQueryChange,
 }: {
   open: boolean;
   onClose: () => void;
   actions: PaletteAction[];
+  /** Live query callback — lets the shell append player/admin results
+   *  as the owner types (debounced by the caller). */
+  onQueryChange?: (q: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -49,9 +53,10 @@ export function CommandPalette({
     return list.slice(0, 12);
   }, [actions, query]);
 
-  const onQueryChange = (q: string) => {
+  const onQueryChangeInner = (q: string) => {
     setQuery(q);
     setActive(0);
+    onQueryChange?.(q);
   };
   useEffect(() => {
     if (!open) return;
@@ -92,7 +97,7 @@ export function CommandPalette({
           type="search"
           placeholder="Search pages, players, admins…"
           value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
+          onChange={(e) => onQueryChangeInner(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();
