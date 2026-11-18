@@ -132,6 +132,7 @@ export async function POST(req: Request) {
       pocket, won, mult, factor, mode, lifetimeDeposited,
       cash: settled.cash, coins: settled.coins, sim: settled.sim,
       xp: settled.xp, level: settled.level,
+      stakeBalance: settled.stakeBalance, winningsBalance: settled.winningsBalance,
       gameResultId: settled.gameResult.id,
     });
   } catch (err) {

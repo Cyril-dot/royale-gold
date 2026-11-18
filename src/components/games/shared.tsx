@@ -23,6 +23,9 @@ export interface SettleResult {
   sim: number;
   xp: number;
   level: number;
+  // Win logic (Nov 2026): the Stake/Winnings split after this round.
+  stakeBalance?: number;
+  winningsBalance?: number;
 }
 
 // ---- Shared win confetti (Round 31) ----
@@ -177,7 +180,7 @@ export function useGameRoom(game: GameDef) {
         method: "POST",
         body: JSON.stringify({ game: game.slug, currency: game.currency, stake, payout, result, roundId: roundId || undefined }),
       });
-      setWallet({ cash: r.cash, coins: r.coins, sim: r.sim, currency: user?.currency ?? "GHS", country: user?.country ?? "GH" });
+      setWallet({ cash: r.cash, coins: r.coins, sim: r.sim, currency: user?.currency ?? "GHS", country: user?.country ?? "GH", stake: r.stakeBalance, winnings: r.winningsBalance });
       // P0 Batch 2 (O10): the toast shows the EFFECTIVE payout the
       // server settled — equal to the requested one unless the owner's
       // per-game max-payout cap cut it down. Tetris can also bank coins

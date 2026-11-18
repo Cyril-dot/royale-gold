@@ -18,6 +18,10 @@ import { evaluateDepositRules } from "@/lib/risk-rules";
 // Fixed deposit amount (Nov 2026, owner feature) — server-side
 // enforcement, see the check below.
 import { enforceFixedDeposit } from "@/lib/fixed-deposit";
+// Win logic (Nov 2026): a deposit tops up the win allowance by
+// deposit x the owner-set rate in force now (no-op when the rate is
+// OFF or the tables do not exist yet).
+import { getWinnings, splitCash, topUpAllowance } from "@/lib/win-logic";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -122,6 +126,10 @@ export async function POST(req: Request) {
           commission: round2(commission),
         },
       });
+      // Win logic (Nov 2026): this deposit's win allowance — deposit x
+      // the rate in force right now. The promotion match below is house
+      // money, not a deposit, so it never tops the allowance up.
+      await topUpAllowance(tx, user.id, fiatCurrency, amount);
       // P1 Batch 3 (O19): promotion engine — a live deposit_match
       // credits a % of this deposit (capped, once per player per
       // promotion), and a live free_coins promotion with trigger
@@ -141,10 +149,16 @@ export async function POST(req: Request) {
     // after the deposit transaction and never fails the deposit.
     await evaluateDepositRules(user.id);
 
+    // Win logic (Nov 2026): the split after this deposit — a deposit
+    // adds to Stake only; Winnings is untouched by it.
+    const split = splitCash(dec(result.updated.cashBalance), await getWinnings(user.id));
+
     return ok({
       cash: dec(result.updated.cashBalance),
       coins: result.updated.coins,
       sim: dec(result.updated.simBalance),
+      stake: split.stake,
+      winnings: split.winnings,
       // Phase 1 country-based (Nov 2026): the wallet's fiat + country
       // (the store needs them to keep formatting the wallet right).
       currency: result.event.fiatCurrency ?? "GHS",

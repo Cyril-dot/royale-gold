@@ -13,6 +13,7 @@ import { getGame } from "../../lib/games";
 import { useStore } from "../../lib/store";
 import WalletCard from "../../components/WalletCard";
 import CoinCard from "../../components/CoinCard";
+import { WithdrawSection } from "../../components/WithdrawSection";
 
 export default function WalletPage() {
   const { user, wallet, mode, simSession, topUpSim, openAuth, setDepositOpen } = useStore();
@@ -84,6 +85,32 @@ export default function WalletPage() {
         {mode === "SIM" && (
           <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
         )}
+        {/* Win logic (Nov 2026): the Stake/Winnings split of the cash
+            balance — REAL mode only (in SIM mode the card shows the SIM
+            balance). Shown once the wallet split has loaded. */}
+        {mode === "REAL" && wallet?.stake !== undefined && (
+          <section className="wallet-hist" aria-label="Cash split">
+            <div className="wallet-hist-list">
+              <div className="wallet-hist-row">
+                <span className="wallet-hist-txt"><b>Stake</b></span>
+                <b>{fmtMoney(wallet.stake, fiat)}</b>
+              </div>
+              <div className="wallet-hist-row">
+                <span className="wallet-hist-txt"><b>Winnings</b></span>
+                <b>{fmtMoney(wallet.winnings ?? 0, fiat)}</b>
+              </div>
+            </div>
+          </section>
+        )}
+        {/* Withdraw (Nov 2026): the wallet page had no withdraw option —
+            the same request form as the Convert page, same endpoint. */}
+        <WithdrawSection
+          cash={cash}
+          stake={wallet?.stake}
+          winnings={wallet?.winnings}
+          fiat={fiat}
+          sym={sym}
+        />
         {/* Round 31: History — recent game rounds (stake out, payout in),
             the only wallet movement an existing endpoint returns. */}
         <section className="wallet-hist" aria-label="Wallet history">

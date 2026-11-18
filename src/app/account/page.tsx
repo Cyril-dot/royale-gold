@@ -431,6 +431,15 @@ export default function AccountPage() {
           <Link className="ac-wcard" href="/wallet"><span>SIM</span><b>{fmtCoins(sim)}</b><i>Wallet →</i></Link>
         </section>
 
+        {/* Win logic (Nov 2026): the Stake/Winnings split of the cash
+            balance — shown once the wallet split has loaded. */}
+        {wallet?.stake !== undefined && (
+          <div className="ac-split" aria-label="Cash split">
+            <div><span>STAKE</span><b>{fmtMoney(wallet.stake, fiat)}</b></div>
+            <div><span>WINNINGS</span><b>{fmtMoney(wallet.winnings ?? 0, fiat)}</b></div>
+          </div>
+        )}
+
         {/* P2 Batch 2 (O28): birthday — optional. The loyalty birthday
             bonus pays on this day, once per year, when the owner runs
             "Pay birthday bonuses for today". */}

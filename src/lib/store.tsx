@@ -87,7 +87,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     timers.current.set(id, hide);
   }, []);
 
-  const setWallet = useCallback((w: Wallet) => setWalletState({ cash: w.cash, coins: w.coins, sim: w.sim, currency: w.currency, country: w.country }), []);
+  // Win logic (Nov 2026): carry the Stake/Winnings split through.
+  // Responses that predate the split (or SIM-only paths) carry no
+  // split — keep the previous one so the display never flickers back
+  // to all-Stake after a settle that did not return it.
+  const setWallet = useCallback((w: Wallet) => setWalletState((prev) => ({
+    cash: w.cash,
+    coins: w.coins,
+    sim: w.sim,
+    currency: w.currency,
+    country: w.country,
+    stake: w.stake ?? prev?.stake ?? w.cash,
+    winnings: w.winnings ?? prev?.winnings ?? 0,
+  })), []);
+
+  // Win logic (Nov 2026): the Stake/Winnings split lives on
+  // GET /api/wallet, not on /api/auth/me — fetch it and merge it in.
+  // Best-effort: a failure leaves the split unset (pages hide the
+  // split rows until it loads), never a 401 loop.
+  const loadSplit = useCallback(async () => {
+    try {
+      const w = await api<Wallet>("/api/wallet");
+      setWalletState((prev) =>
+        prev ? { ...prev, stake: w.stake ?? prev.cash, winnings: w.winnings ?? 0 } : prev,
+      );
+    } catch {
+      /* split stays unset until the next refresh */
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     // Signed-out loads must not hit /api/auth/me or /api/wallet at all:
@@ -106,12 +133,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setUser(me.user);
       setWalletState({ cash: me.user.cash, coins: me.user.coins, sim: me.user.sim, currency: me.user.currency, country: me.user.country });
       setSimSession((prev) => (prev === null ? me.user.sim : prev));
+      void loadSplit();
     } catch {
       setUser(null);
       setWalletState(null);
       try { window.localStorage.removeItem("rg-session"); } catch { /* ignore */ }
     }
-  }, []);
+  }, [loadSplit]);
 
   useEffect(() => {
     setMuted(mutedStored());
@@ -159,16 +187,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
     setUser(r.user);
     setWalletState({ cash: r.user.cash, coins: r.user.coins, sim: r.user.sim, currency: r.user.currency, country: r.user.country });
+    void loadSplit();
     return { user: r.user };
-  }, []);
+  }, [loadSplit]);
 
   const loginTotp = useCallback(async (userId: string, code: string) => {
     const r = await api<{ user: User }>("/api/auth/login/totp", { method: "POST", body: JSON.stringify({ userId, code }) });
     try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
     setUser(r.user);
     setWalletState({ cash: r.user.cash, coins: r.user.coins, sim: r.user.sim, currency: r.user.currency, country: r.user.country });
+    void loadSplit();
     return r.user;
-  }, []);
+  }, [loadSplit]);
 
   const register = useCallback(async (name: string, emailOrPhone: string, password: string, refCode?: string, country?: string) => {
     const r = await api<{ user: User; referredBonusCoins?: number }>("/api/auth/register", {
@@ -181,8 +211,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
     setUser(r.user);
     setWalletState({ cash: r.user.cash, coins: r.user.coins, sim: r.user.sim, currency: r.user.currency, country: r.user.country });
+    void loadSplit();
     return r;
-  }, []);
+  }, [loadSplit]);
 
   const logout = useCallback(async () => {
     try {

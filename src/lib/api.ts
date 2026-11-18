@@ -39,6 +39,12 @@ export interface Wallet {
   // Phase 1 country-based (Nov 2026): the wallet's fiat + country.
   currency: string;
   country: string | null;
+  // Win logic (Nov 2026): the Stake/Winnings split of the cash
+  // balance. stake + winnings = cash. Optional on the type because
+  // older responses (and SIM-only paths) carry cash only — callers
+  // fall back to stake = cash, winnings = 0.
+  stake?: number;
+  winnings?: number;
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {

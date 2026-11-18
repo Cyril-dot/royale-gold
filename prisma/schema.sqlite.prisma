@@ -359,7 +359,7 @@ model AuditLog {
   id        String   @id @default(cuid())
   actorId   String
   actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send" | "promotion.create" | "promotion.grant" | "promotion.cashback" | "promotion.toggle" | "announcement.create" | "announcement.toggle" | "platform.settings" | "kyc.settings" | "ticket.reassign" | "admin.parent.set" | "campaign.send" | "tournament.create" | "tournament.end" | "player.break" | "vip.tier.set"
+  action    String   // "balance.adjust" | "user.block" | "user.unblock" | "withdrawal.approve" | "withdrawal.reject" | "withdrawal.request" | "commission.rule.set" | "commission.payout" | "admin.permission" | "admin.kill_sessions" | "admin.deactivate" | "auth.2fa.enable" | "auth.2fa.disable" | "ticket.create" | "ticket.reply" | "ticket.close" | "bonus.grant" | "promo.create" | "promo.redeem" | "player.note.add" | "player.tag.add" | "player.tag.remove" | "player.limit.set" | "kyc.submit" | "kyc.approve" | "kyc.reject" | "notification.send" | "promotion.create" | "promotion.grant" | "promotion.cashback" | "promotion.toggle" | "announcement.create" | "announcement.toggle" | "platform.settings" | "kyc.settings" | "ticket.reassign" | "admin.parent.set" | "campaign.send" | "tournament.create" | "tournament.end" | "player.break" | "vip.tier.set" | "deposit.fixed_amount" | "win.rate"
   targetId  String?
   detail    String?
   createdAt DateTime @default(now())
@@ -508,13 +508,57 @@ model CurrencyConfig {
   updatedAt                DateTime @updatedAt
 }
 
-// Fixed deposit amount (Nov 2026, owner feature) — see schema.prisma
-// for the full note. Separate table so a missing table in prod degrades
-// to OFF instead of 500ing every CurrencyConfig read.
+// Fixed deposit amount (Nov 2026, owner feature): when a row exists
+// for a fiat, EVERY deposit in that fiat must be exactly `amount` —
+// no other amount is allowed (server-enforced in the demo cashier +
+// PayTeller create; the DepositModal locks to it). No row = OFF
+// (current behaviour: any amount >= min deposit). Separate table on
+// purpose: prod Neon will not have it until Chuks runs
+// rg-fixed-deposit.sql, and a missing column on CurrencyConfig would
+// 500 every getCurrencyConfig read site-wide — a missing table here
+// degrades to OFF (getFixedDepositAmount catches P2022) and only the
+// set endpoint 503s.
 model FixedDeposit {
   currency  String   @id // "GHS" | "NGN" | ...
-  amount    Float
+  amount    Float 
   updatedAt DateTime @updatedAt
+}
+
+// Win logic (Nov 2026, owner feature) — the owner's per-fiat win rate:
+// a deposit of D creates a win allowance of D x rate%. Total game
+// winnings from that deposit, across ALL games, cannot exceed its
+// allowance. Rate row absent = OFF (no cap, current behaviour).
+// Reads are P2022-safe in src/lib/win-logic.ts — a prod DB without
+// these tables behaves as OFF and never 500s.
+model WinRate {
+  currency  String   @id // "GHS" | "NGN" | ...
+  ratePct   Float  // percent, e.g. 20.00 = 20%
+  updatedAt DateTime @updatedAt
+}
+
+// Running win allowance per user per fiat: topped up on each deposit
+// (deposit x rate in force at deposit time), drained as winnings are
+// credited. Exhausted (0) = no more wins until the next deposit.
+model WinAllowance {
+  userId       String
+  fiatCurrency String   @default("GHS")
+  remaining    Float 
+  updatedAt    DateTime @updatedAt
+
+  @@id([userId, fiatCurrency])
+}
+
+// Winnings sub-ledger: the part of the user's cashBalance that came
+// from game profits (payout - stake). Displayed Stake = cashBalance -
+// winnings. Invariant: 0 <= winnings <= cashBalance, enforced by
+// clampWinnings() after every cash debit (settle loss, convert,
+// admin adjust). Manual credits (bonus, jackpot, cashback, promo
+// match) land in the Stake portion, never here.
+model WinWallet {
+  userId       String   @id
+  fiatCurrency String   @default("GHS")
+  winnings     Float 
+  updatedAt    DateTime @updatedAt
 }
 
 // Phase 1 country-based (Nov 2026): gateway credentials + the Ghana
@@ -545,7 +589,7 @@ model PaytellerPayment {
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   reference          String   @unique // RG-<16 hex>
   paytellerId        String? // PayTeller's payment id (for /verify)
-  amount             Float // principal, GHS
+  amount             Float  // principal, GHS
   fiatCurrency       String   @default("GHS")
   merchantNet        Float?
   platformCommission Float?

@@ -16,6 +16,7 @@ import { OwnerPayRow } from "../../../../components/owner/OwnerPayRow";
 import { OwnerWalletForm } from "../../../../components/owner/OwnerWalletForm";
 import { OwnerCurrencyConfig } from "../../../../components/owner/OwnerCurrencyConfig";
 import { OwnerFixedDeposit } from "../../../../components/owner/OwnerFixedDeposit";
+import { OwnerWinRate } from "../../../../components/owner/OwnerWinRate";
 import { OwnerGatewaySection } from "../../../../components/owner/OwnerGatewaySection";
 import { useOwnerFetch } from "../../../../components/owner/useOwnerFetch";
 
@@ -90,6 +91,10 @@ export default function OwnerGatewayPage() {
 
       <Card title="Fixed deposit amount">
         <OwnerFixedDeposit />
+      </Card>
+
+      <Card title="Win rate — max winnings per deposit">
+        <OwnerWinRate />
       </Card>
     </div>
   );

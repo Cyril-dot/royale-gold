@@ -257,6 +257,24 @@ export default function Header() {
                   <span className="htm-val">{balText}</span>
                 </span>
               </Link>
+              {mode === "REAL" && wallet?.stake !== undefined && (
+                <>
+                  <Link href="/wallet" className="htm-row" role="menuitem" onClick={() => setToolsOpen(false)}>
+                    <span className="bal-coin htm-ico" aria-hidden="true">₵</span>
+                    <span className="htm-lab">Stake</span>
+                    <span className="htm-ctl">
+                      <span className="htm-val">{fmtMoney(wallet.stake, user?.currency ?? "GHS")}</span>
+                    </span>
+                  </Link>
+                  <Link href="/wallet" className="htm-row" role="menuitem" onClick={() => setToolsOpen(false)}>
+                    <span className="bal-coin htm-ico" aria-hidden="true">₵</span>
+                    <span className="htm-lab">Winnings</span>
+                    <span className="htm-ctl">
+                      <span className="htm-val">{fmtMoney(wallet.winnings ?? 0, user?.currency ?? "GHS")}</span>
+                    </span>
+                  </Link>
+                </>
+              )}
               <Link href="/wallet" className="htm-row" role="menuitem" onClick={() => setToolsOpen(false)}>
                 <span className="cp-ico htm-ico" aria-hidden="true">◉</span>
                 <span className="htm-lab">Coins</span>

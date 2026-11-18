@@ -15,6 +15,9 @@ import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
 import { symbolFor } from "@/lib/country";
 import { getCurrencyConfig, getPlatformSettings, PLATFORM_DEFAULTS } from "@/lib/game-config";
+// Win logic (Nov 2026): converting cash to coins debits cash —
+// debits hit Stake first, so clamp Winnings to the cash left.
+import { clampWinnings, getWinnings, splitCash } from "@/lib/win-logic";
 
 export const CONVERSION_RATE = PLATFORM_DEFAULTS.conversionRate; // GH₵5 = 1 coin (default, GHS)
 
@@ -56,16 +59,23 @@ export async function POST(req: Request) {
           coins: { increment: coinsGained },
         },
       });
+      // Win logic: the debit hits Stake first — Winnings can never
+      // exceed the cash left after the conversion.
+      await clampWinnings(tx, user.id, dec(updated.cashBalance));
       await tx.conversionEvent.create({
         data: { userId: user.id, cashDebited: round2(amount), coinsGained, fiatCurrency },
       });
       return updated;
     });
 
+    const split = splitCash(dec(result.cashBalance), await getWinnings(user.id));
+
     return ok({
       cash: dec(result.cashBalance),
       coins: result.coins,
       sim: dec(result.simBalance),
+      stake: split.stake,
+      winnings: split.winnings,
       coinsGained,
       cashDebited: round2(amount),
       fiatCurrency,

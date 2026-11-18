@@ -4,7 +4,7 @@
 //
 // PROD SAFETY: the FixedDeposit table does not exist in prod Neon
 // until Chuks runs rg-fixed-deposit.sql. Every read here catches the
-// missing-table error (Prisma P2022) and degrades to OFF (null) — the
+// missing-table error (Prisma P2021/P2022) and degrades to OFF (null) — the
 // site never 500s for a table it does not have yet. Only the write
 // path fails, with a plain 503 telling the owner to run the SQL first.
 // Reads use explicit `select` so a future column addition cannot 500
@@ -14,10 +14,13 @@ import { dec, round2 } from "./money";
 import { symbolFor } from "./country";
 
 function isMissingTable(err: unknown): boolean {
-  // Prisma P2022 = "the column/table does not exist in the current
-  // database" — the code the verify-copy A/B proved for a dropped
-  // table/column (Phase 6 reports.ts fix).
-  return (err as { code?: string }).code === "P2022";
+  // Prisma P2021 = "the table does not exist", P2022 = "the column
+  // does not exist" — BOTH mean "this database predates the feature".
+  // (Was P2022-only; the win-logic nodb A/B proved a dropped TABLE
+  // throws P2021, so a P2022-only guard 500s exactly the case it
+  // exists to prevent — fixed here, same class, one line.)
+  const code = (err as { code?: string }).code;
+  return code === "P2021" || code === "P2022";
 }
 
 /** The fixed amount for one fiat, or null when OFF / table missing. */
@@ -37,7 +40,7 @@ export async function getFixedDepositAmount(currency: string): Promise<number | 
   }
 }
 
-/** Every fixed amount, keyed by fiat — P2022-safe (missing table → {}). */
+/** Every fixed amount, keyed by fiat — P2021/P2022-safe (missing table → {}). */
 export async function getAllFixedDeposits(): Promise<Record<string, number>> {
   try {
     const rows = await prisma.fixedDeposit.findMany({ select: { currency: true, amount: true } });

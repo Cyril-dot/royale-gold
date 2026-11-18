@@ -21,6 +21,12 @@ import { checkPlayLimits } from "./limits";
 // number, never taken from any payout (runs after the payout is
 // computed, inside the same transaction, and touches only JackpotPot).
 import { contributeToJackpots } from "./jackpots";
+// Win logic (Nov 2026): Stake + Winnings split + per-deposit win
+// allowance cap (src/lib/win-logic.ts). The cap is a hard limit ON TOP
+// of the LIVE win-chance factor (economy.ts) — it never changes the
+// draw, only the credited profit. Silent server-side: no message, no
+// label; the credited (capped) payout is what settles and is returned.
+import { clampWinnings, creditWinProfit, getWinningsTx, splitCash } from "./win-logic";
 
 /** Slugs that settle against a server-issued crash round. Balloon Burst
  * is a crash game too (shared engine, roundId passed at settle) — it
@@ -130,7 +136,6 @@ export async function settleGame(
   }
 
   const stakeD = currency === "cash" ? toDecimal(stake) : stake;
-  const payoutD = currency === "cash" ? toDecimal(effPayout) : effPayout;
 
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });
@@ -145,6 +150,25 @@ export async function settleGame(
       throw new Error("Insufficient coins");
     }
 
+    // Win allowance cap (Nov 2026, cash only): the profit of this round
+    // (payout - stake) is credited only up to the remaining allowance
+    // for this deposit pool. The stake itself always returns in full —
+    // only the PROFIT is capped, so a capped win still pays back the
+    // stake. When the allowance is exhausted the credited payout is
+    // exactly the stake (a win that pays nothing extra). The credited
+    // profit lands in Winnings (WinWallet) via creditWinProfit. Coins
+    // never touch the cap.
+    if (currency === "cash") {
+      const profit = Math.max(0, round2(effPayout - stake));
+      if (profit > 0) {
+        const credited = await creditWinProfit(tx, userId, fiatCurrency, profit);
+        effPayout = round2(stake + credited);
+      }
+    }
+    // Recomputed here (not before the transaction) so the GameResult
+    // records the CAPPED payout — what was actually credited.
+    const payoutD = currency === "cash" ? toDecimal(effPayout) : effPayout;
+
     const updated =
       currency === "cash"
         ? await tx.user.update({
@@ -158,6 +182,14 @@ export async function settleGame(
             where: { id: userId },
             data: { coins: user.coins - stake + effPayout, xp: { increment: 2 } },
           });
+
+    // Win logic: a cash debit (a losing round, or a round whose capped
+    // payout is below the stake) can drop the total below the Winnings
+    // sub-ledger — debits hit Stake first, Winnings only when the total
+    // drops below it.
+    if (currency === "cash") {
+      await clampWinnings(tx, userId, dec(updated.cashBalance));
+    }
 
     // Level = 1 + floor(xp / 100).
     const level = 1 + Math.floor(updated.xp / 100);
@@ -184,16 +216,30 @@ export async function settleGame(
     // Phase 1 (Nov 2026): GHS-only — NGN stakes do not feed the pot.
     await contributeToJackpots(tx, gameSlug, currency, stake, fiatCurrency);
 
+    // The Stake/Winnings split after this round (cash only; coins
+    // have no split). Read post-clamp so the returned split always
+    // satisfies winnings <= cash.
+    const split =
+      currency === "cash"
+        ? splitCash(dec(withLevel.cashBalance), await getWinningsTx(tx, userId))
+        : { cash: dec(withLevel.cashBalance), winnings: 0, stake: dec(withLevel.cashBalance) };
+
     return {
       gameResult,
       // The effective payout — equal to the requested one unless the
-      // owner's max-payout cap cut it down (O10).
+      // owner's max-payout cap (O10) or the win allowance cap cut it
+      // down. Both caps are silent: the credited amount is returned
+      // with no mention of why it is lower.
       payout: effPayout,
       cash: dec(withLevel.cashBalance),
       coins: withLevel.coins,
       sim: dec(withLevel.simBalance),
       xp: withLevel.xp,
       level: withLevel.level,
+      // Named stakeBalance/winningsBalance (not stake/winnings) so
+      // they never collide with the round's `stake` in the response.
+      stakeBalance: split.stake,
+      winningsBalance: split.winnings,
     };
   });
 }

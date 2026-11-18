@@ -19,6 +19,7 @@ import { dec, round2 } from "./money";
 import { getEffectiveRuleNow } from "./commission";
 import { applyDepositPromotions } from "./promotions";
 import { evaluateDepositRules } from "./risk-rules";
+import { topUpAllowance } from "./win-logic";
 import { isSuccessfulStatus, type PaytellerPaymentResponse } from "./payteller";
 
 export interface CreditResult {
@@ -161,6 +162,9 @@ export async function creditPaytellerPayment(
         providerPayload: verified as Prisma.InputJsonValue,
       },
     });
+    // Win logic (Nov 2026): this deposit's win allowance — deposit x
+    // the rate in force right now (no-op when the rate is OFF).
+    await topUpAllowance(tx, payment.userId, "GHS", amount);
     // P1 Batch 3 (O19): same promotion hook as the demo route — a live
     // deposit_match / first-deposit free-coins grant lands in the same
     // transaction as the deposit itself.

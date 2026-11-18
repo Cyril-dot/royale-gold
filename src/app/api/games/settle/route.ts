@@ -42,13 +42,16 @@ export async function POST(req: Request) {
       currency: body.currency,
       stake,
       // The effective payout — equal to the requested one unless the
-      // owner's per-game max-payout cap (O10) cut it down.
+      // owner's per-game max-payout cap (O10) or the win allowance cap
+      // cut it down.
       payout: settled.payout,
       cash: settled.cash,
       coins: settled.coins,
       sim: settled.sim,
       xp: settled.xp,
       level: settled.level,
+      stakeBalance: settled.stakeBalance,
+      winningsBalance: settled.winningsBalance,
       gameResultId: settled.gameResult.id,
     });
   } catch (err) {

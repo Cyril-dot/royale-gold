@@ -79,8 +79,10 @@ several accounts resolves to nobody — those users sign in by email.
 
 ### GET /api/wallet
 ```json
-{ "cash": 350, "coins": 15, "sim": 1000 }
+{ "cash": 350, "coins": 15, "sim": 1000, "stake": 330, "winnings": 20 }
 ```
+`stake` + `winnings` = `cash` (win logic, Nov 2026 — the Stake/Winnings
+split: Stake is deposit money, Winnings is money won in games).
 
 ### POST /api/wallet/deposit — demo cashier (cash only, coins never involved)
 ```json
@@ -157,10 +159,21 @@ amounts** per the table — settle them with those exact payouts.
 // response 200
 { "game": "penalty-shoot-out", "currency": "cash", "stake": 10, "payout": 15.6,
   "cash": 355.6, "coins": 15, "sim": 1000, "xp": 2, "level": 1,
-  "gameResultId": "..." }
+  "stakeBalance": 350, "winningsBalance": 5.6, "gameResultId": "..." }
 ```
 Settles in one transaction: debit stake, credit payout, record a
 `GameResult`, +2 XP. A loss is `payout: 0`.
+
+Win logic (Nov 2026): the credited profit (`payout − stake`, when > 0)
+lands in Winnings, capped by the user's remaining win allowance when
+the owner has set a win rate for the fiat — the returned `payout` is
+the CAPPED amount (stake + credited profit) and the GameResult records
+it. The stake itself always returns in full; only the profit is
+capped. When the allowance is exhausted the credited payout is exactly
+the stake. Silent server-side: no message or label ever explains a
+capped payout. The LIVE win-chance factor is unchanged — the cap is a
+hard limit on top of it. Crash cash-outs cap the same way (the round
+result stays as computed; only the credited amount is capped).
 
 Play-gated games (currently: `royale-roulette`) are REJECTED here — they
 settle only through `POST /api/games/play`, where the server draws the
@@ -519,6 +532,38 @@ run `rg-fixed-deposit.sql` in Neon before setting one live.
 `GET /api/owner/currency-config` now carries `fixedDepositAmount:
 number | null` per currency, and `GET /api/games/config` carries it
 too (the DepositModal reads it there).
+
+### POST /api/owner/win-rate (owner, Nov 2026 — win rate)
+Sets (or clears) ONE win rate per fiat — a percent (e.g. 20 = 20%).
+When set, a deposit of D in that fiat can win at most D × rate% in
+total across all games: the allowance is topped up at deposit time
+(deposit × rate in force then) and drained as game winnings are
+credited; the credited profit of a round is capped at the remaining
+allowance (server-side, in `settleGame` — the stake itself always
+returns in full, only the profit is capped). Null/empty = OFF
+(winnings uncapped, current behaviour). Deposits made while the rate
+is OFF create no allowance — a rate change is never retroactive.
+Audit-logged (`win.rate`). The value is stored in its own `WinRate`
+table (allowances in `WinAllowance`, the Winnings sub-ledger in
+`WinWallet`) so a prod database without the tables degrades to OFF
+instead of 500ing — run `rg-win-logic.sql` in Neon before setting one
+live. Players never see the rate or the allowance: no max-win labels
+anywhere player-facing; a capped payout is returned silently as the
+credited amount.
+```json
+// request — ratePct: null (or omitted) = clear = OFF
+{ "currency": "GHS", "ratePct": 20 }
+// response 200
+{ "currency": "GHS", "winRatePct": 20 }
+// clear — response 200
+{ "currency": "GHS", "winRatePct": null }
+```
+400 for a bad currency code or a rate ≤ 0 / > 100. 503 when the
+`WinRate` table does not exist yet (run `rg-win-logic.sql`).
+`GET /api/owner/currency-config` now carries `winRatePct: number |
+null` per currency. `GET /api/wallet` carries the player's split
+(`stake` + `winnings` = `cash`); `POST /api/games/settle` and `POST
+/api/games/play` carry it as `stakeBalance` / `winningsBalance`.
 
 ### GET /api/owner/analytics?from=2026-11-01&to=2026-11-30&currency=GHS (owner, Nov 2026)
 Income vs losses + when income rises, per fiat, UTC days (range

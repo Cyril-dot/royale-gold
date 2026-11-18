@@ -31,6 +31,9 @@ interface PlayResult {
   cash?: number;
   coins?: number;
   sim?: number;
+  // Win logic (Nov 2026): the Stake/Winnings split after this round.
+  stakeBalance?: number;
+  winningsBalance?: number;
 }
 
 // ---------- cards (v48 port) ----------
@@ -306,7 +309,7 @@ export function RouletteRoom({ game }: { game: GameDef }) {
           setSimSession((simSession ?? 0) - stake + res.payout);
           room.pushHistory({ id: `sim-${Date.now()}`, game: game.slug, currency: "cash", fiatCurrency: room.user?.currency ?? "GHS", stake, payout: res.payout, result: { bet: betKind, pick, out }, createdAt: new Date().toISOString() });
         } else if (res.cash !== undefined && res.coins !== undefined && res.sim !== undefined) {
-          setWallet({ cash: res.cash, coins: res.coins, sim: res.sim, currency: room.user?.currency ?? "GHS", country: room.user?.country ?? "GH" });
+          setWallet({ cash: res.cash, coins: res.coins, sim: res.sim, currency: room.user?.currency ?? "GHS", country: room.user?.country ?? "GH", stake: res.stakeBalance, winnings: res.winningsBalance });
           // Server history/stats only exist for REAL rounds. Refreshing here
           // in SIM mode would fetch the (empty) server history and wipe the
           // local SIM row just added above.

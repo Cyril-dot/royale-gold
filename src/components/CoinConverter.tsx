@@ -171,11 +171,11 @@ export default function CoinConverter({ onConverted }: { onConverted?: () => voi
     setError(null);
     const fromCoins = coins;
     try {
-      const r = await api<{ cash: number; coins: number; sim: number; coinsGained: number; cashDebited: number; fiatCurrency: string; rate: number }>(
+      const r = await api<{ cash: number; coins: number; sim: number; coinsGained: number; cashDebited: number; fiatCurrency: string; rate: number; stake?: number; winnings?: number }>(
         "/api/wallet/convert",
         { method: "POST", body: JSON.stringify({ cashAmount: parsed }) }
       );
-      setWallet({ cash: r.cash, coins: r.coins, sim: r.sim, currency: r.fiatCurrency ?? fiat, country: user?.country ?? wallet?.country ?? "GH" });
+      setWallet({ cash: r.cash, coins: r.coins, sim: r.sim, currency: r.fiatCurrency ?? fiat, country: user?.country ?? wallet?.country ?? "GH", stake: r.stake, winnings: r.winnings });
       setCountFrom(fromCoins);
       setSpinKey((k) => k + 1);
       setSpinning(true);

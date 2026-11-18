@@ -10,6 +10,10 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
 import { symbolFor } from "@/lib/country";
+// Win logic (Nov 2026): a cash debit can drop the total below the
+// Winnings sub-ledger — debits hit Stake first, so clamp Winnings to
+// the cash left. A credit never needs a clamp (cash only grows).
+import { clampWinnings } from "@/lib/win-logic";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -40,6 +44,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const next = round2(dec(fresh.cashBalance) + signed);
         if (next < 0) throw new Error("Debit exceeds the player's cash balance");
         await tx.user.update({ where: { id }, data: { cashBalance: next } });
+        // Win logic: a debit hits Stake first — clamp Winnings to the
+        // cash left (a credit is a no-op for the clamp).
+        if (signed < 0) await clampWinnings(tx, id, next);
       } else {
         const next = fresh.coins + signed;
         if (next < 0) throw new Error("Debit exceeds the player's coin balance");
