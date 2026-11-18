@@ -226,8 +226,11 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
     setPlaying(false);
     const payout = Math.round(stake * odds * 100) / 100;
     playSfx("blip", room.muted);
-    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}! The balloon floats away.`);
-    await room.settle(stake, payout, { odds }, roundIdRef.current || undefined);
+    // Capped-win display: the cash-out line states the credited amount
+    // from the settle response, never the local multiplier value.
+    const res = await room.settle(stake, payout, { odds }, roundIdRef.current || undefined);
+    const eff = res?.payout ?? payout;
+    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"} The balloon floats away.`);
     void revealAfterEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, odds, stake, room, revealAfterEnd]);

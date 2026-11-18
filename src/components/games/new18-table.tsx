@@ -105,10 +105,13 @@ export function BaccaratRoom({ game }: { game: GameDef }) {
     ];
     if (pThird) steps.push([1300, () => setPc(finalP)]);
     if (bThird) steps.push([1600, () => setBc(finalB)]);
-    steps.push([1900, () => {
+    steps.push([1900, async () => {
       setPhase("done");
-      setMsg(winner === "tie" ? `Tie ${fp}–${fb} — ${mult ? `Tie pays ×9! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : "no win."}` : `${winner === "player" ? "Player" : "Banker"} ${winner === "player" ? fp : fb} beats ${winner === "player" ? fb : fp} — ${mult ? `you called it! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : "not your side."}`);
-      void room.settle(stake, payout, { pick, winner, p: fp, b: fb });
+      // Capped-win display: the win line states the credited amount
+      // from the settle response, never the local multiplier value.
+      const res = await room.settle(stake, payout, { pick, winner, p: fp, b: fb });
+      const eff = res?.payout ?? payout;
+      setMsg(winner === "tie" ? `Tie ${fp}–${fb} — ${mult ? `Tie pays ×9! ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : "no win."}` : `${winner === "player" ? "Player" : "Banker"} ${winner === "player" ? fp : fb} beats ${winner === "player" ? fb : fp} — ${mult ? `you called it! ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : "not your side."}`);
     }]);
     steps.forEach(([ms, fn]) => { timersRef.current.push(window.setTimeout(fn, ms)); });
   };
@@ -193,11 +196,14 @@ export function ThreeCardPokerRoom({ game }: { game: GameDef }) {
     const mult = Math.max(ante, pairPlus);
     const payout = Math.round(stake * mult * 100) / 100;
     setPhase("done");
+    // Capped-win display: the win line states the credited amount
+    // from the settle response, never the local multiplier value.
+    const res = await room.settle(stake, payout, { player: pe.name, dealer: de.name, qualifies, mult });
+    const eff = res?.payout ?? payout;
     setMsg(
       `You: ${pe.name} · Dealer: ${de.name}${qualifies ? "" : " (dealer does not qualify)"} — ` +
-      (mult === 0 ? "dealer wins, no Pair Plus." : mult === pairPlus && pairPlus > ante ? `Pair Plus pays ×${pairPlus}! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : ante === 2 ? `you beat the dealer! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : `ante pushes, stake back. ${fmtMoney(payout, room.user?.currency ?? "GHS")}`)
+      (mult === 0 ? "dealer wins, no Pair Plus." : mult === pairPlus && pairPlus > ante ? `Pair Plus pays ×${pairPlus}! ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : ante === 2 ? `you beat the dealer! ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : `ante pushes, stake back. ${fmtMoney(eff, room.user?.currency ?? "GHS")}`)
     );
-    await room.settle(stake, payout, { player: pe.name, dealer: de.name, qualifies, mult });
   };
 
   const reset = () => { setPhase("idle"); setPh([]); setDh([]); };
@@ -250,7 +256,7 @@ export function SicBoRoom({ game }: { game: GameDef }) {
     playSfx("blip", room.muted);
     const d: [number, number, number] = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
     const iv = window.setInterval(() => setDice([1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)]), 90);
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       window.clearInterval(iv);
       setDice(d);
       setRolling(false);
@@ -261,8 +267,11 @@ export function SicBoRoom({ game }: { game: GameDef }) {
       else if (bet === "small") mult = !triple && total >= 4 && total <= 10 ? 2 : 0;
       else mult = total === Number(bet) ? SIC_TOTALS[total] : 0;
       const payout = Math.round(stake * mult * 100) / 100;
-      setMsg(`Rolled ${d.join(" + ")} = ${total}${triple ? " — TRIPLE!" : ""} — ${mult > 0 ? `win ×${mult}! ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : "no win."}`);
-      void room.settle(stake, payout, { bet, dice: d, total, triple, mult });
+      // Capped-win display: the win line states the credited amount
+      // from the settle response, never the local multiplier value.
+      const res = await room.settle(stake, payout, { bet, dice: d, total, triple, mult });
+      const eff = res?.payout ?? payout;
+      setMsg(`Rolled ${d.join(" + ")} = ${total}${triple ? " — TRIPLE!" : ""} — ${mult > 0 ? `win ×${mult}! ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : "no win."}`);
     }, 750);
   };
 
@@ -346,8 +355,11 @@ export function JacksOrBetterRoom({ game }: { game: GameDef }) {
     setPhase("done");
     const ev = evalPoker(final);
     const payout = Math.round(stake * ev.mult * 100) / 100;
-    setMsg(ev.mult > 0 ? `${ev.name}! Pays ×${ev.mult} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : `${ev.name} — no win. Deal again.`);
-    await room.settle(stake, payout, { hand: final.map(label), result: ev.name, mult: ev.mult });
+    // Capped-win display: the win line states the credited amount
+    // from the settle response, never the local multiplier value.
+    const res = await room.settle(stake, payout, { hand: final.map(label), result: ev.name, mult: ev.mult });
+    const eff = res?.payout ?? payout;
+    setMsg(ev.mult > 0 ? `${ev.name}! Pays ×${ev.mult} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : `${ev.name} — no win. Deal again.`);
   };
 
   return (

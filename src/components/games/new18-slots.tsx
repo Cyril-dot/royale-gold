@@ -113,7 +113,7 @@ export function GoldenReelsRoom({ game }: { game: GameDef }) {
     stopAt(0, 600);
     stopAt(1, 1000);
     stopAt(2, 1400);
-    const fin = window.setTimeout(() => {
+    const fin = window.setTimeout(async () => {
       window.clearInterval(iv);
       setReels(result);
       setSpinning(false);
@@ -124,8 +124,11 @@ export function GoldenReelsRoom({ game }: { game: GameDef }) {
       else if (a === b || b === c || a === c) { mult = 1; label = "A pair — stake back."; }
       const payout = Math.round(stake * mult * 100) / 100;
       setWin(mult > 0 ? mult : null);
-      setMsg(mult > 0 ? `${label} ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : "No match — spin again.");
-      void room.settle(stake, payout, { reels: result, mult });
+      // Capped-win display: the win line states the credited amount
+      // from the settle response, never the local multiplier value.
+      const res = await room.settle(stake, payout, { reels: result, mult });
+      const eff = res?.payout ?? payout;
+      setMsg(mult > 0 ? `${label} ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : "No match — spin again.");
     }, 1450);
     timersRef.current.push(fin);
   };

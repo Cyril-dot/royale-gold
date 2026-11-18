@@ -142,21 +142,26 @@ export default function PlinkoRoom({ game }: { game: GameDef }) {
     return { pts, bin };
   };
 
-  const settleDrop = (drop: Drop) => {
+  const settleDrop = async (drop: Drop) => {
     const t = TABLES[drop.risk];
     const mult = t[drop.bin];
     const pay = Math.round(drop.stake * mult * 100) / 100;
     flashRef.current = { bin: drop.bin, t0: performance.now() };
     setLastBin(drop.bin);
     setLastMult(mult);
-    setLastPay(pay);
-    setMsg(
-      mult > 1 ? `Bin ${drop.bin + 1} — ×${mult}! ${fmtMoney(pay, room.user?.currency ?? "GHS")} paid to your balance.`
-      : mult === 1 ? `Dead centre — ×1, your ${fmtMoney(drop.stake, room.user?.currency ?? "GHS")} stake comes straight back.`
-      : `Bin ${drop.bin + 1} — ×${mult}. ${pay > 0 ? `${fmtMoney(pay, room.user?.currency ?? "GHS")} back of your ${fmtMoney(drop.stake, room.user?.currency ?? "GHS")}.` : "Nothing back this drop."}`
-    );
     drawRef.current(null, []);
-    void settleRef.current(drop.stake, pay, { bin: drop.bin, mult, risk: drop.risk });
+    // Capped-win display: the last-drop strip and the win line state
+    // the credited amount from the settle response, never the local
+    // slot value. A credit of only the stake reads as stake-back, not
+    // a win. The bin highlight stays on the landed slot (game outcome).
+    const res = await settleRef.current(drop.stake, pay, { bin: drop.bin, mult, risk: drop.risk });
+    const eff = res?.payout ?? pay;
+    setLastPay(eff);
+    setMsg(
+      mult > 1 ? `Bin ${drop.bin + 1} — ×${mult}! ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > drop.stake ? " paid to your balance." : " back to your balance."}`
+      : mult === 1 ? `Dead centre — ×1, your ${fmtMoney(drop.stake, room.user?.currency ?? "GHS")} stake comes straight back.`
+      : `Bin ${drop.bin + 1} — ×${mult}. ${eff > 0 ? `${fmtMoney(eff, room.user?.currency ?? "GHS")} back of your ${fmtMoney(drop.stake, room.user?.currency ?? "GHS")}.` : "Nothing back this drop."}`
+    );
   };
 
   const runDrop = (drop: Drop) => {

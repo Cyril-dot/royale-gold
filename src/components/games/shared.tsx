@@ -137,13 +137,22 @@ export function useGameRoom(game: GameDef) {
     } catch { /* ignore */ }
   }, [game.slug, simMode]);
 
-  /** Settle one round. Returns true on success. */
-  const settle = useCallback(async (stake: number, payout: number, result: Record<string, unknown> = {}, roundId?: string): Promise<boolean> => {
-    if (!user) { openAuth("login"); return false; }
+  // Capped-win display (Nov 2026): settle returns the EFFECTIVE
+  // payout the server credited (SettleResult.payout — already capped
+  // by the win allowance / the per-game max-payout cap), or null when
+  // it fails / the player is not signed in / the stake is not covered.
+  // Rooms MUST build their win line from the returned payout, never
+  // from the locally computed one — the two only differ when a cap
+  // cut the credit, and the room line, toast, balance and stats must
+  // all agree on the credited amount. The cap itself stays silent:
+  // nothing here names it.
+  /** Settle one round. Returns the effective payout on success, null on failure. */
+  const settle = useCallback(async (stake: number, payout: number, result: Record<string, unknown> = {}, roundId?: string): Promise<{ payout: number } | null> => {
+    if (!user) { openAuth("login"); return null; }
     stake = money(stake);
     payout = money(payout);
-    if (stake <= 0) return false;
-    if (balance < stake) { toast(`Not enough ${isCoin ? "coins" : simMode ? "SIM" : "cash"} — top up to play`, "lose"); return false; }
+    if (stake <= 0) return null;
+    if (balance < stake) { toast(`Not enough ${isCoin ? "coins" : simMode ? "SIM" : "cash"} — top up to play`, "lose"); return null; }
     setBusy(true);
     try {
       if (simMode) {
@@ -174,7 +183,8 @@ export function useGameRoom(game: GameDef) {
           return next;
         });
         setHistory((h) => [{ id: `sim-${Date.now()}`, game: game.slug, currency: "cash", fiatCurrency: user?.currency ?? "GHS", stake, payout, result, createdAt: new Date().toISOString() }, ...h].slice(0, 20));
-        return true;
+        // SIM is never capped: the effective payout is the requested one.
+        return { payout };
       }
       const r = await api<SettleResult>("/api/games/settle", {
         method: "POST",
@@ -194,10 +204,12 @@ export function useGameRoom(game: GameDef) {
       toast(won ? `You won ${amt}` : totalWon > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtMoney(stake, user?.currency ?? "GHS")}`, won ? "win" : "lose");
       if (won) { playSfx("cheer", muted); fireConfetti(); } else if (totalWon === 0) playSfx("groan", muted);
       await loadStats();
-      return true;
+      // The effective payout the server credited (r.payout) — rooms
+      // build their win line from this, never from the local payout.
+      return r;
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Settle failed", "lose");
-      return false;
+      return null;
     } finally {
       setBusy(false);
     }

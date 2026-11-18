@@ -336,9 +336,12 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
     const payout = Math.round(stake * odds * 100) / 100;
-    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}!`);
     playSfx("blip", mutedRef.current);
-    await room.settle(stake, payout, { odds, coins, dist: Math.round(st.dist) }, roundIdRef.current || undefined);
+    // Capped-win display: the cash-out line states the credited amount
+    // from the settle response, never the local multiplier value.
+    const res = await room.settle(stake, payout, { odds, coins, dist: Math.round(st.dist) }, roundIdRef.current || undefined);
+    const eff = res?.payout ?? payout;
+    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"}`);
     void revealAfterEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, odds, stake, coins, room, revealAfterEnd]);
@@ -844,8 +847,11 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
     const payout = won ? Math.round(stake * goal.mult * 100) / 100 : 0;
-    setMsg(won ? `Goal reached — ${k} kills! ×${goal.mult} = ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : `Ship down — ${k}/${goal.kills} kills. Goal not reached.`);
-    await room.settle(stake, payout, { kills: k, diff, goal: goal.kills });
+    // Capped-win display: the win line states the credited amount
+    // from the settle response, never the local multiplier value.
+    const res = await room.settle(stake, payout, { kills: k, diff, goal: goal.kills });
+    const eff = res?.payout ?? payout;
+    setMsg(won ? `Goal reached — ${k} kills! ×${goal.mult} = ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : `Ship down — ${k}/${goal.kills} kills. Goal not reached.`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stake, goal, diff, room]);
 

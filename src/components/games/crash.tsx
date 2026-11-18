@@ -36,7 +36,7 @@ function multAt(elapsedMs: number) {
   return Math.exp(GROWTH * elapsedMs);
 }
 
-interface Bet { stake: number; auto: number | null; cashed: boolean; payout: number }
+interface Bet { id: number; stake: number; auto: number | null; cashed: boolean; payout: number; pending: boolean }
 
 interface Reveal { serverSeed: string; clientSeed: string; nonce: number; crashPoint: number; hash: string }
 
@@ -216,6 +216,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
   // domain: the moment the current vehState began.
   const sceneStateRef = useRef<CrashSceneState>({ mult: 1, elapsed: 0, phase: "idle", vehState: "idle", vehT0: 0 });
   const cashT0Ref = useRef(0); // performance.now() of the first cash-out this round (0 = none)
+  const betIdRef = useRef(0); // per-bet id so a cashed bet's credited payout can be corrected in state after settle
   const [has3d, setHas3d] = useState(false);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -540,7 +541,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
     if (phase !== "waiting") { setMsg("Wait for the next round to bet."); return; }
     if (bets.length >= (skin === "jet" ? 2 : 1)) return;
     if (room.balance < stake) { setMsg("Not enough balance for that stake."); return; }
-    setBets((b) => [...b, { stake, auto, cashed: false, payout: 0 }]);
+    setBets((b) => [...b, { id: ++betIdRef.current, stake, auto, cashed: false, payout: 0, pending: false }]);
     setMsg(`Bet placed — GH₵ ${stake}. Good luck.`);
   };
 
@@ -552,9 +553,16 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
     playSfx("blip", room.muted);
     // 3D: the first cash-out of the round starts the cash lift.
     if (!cashT0Ref.current) cashT0Ref.current = performance.now();
-    setBets((bs) => bs.map((b) => (b === bet ? { ...b, cashed: true, payout } : b)));
-    await room.settle(bet.stake, payout, { cashout: m }, roundId || undefined);
-    setMsg(`Cashed out at ×${m.toFixed(2)} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}`);
+    setBets((bs) => bs.map((b) => (b === bet ? { ...b, cashed: true, payout, pending: true } : b)));
+    // Capped-win display: the cash-out line and the "Active bets" line
+    // state the credited amount from the settle response, never the
+    // local multiplier value. A credit of only the stake reads as
+    // stake-back, not a win. While the settle is in flight the line
+    // shows no amount at all, so the local value never flashes.
+    const res = await room.settle(bet.stake, payout, { cashout: m }, roundId || undefined);
+    const eff = res?.payout ?? payout;
+    setBets((bs) => bs.map((b) => (b.id === bet.id ? { ...b, payout: eff, pending: false } : b)));
+    setMsg(`Cashed out at ×${m.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > bet.stake ? "" : " back"}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, roundId]);
 
@@ -608,7 +616,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
         )}
         {phase === "running" && !activeBet && <button className="btn btn-ghost xg-action" type="button" disabled>Watching — no active bet</button>}
         <p className="xg-msg">{msg}</p>
-        {bets.length > 0 && <p className="xg-msg">Active bets: {bets.map((b) => `${fmtMoney(b.stake, room.user?.currency ?? "GHS")}${b.cashed ? ` → cashed ${fmtMoney(b.payout, room.user?.currency ?? "GHS")}` : b.auto ? ` (auto ×${b.auto})` : ""}`).join(" · ")}</p>}
+        {bets.length > 0 && <p className="xg-msg">Active bets: {bets.map((b) => `${fmtMoney(b.stake, room.user?.currency ?? "GHS")}${b.cashed ? (b.pending ? " → cashing out…" : ` → cashed ${fmtMoney(b.payout, room.user?.currency ?? "GHS")}`) : b.auto ? ` (auto ×${b.auto})` : ""}`).join(" · ")}</p>}
       </div>
       {phase === "crashed" && (
         <div className="cr-reveal" aria-label="Provably fair reveal">

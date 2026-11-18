@@ -131,8 +131,10 @@ export default function MinesRoom({ game }: { game: GameDef }) {
       const pay = Math.round(stake * m * 100) / 100;
       revealAll(null, t);
       setPlaying(false);
-      setMsg(`Every safe tile found! ${r} gems at ×${m.toFixed(2)}: ${fmtMoney(pay, room.user?.currency ?? "GHS")} to your balance.`);
-      await room.settle(stake, pay, { mines: mineCount, revealed: r });
+      // Capped-win display: the win line states the credited amount.
+      const res = await room.settle(stake, pay, { mines: mineCount, revealed: r });
+      const eff = res?.payout ?? pay;
+      setMsg(`Every safe tile found! ${r} gems at ×${m.toFixed(2)}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " to your balance." : " back."}`);
       return;
     }
     setMsg(`Gem ${r} — ×${multFor(r, mineCount).toFixed(2)} (${fmtMoney(Math.round(stake * multFor(r, mineCount) * 100) / 100, room.user?.currency ?? "GHS")}). Next gem pays ×${multFor(r + 1, mineCount).toFixed(2)} — cash out or keep digging?`);
@@ -142,8 +144,10 @@ export default function MinesRoom({ game }: { game: GameDef }) {
     if (!playing || revealed === 0) return;
     revealAll(null, tiles);
     setPlaying(false);
-    setMsg(`Cashed out — ${revealed} gems at ×${mult.toFixed(2)}: ${fmtMoney(pays, room.user?.currency ?? "GHS")}.`);
-    await room.settle(stake, pays, { mines: mineCount, revealed });
+    // Capped-win display: the cash-out line states the credited amount.
+    const res = await room.settle(stake, pays, { mines: mineCount, revealed });
+    const eff = res?.payout ?? pays;
+    setMsg(`Cashed out — ${revealed} gems at ×${mult.toFixed(2)}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back."}`);
   };
 
   const tileClass = (t: Tile) =>

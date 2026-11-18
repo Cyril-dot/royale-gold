@@ -92,8 +92,12 @@ export function CoinFlipRoom({ game }: { game: GameDef }) {
       setResult(out);
       setFlipping(false);
       const won = out === pick;
-      setMsg(won ? `It landed ${out} — you called it! ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}` : `It landed ${out} — not your call.`);
-      await room.settle(stake, won ? stake * 2 : 0, { pick, out });
+      // Capped-win display: the win line states the credited amount —
+      // the settle response's payout, never the local ×2. A credit of
+      // only the stake reads as stake-back, not a win.
+      const res = await room.settle(stake, won ? stake * 2 : 0, { pick, out });
+      const eff = res?.payout ?? (won ? stake * 2 : 0);
+      setMsg(won ? (eff > stake ? `It landed ${out} — you called it! ${fmtMoney(eff, room.user?.currency ?? "GHS")}` : `It landed ${out} — you called it! ${fmtMoney(eff, room.user?.currency ?? "GHS")} back`) : `It landed ${out} — not your call.`);
     };
     // 3D: flip to the pre-decided face (2350ms artifact flip), then
     // settle. DOM: the 700ms flip it replaces.
@@ -165,10 +169,14 @@ export function DiceRoom({ game }: { game: GameDef }) {
       const won = pick === "over" ? total > 7 : pick === "under" ? total < 7 : total === 7;
       const mult = pick === "exact" ? 5 : 2;
       const payout = won ? stake * mult : 0;
-      setLast({ d1, d2, total, won, payout, stake });
       const call = pick === "over" ? "Over 7" : pick === "under" ? "Under 7" : "Exactly 7";
-      setMsg(won ? `${d1} + ${d2} = ${total} — ${call}! ${fmtMoney(stake * mult, room.user?.currency ?? "GHS")} paid to your balance.` : `${d1} + ${d2} = ${total} — you called ${call}. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone; roll again.`);
-      await room.settle(stake, payout, { d1, d2, total, pick });
+      // Capped-win display: the TOTAL readout and the win line state
+      // the credited amount from the settle response; a credit of only
+      // the stake reads as stake-back, not a win.
+      const res = await room.settle(stake, payout, { d1, d2, total, pick });
+      const eff = res?.payout ?? payout;
+      setLast({ d1, d2, total, won: eff > stake, payout: eff, stake });
+      setMsg(won ? (eff > stake ? `${d1} + ${d2} = ${total} — ${call}! ${fmtMoney(eff, room.user?.currency ?? "GHS")} paid to your balance.` : `${d1} + ${d2} = ${total} — ${call}! ${fmtMoney(eff, room.user?.currency ?? "GHS")} back to your balance.`) : `${d1} + ${d2} = ${total} — you called ${call}. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone; roll again.`);
     };
     // 3D: the physics throw lands on the pre-decided values, then
     // settle. DOM: the 600ms roll it replaces.
@@ -182,10 +190,10 @@ export function DiceRoom({ game }: { game: GameDef }) {
     <Shell game={game} subtitle="Two 3D dice · Over/Under ×2 · Exactly 7 ×5." stake={stake} setStake={setStake} msg={msg} stats={room.stats} history={room.history}>
       <div className={`dice-stage${dice3d ? " has-3d" : ""}`}><Dice3D controllerRef={dice3dRef} onReady={setDice3d} /><div className={`fb-dice${rolling ? " rolling" : ""}`}><Die v={dice[0]} /><Die v={dice[1]} /></div></div>
       {last && (
-        <div className={`dr-total${last.won ? " win" : " lose"}`} aria-live="polite">
+        <div className={`dr-total${last.won ? " win" : last.payout > 0 ? "" : " lose"}`} aria-live="polite">
           <span className="dr-total-label">TOTAL</span>
           <span className="dr-total-num">{last.total}</span>
-          <span className="dr-total-sub">{last.d1} + {last.d2} · {last.won ? `Won ${fmtMoney(last.payout, room.user?.currency ?? "GHS")}` : `Lost ${fmtMoney(last.stake, room.user?.currency ?? "GHS")}`}</span>
+          <span className="dr-total-sub">{last.d1} + {last.d2} · {last.won ? `Won ${fmtMoney(last.payout, room.user?.currency ?? "GHS")}` : last.payout > 0 ? `Back ${fmtMoney(last.payout, room.user?.currency ?? "GHS")}` : `Lost ${fmtMoney(last.stake, room.user?.currency ?? "GHS")}`}</span>
         </div>
       )}
       <div className="xg-pickrow" role="group" aria-label="Pick the total">
@@ -306,7 +314,7 @@ export function WheelRoom({ game }: { game: GameDef }) {
     const t0 = Date.now();
     const dur = 4600;
     let lastSeg = Math.floor(angle / 30);
-    const tick = () => {
+    const tick = async () => {
       const p = Math.min(1, (Date.now() - t0) / dur);
       const eased = 1 - Math.pow(1 - p, 3);
       const rot = start + (target - start) * eased;
@@ -322,20 +330,25 @@ export function WheelRoom({ game }: { game: GameDef }) {
         const w = WHEEL_SEGS[idx];
         setWinIdx(idx);
         const payout = Math.round(stake * w.mult * 100) / 100;
+        // Capped-win display: the result line and the win line state
+        // the credited amount from the settle response. ×0.5 / ×1 pay
+        // at or below the stake, so the cap can never cut them — only
+        // the ×2 / ×4 branch can come back lower.
+        const res = await room.settle(stake, payout, { segment: idx, mult: w.mult });
+        const eff = res?.payout ?? payout;
         if (w.mult === 0) {
           setResult({ text: "LOSE — no payout", cls: "lose" });
           setMsg("LOSE — the pointer stopped on a losing segment. The " + fmtMoney(stake, room.user?.currency ?? "GHS") + " stake is gone.");
         } else if (w.mult === 0.5) {
-          setResult({ text: `×0.5 — ${fmtMoney(payout, room.user?.currency ?? "GHS")} back`, cls: "lose" });
-          setMsg(`×0.5 — half back: ${fmtMoney(payout, room.user?.currency ?? "GHS")} returned to your balance.`);
+          setResult({ text: `×0.5 — ${fmtMoney(eff, room.user?.currency ?? "GHS")} back`, cls: "lose" });
+          setMsg(`×0.5 — half back: ${fmtMoney(eff, room.user?.currency ?? "GHS")} returned to your balance.`);
         } else if (w.mult === 1) {
-          setResult({ text: `×1 — stake back ${fmtMoney(payout, room.user?.currency ?? "GHS")}`, cls: "" });
+          setResult({ text: `×1 — stake back ${fmtMoney(eff, room.user?.currency ?? "GHS")}`, cls: "" });
           setMsg(`×1 — your ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake comes straight back. Spin again.`);
         } else {
-          setResult({ text: `${w.label} — ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid`, cls: "win" });
-          setMsg(`${w.label}! ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid to your balance.`);
+          setResult({ text: `${w.label} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " paid" : " back"}`, cls: eff > stake ? "win" : "" });
+          setMsg(`${w.label}! ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " paid to your balance." : " back to your balance."}`);
         }
-        void room.settle(stake, payout, { segment: idx, mult: w.mult });
       }
     };
     tick();
@@ -395,8 +408,10 @@ export function HiLoRoom({ game }: { game: GameDef }) {
     if (!playing || chain === 0) return;
     const payout = Math.round(stake * mult * 100) / 100;
     setPlaying(false);
-    setMsg(`Cashed out — ${chain} ${chain === 1 ? "card" : "cards"} chained at ×${mult.toFixed(2)}: ${fmtMoney(payout, room.user?.currency ?? "GHS")} to your balance.`);
-    await room.settle(stake, payout, { chain });
+    // Capped-win display: the cash-out line states the credited amount.
+    const res = await room.settle(stake, payout, { chain });
+    const eff = res?.payout ?? payout;
+    setMsg(`Cashed out — ${chain} ${chain === 1 ? "card" : "cards"} chained at ×${mult.toFixed(2)}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " to your balance." : " back."}`);
   };
   return (
     <Shell game={game} subtitle="Guess higher or lower — every right call chains ×1.9. Cash out anytime." stake={stake} setStake={setStake} msg={msg} stats={room.stats} history={room.history} lockStake={playing}>
@@ -481,8 +496,11 @@ export function RpsRoom({ game }: { game: GameDef }) {
         yw++;
         setYouWins(yw);
         res = "win";
-        roundMsg = `${RPS_NAMES[pick]} beats ${RPS_NAMES[c]} — ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")} paid to your balance.`;
-        await room.settle(stake, stake * 2, { pick, cpu: c });
+        // Capped-win display: the amount is the credited one from the
+        // settle response, never the local ×2.
+        const sres = await room.settle(stake, stake * 2, { pick, cpu: c });
+        const eff = sres?.payout ?? stake * 2;
+        roundMsg = `${RPS_NAMES[pick]} beats ${RPS_NAMES[c]} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " paid to your balance." : " back to your balance."}`;
       } else {
         cw++;
         setCpuWins(cw);
@@ -577,7 +595,7 @@ export function LimboRoom({ game }: { game: GameDef }) {
     const th = 100 / target;
     const t0 = Date.now();
     const dur = 550;
-    const anim = () => {
+    const anim = async () => {
       const p = Math.min(1, (Date.now() - t0) / dur);
       setRolled(Math.random() * 100);
       if (p < 1) requestAnimationFrame(anim);
@@ -586,8 +604,10 @@ export function LimboRoom({ game }: { game: GameDef }) {
         setRolling(false);
         const won = r < th;
         const payout = won ? Math.round(stake * target * 0.97 * 100) / 100 : 0;
-        setMsg(won ? `${r.toFixed(2)} — under the ${th.toFixed(2)} line! ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid to your balance.` : `${r - th <= 5 ? `So close — just ${(r - th).toFixed(2)} over the line! ` : ""}${r.toFixed(2)} is over the ${th.toFixed(2)} line. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
-        void room.settle(stake, payout, { target, rolled: Math.round(r * 100) / 100 });
+        // Capped-win display: the win line states the credited amount.
+        const res = await room.settle(stake, payout, { target, rolled: Math.round(r * 100) / 100 });
+        const eff = res?.payout ?? payout;
+        setMsg(won ? `${r.toFixed(2)} — under the ${th.toFixed(2)} line! ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " paid to your balance." : " back to your balance."}` : `${r - th <= 5 ? `So close — just ${(r - th).toFixed(2)} over the line! ` : ""}${r.toFixed(2)} is over the ${th.toFixed(2)} line. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
       }
     };
     anim();
@@ -635,8 +655,10 @@ export function RedBlackRoom({ game }: { game: GameDef }) {
       if (n >= 3) {
         const payout = Math.round(stake * 8 * 100) / 100;
         setPlaying(false);
-        setMsg(`${cardLabel(c)} — ${out}! That's the ×8 cap: ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid automatically. Top of the ladder!`);
-        await room.settle(stake, payout, { chain: n });
+        // Capped-win display: the ×8 line states the credited amount.
+        const res = await room.settle(stake, payout, { chain: n });
+        const eff = res?.payout ?? payout;
+        setMsg(`${cardLabel(c)} — ${out}! That's the ×8 cap: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " paid automatically. Top of the ladder!" : " back automatically. Top of the ladder!"}`);
       } else setMsg(`${cardLabel(c)} — ${out}, called it! Chain ×${Math.pow(2, n)} (${fmtMoney(stake * Math.pow(2, n), room.user?.currency ?? "GHS")}). Call the next card or cash out.`);
     } else {
       setPlaying(false);
@@ -648,8 +670,10 @@ export function RedBlackRoom({ game }: { game: GameDef }) {
     if (!playing || chain === 0) return;
     const payout = Math.round(stake * mult * 100) / 100;
     setPlaying(false);
-    setMsg(`Cashed out — ${chain} ${chain === 1 ? "call" : "calls"} chained at ×${mult}: ${fmtMoney(payout, room.user?.currency ?? "GHS")} to your balance.`);
-    await room.settle(stake, payout, { chain });
+    // Capped-win display: the cash-out line states the credited amount.
+    const res = await room.settle(stake, payout, { chain });
+    const eff = res?.payout ?? payout;
+    setMsg(`Cashed out — ${chain} ${chain === 1 ? "call" : "calls"} chained at ×${mult}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " to your balance." : " back."}`);
   };
   return (
     <Shell game={game} subtitle="Call red or black — each right call doubles. Chain to ×8, cash out anytime." stake={stake} setStake={setStake} msg={msg} stats={room.stats} history={room.history} lockStake={playing}>
@@ -689,7 +713,12 @@ export function WarRoom({ game }: { game: GameDef }) {
     setTimeout(async () => {
       setDealing(false);
       setRevealed(true);
-      if (y.rank > d.rank) { setMsg(`Your ${cardLabel(y)} beats the dealer's ${cardLabel(d)} — ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")} paid to your balance.`); await room.settle(stake, stake * 2, { you: cardLabel(y), dealer: cardLabel(d) }); }
+      if (y.rank > d.rank) {
+        // Capped-win display: the win line states the credited amount.
+        const res = await room.settle(stake, stake * 2, { you: cardLabel(y), dealer: cardLabel(d) });
+        const eff = res?.payout ?? stake * 2;
+        setMsg(`Your ${cardLabel(y)} beats the dealer's ${cardLabel(d)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " paid to your balance." : " back to your balance."}`);
+      }
       else if (y.rank < d.rank) { setMsg(`${d.rank - y.rank === 1 ? "So close — one rank in it! " : ""}The dealer's ${cardLabel(d)} beats your ${cardLabel(y)}. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`); await room.settle(stake, 0, { you: cardLabel(y), dealer: cardLabel(d) }); }
       else { setMsg(`Tie — ${cardLabel(y)} apiece. No harm done: your stake is back and the re-deal is free. Deal again.`); await room.settle(stake, stake, { you: cardLabel(y), dealer: cardLabel(d), draw: true }); }
     }, 380);
@@ -761,8 +790,10 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
     if (!playing || step < 1) return;
     const pay = Math.round(stake * mult * 100) / 100;
     setPlaying(false);
-    setMsg(`Cashed out — ${step} ${step === 1 ? "find" : "finds"} at ×${mult.toFixed(2)}: ${fmtMoney(pay, room.user?.currency ?? "GHS")} to your balance.`);
-    await room.settle(stake, pay, { step });
+    // Capped-win display: the cash-out line states the credited amount.
+    const res = await room.settle(stake, pay, { step });
+    const eff = res?.payout ?? pay;
+    setMsg(`Cashed out — ${step} ${step === 1 ? "find" : "finds"} at ×${mult.toFixed(2)}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " to your balance." : " back."}`);
   };
   const chestLabel = (i: number): { text: string; color?: string } => {
     if (playing && picked === i && phase === "gold") return { text: "GOLD!", color: "#3ED97E" };
@@ -820,14 +851,17 @@ export function MiniRouletteRoom({ game }: { game: GameDef }) {
       const colour = out === 0 ? "green" : MR_RED.has(out) ? "red" : "black";
       const mult = (bet === "red" && colour === "red") || (bet === "black" && colour === "black") ? 2 : bet === "green" && colour === "green" ? 36 : 0;
       const payout = Math.round(stake * mult * 100) / 100;
+      // Capped-win display: the result line and the win line state the
+      // credited amount from the settle response.
+      const res = await room.settle(stake, payout, { bet, out, colour });
+      const eff = res?.payout ?? payout;
       if (mult > 0) {
-        setResult({ text: `${out} ${colour.toUpperCase()} — ×${mult} · ${fmtMoney(payout, room.user?.currency ?? "GHS")}`, cls: "win" });
-        setMsg(`It lands on ${out} ${colour} — your colour! ×${mult}: ${fmtMoney(payout, room.user?.currency ?? "GHS")} paid to your balance.`);
+        setResult({ text: `${out} ${colour.toUpperCase()} — ×${mult} · ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}`, cls: eff > stake ? "win" : "" });
+        setMsg(`It lands on ${out} ${colour} — your colour! ×${mult}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " paid to your balance." : " back to your balance."}`);
       } else {
         setResult({ text: `${out} ${colour.toUpperCase()} — no payout`, cls: "lose" });
         setMsg(`It lands on ${out} ${colour} — you were on ${bet}. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
       }
-      await room.settle(stake, payout, { bet, out, colour });
     };
     // Canvas: the wheel spins 4400ms and lands on the pre-decided
     // pocket, then settles. DOM: the 900ms spin it replaces.
@@ -926,15 +960,18 @@ export function BottleRoom({ game, variant = "room" }: { game: GameDef; variant?
       const won = result === pick;
       setSpinning(false);
       setHistory((h) => [{ out: result, won }, ...h].slice(0, 20));
+      // Capped-win display: the win line states the credited amount
+      // from the settle response, never the local ×2.
+      const res = await room.settle(stake, won ? stake * 2 : 0, { pick, out: result });
+      const eff = res?.payout ?? (won ? stake * 2 : 0);
       if (won) {
-        setMsg(`${result.toUpperCase()}! You called it — +${fmtMoney(stake * 2, room.user?.currency ?? "GHS").replace(".00", "")} paid to your balance. Bottle stands tall.`);
+        setMsg(`${result.toUpperCase()}! You called it — ${eff > stake ? `+${fmtMoney(eff, room.user?.currency ?? "GHS").replace(".00", "")} paid to your balance.` : `${fmtMoney(eff, room.user?.currency ?? "GHS").replace(".00", "")} back to your balance.`} Bottle stands tall.`);
         burst(stageRef.current);
       } else {
         setLost(true);
         setKnocked(true);
         setMsg(`${result.toUpperCase()} — not your side. The bottle's knocked over; spin again.`);
       }
-      await room.settle(stake, won ? stake * 2 : 0, { pick, out: result });
     }, reduced ? 120 : 3450);
   };
   return (

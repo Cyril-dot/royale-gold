@@ -126,7 +126,7 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
   // (the port rendered the same keyed nodes, so no card ever flipped).
   const [dealId, setDealId] = useState(0);
 
-  const deal = () => {
+  const deal = async () => {
     const d = newDeck();
     const y = [d.pop()!, d.pop()!];
     const dl = [d.pop()!, d.pop()!];
@@ -136,8 +136,11 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
       setHideHole(false);
       setPlaying(false);
       const payout = Math.round(stake * 2.5 * 100) / 100;
-      setMsg(`Blackjack! 3:2 pays ${fmtMoney(payout, room.user?.currency ?? "GHS")}.`);
-      void room.settle(stake, payout, { blackjack: true });
+      // Capped-win display: the win line states the credited amount
+      // from the settle response, never the local 3:2.
+      const res = await room.settle(stake, payout, { blackjack: true });
+      const eff = res?.payout ?? payout;
+      setMsg(`Blackjack! 3:2 pays ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back"}`);
     } else setMsg(`You have ${bjValue(y)}. Hit or stand?`);
   };
   const hit = () => {
@@ -159,8 +162,10 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
     while (bjValue(dl) < 17) dl.push(d.pop()!);
     setDeck(d); setDealer(dl); setHideHole(false); setPlaying(false); setDealId((n) => n + 1);
     const yv = bjValue(you), dv = bjValue(dl);
-    if (dv > 21) { setMsg(`Dealer busts on ${dv} — you win ×2, ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}!`); await room.settle(stake, stake * 2, { you: yv, dealer: dv }); }
-    else if (yv > dv) { setMsg(`${yv} beats ${dv} — you win ×2, ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}!`); await room.settle(stake, stake * 2, { you: yv, dealer: dv }); }
+    // Capped-win display: the win lines state the credited amount
+    // from the settle response, never the local ×2.
+    if (dv > 21) { const res = await room.settle(stake, stake * 2, { you: yv, dealer: dv }); const eff = res?.payout ?? stake * 2; setMsg(`Dealer busts on ${dv} — you win ×2, ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"}`); }
+    else if (yv > dv) { const res = await room.settle(stake, stake * 2, { you: yv, dealer: dv }); const eff = res?.payout ?? stake * 2; setMsg(`${yv} beats ${dv} — you win ×2, ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"}`); }
     else if (yv < dv) { setMsg(`${dv} beats ${yv} — stake gone.`); await room.settle(stake, 0, { you: yv, dealer: dv }); }
     else { setMsg(`Push on ${yv} — stake back.`); await room.settle(stake, stake, { you: yv, dealer: dv, push: true }); }
   };
@@ -219,7 +224,9 @@ export function PokerRoom({ game }: { game: GameDef }) {
     setDealerHand(handName(ds));
     setStage(2);
     const cmp = cmpScore(ys, ds);
-    if (cmp > 0) { setWinner("you"); setMsg(`You win with ${handName(ys)} over ${handName(ds)} — ×2, ${fmtMoney(stake * 2, room.user?.currency ?? "GHS")}!`); await room.settle(stake, stake * 2, { you: handName(ys), dealer: handName(ds) }); }
+    // Capped-win display: the win line states the credited amount
+    // from the settle response, never the local ×2.
+    if (cmp > 0) { setWinner("you"); const res = await room.settle(stake, stake * 2, { you: handName(ys), dealer: handName(ds) }); const eff = res?.payout ?? stake * 2; setMsg(`You win with ${handName(ys)} over ${handName(ds)} — ×2, ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"}`); }
     else if (cmp < 0) { setWinner("dealer"); setMsg(`Dealer wins with ${handName(ds)} over ${handName(ys)} — stake gone.`); await room.settle(stake, 0, { you: handName(ys), dealer: handName(ds) }); }
     else { setWinner("split"); setMsg(`Split pot — both ${handName(ys)}. Stake back.`); await room.settle(stake, stake, { you: handName(ys), dealer: handName(ds), push: true }); }
   };

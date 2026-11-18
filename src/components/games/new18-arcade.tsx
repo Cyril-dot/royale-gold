@@ -207,8 +207,10 @@ export function TowerClimbRoom({ game }: { game: GameDef }) {
     if (row === cfg.rows - 1) {
       setPhase("done");
       const payout = Math.round(stake * mult * 100) / 100;
-      setMsg(`Top of the tower! ×${mult} — ${fmtMoney(payout, room.user?.currency ?? "GHS")}`);
-      await room.settle(stake, payout, { diff, row, mult });
+      // Capped-win display: the win line states the credited amount.
+      const res = await room.settle(stake, payout, { diff, row, mult });
+      const eff = res?.payout ?? payout;
+      setMsg(`Top of the tower! ×${mult} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}`);
       return;
     }
     setRow(row + 1);
@@ -220,8 +222,10 @@ export function TowerClimbRoom({ game }: { game: GameDef }) {
     const mult = cfg.ladder[row - 1];
     const payout = Math.round(stake * mult * 100) / 100;
     setPhase("done");
-    setMsg(`Cashed out at row ${row} — ×${mult}, ${fmtMoney(payout, room.user?.currency ?? "GHS")}!`);
-    await room.settle(stake, payout, { diff, row: row - 1, mult });
+    // Capped-win display: the cash-out line states the credited amount.
+    const res = await room.settle(stake, payout, { diff, row: row - 1, mult });
+    const eff = res?.payout ?? payout;
+    setMsg(`Cashed out at row ${row} — ×${mult}, ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"}`);
   };
 
   const curMult = row > 0 && phase !== "idle" ? cfg.ladder[row - 1] : 1;
@@ -304,22 +308,28 @@ export function GoldenCatchRoom({ game }: { game: GameDef }) {
   const potRef = useRef(0);
   const caughtRef = useRef(0);
   const settledRef = useRef(false);
+  const effRef = useRef<number | null>(null); // credited payout from the settle response, so a second end() call reuses it instead of the local value
 
   const end = async (reason: string) => {
     setPhase("done");
     setFishes([]);
     const mult = Math.min(10, Math.round(potRef.current * 100) / 100);
     const payout = Math.round(stake * mult * 100) / 100;
-    setMsg(`${reason} — you caught ${caughtRef.current} fish for a ×${mult.toFixed(1)} pot. ${payout > 0 ? fmtMoney(payout, room.user?.currency ?? "GHS") : "Nothing in the net."}`);
+    // Capped-win display: the end line states the credited amount
+    // from the settle response, never the local pot value.
     if (!settledRef.current) {
       settledRef.current = true;
-      await room.settle(stake, payout, { caught: caughtRef.current, pot: mult });
+      const res = await room.settle(stake, payout, { caught: caughtRef.current, pot: mult });
+      effRef.current = res?.payout ?? payout;
     }
+    const eff = effRef.current ?? payout;
+    setMsg(`${reason} — you caught ${caughtRef.current} fish for a ×${mult.toFixed(1)} pot. ${eff > 0 ? `${fmtMoney(eff, room.user?.currency ?? "GHS")}${mult > 1 && eff <= stake ? " back" : ""}` : "Nothing in the net."}`);
   };
 
   const start = () => {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
     settledRef.current = false;
+    effRef.current = null;
     potRef.current = 0;
     caughtRef.current = 0;
     setPot(0); setCaught(0); setSecs(30);
@@ -423,7 +433,7 @@ export function GoldRushDerbyRoom({ game }: { game: GameDef }) {
     let hs = HORSES.map((h) => ({ ...h, pos: 0, speed: 0.8 + Math.random() * 0.6 }));
     setHorses(hs);
     setMsg(`And they're off! ${HORSES[pick].name} is your horse.`);
-    const iv = window.setInterval(() => {
+    const iv = window.setInterval(async () => {
       hs = hs.map((h) => {
         const burst = Math.random() < 0.06 ? 1.6 : 1;
         const next = h.pos + h.speed * burst * (0.7 + Math.random() * 0.6);
@@ -437,8 +447,11 @@ export function GoldRushDerbyRoom({ game }: { game: GameDef }) {
         setPhase("done");
         const won = fin === pick;
         const payout = won ? Math.round(stake * 4 * 100) / 100 : 0;
-        setMsg(won ? `${HORSES[fin].name} wins by a nose! ×4 — ${fmtMoney(payout, room.user?.currency ?? "GHS")}` : `${HORSES[fin].name} takes it. Your horse, ${HORSES[pick].name}, didn't place.`);
-        void room.settle(stake, payout, { pick, winner: fin, horse: HORSES[fin].name });
+        // Capped-win display: the win line states the credited amount
+        // from the settle response, never the local ×4.
+        const res = await room.settle(stake, payout, { pick, winner: fin, horse: HORSES[fin].name });
+        const eff = res?.payout ?? payout;
+        setMsg(won ? `${HORSES[fin].name} wins by a nose! ×4 — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "" : " back"}` : `${HORSES[fin].name} takes it. Your horse, ${HORSES[pick].name}, didn't place.`);
       }
     }, 120);
   };

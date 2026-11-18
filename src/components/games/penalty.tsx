@@ -94,19 +94,23 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
 
   const finish = useCallback(async (won: boolean, payout: number, label: string, goalsNow?: number) => {
     const g = goalsNow ?? goals;
-    await room.settle(stake, payout, { shots: g + (won ? 1 : 0), goals: g, label });
+    // Capped-win display: callers build their win line from the
+    // returned effective payout, never from the local ladder value.
+    const res = await room.settle(stake, payout, { shots: g + (won ? 1 : 0), goals: g, label });
     setPlaying(false);
     setBusy(false);
     stateRef.current.playing = false;
     stateRef.current.busy = false;
+    return res;
   }, [room, stake, goals]);
 
   const cashOut = useCallback(async (auto = false) => {
     if (!playing || goals < 1) return;
     const m = LADDER[goals - 1];
     const pay = Math.round(stake * m * 100) / 100;
-    setMsg(`${auto ? "Five from five! " : "Cashed out — "}${goals}${goals === 1 ? " goal" : " goals"} at ×${m}: ${fmtMoney(pay, room.user?.currency ?? "GHS")}.`);
-    await finish(true, pay, `×${m}`);
+    const res = await finish(true, pay, `×${m}`);
+    const eff = res?.payout ?? pay;
+    setMsg(`${auto ? "Five from five! " : "Cashed out — "}${goals}${goals === 1 ? " goal" : " goals"} at ×${m}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back."}`);
   }, [playing, goals, stake, finish]);
 
   // Goal confetti (the artifact's burst): coloured shards fly out of
@@ -163,8 +167,10 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
         // directly and pass the true goals count to finish.
         const m5 = LADDER[4];
         const pay5 = Math.round(stake * m5 * 100) / 100;
-        setMsg(`Five from five! ${g} goals at ×${m5}: ${fmtMoney(pay5, room.user?.currency ?? "GHS")}.`);
-        setTimeout(() => { resetActors(); void finish(true, pay5, `×${m5}`, g); }, 460);
+        // Capped-win display: no amount is shown until settle returns
+        // the credited one — the interim line carries no figure at all.
+        setMsg(`Five from five!`);
+        setTimeout(async () => { resetActors(); const res = await finish(true, pay5, `×${m5}`, g); const eff = res?.payout ?? pay5; setMsg(`Five from five! ${g} goals at ×${m5}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back."}`); }, 460);
         return;
       }
       setMsg(`GOAL — ${aim.label}! That's ${g} on the ladder: ×${LADDER[g - 1]} = ${fmtMoney(Math.round(stake * LADDER[g - 1] * 100) / 100, room.user?.currency ?? "GHS")}. Cash out now or shoot for ×${LADDER[g]}.`);
