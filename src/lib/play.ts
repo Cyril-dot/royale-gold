@@ -1,5 +1,5 @@
 import { randomInt } from "crypto";
-import { adjustedWinProb } from "./economy";
+import { adjustedWinProb, SIM_WIN_PROB_CAP } from "./economy";
 
 /**
  * Server-decided game draws (round 6). Only games listed in
@@ -56,15 +56,32 @@ function drawPocketFrom(winning: boolean, betKind: RouletteBetKind, pick: number
  * Draw a roulette round at the economy-adjusted win probability.
  * Returns the pocket the wheel must land on, whether it won, and the
  * multiplier. The draw is exact: win chance = adjustedWinProb(natural, factor).
+ *
+ * Win controls (Nov 2026): `opts.baseProb` is the owner's per-game
+ * win chance for this game (0..1) — it REPLACES the natural
+ * probability as the base, and the LIVE factor still applies ON TOP
+ * of it (base x factor). Unset = today's behaviour (natural x factor,
+ * via adjustedWinProb — untouched, so the no-override path is
+ * byte-identical to before). The SIM cap (0.9) applies in SIM mode
+ * only: in REAL mode an owner-set 100% is honestly 100% — capping it
+ * at 90% would make the panel lie. Only the play route passes a base
+ * probability, and only for games in PLAY_GATED_GAMES.
  */
 export function drawRoulette(
   betKind: RouletteBetKind,
   pick: number,
   factor: number,
   rng: () => number = Math.random,
+  opts: { baseProb?: number; sim?: boolean } = {},
 ): { pocket: number; won: boolean; mult: number } {
   const natural = rouletteNaturalProb(betKind);
-  const won = rng() < adjustedWinProb(natural, factor);
+  const prob =
+    opts.baseProb != null
+      ? opts.sim
+        ? Math.min(Math.max(0, opts.baseProb) * factor, SIM_WIN_PROB_CAP)
+        : Math.min(Math.max(0, opts.baseProb) * factor, 1)
+      : adjustedWinProb(natural, factor);
+  const won = rng() < prob;
   const pocket = drawPocketFrom(won, betKind, pick);
   const mult = won ? rouletteMultiplier(betKind) : 0;
   return { pocket, won, mult };

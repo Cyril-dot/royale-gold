@@ -86,4 +86,24 @@ check("red/black SIM capped at 0.90", Math.abs(rbSim - SIM_WIN_PROB_CAP) < 0.01,
 check("adjustedWinProb caps at 0.90", adjustedWinProb(0.99, 5) === SIM_WIN_PROB_CAP, `got ${adjustedWinProb(0.99, 5)}`);
 check("adjustedWinProb floor 0", adjustedWinProb(0.5, 0) === 0, `got ${adjustedWinProb(0.5, 0)}`);
 
+// --- Per-game win chance (Nov 2026, win controls): the owner's base
+// probability replaces the natural one, the LIVE factor still applies
+// on top (base x factor). Unset = the natural path above (unchanged).
+function rouletteRateBase(baseProb: number, factor: number, n: number, seed: number, sim = false): number {
+  const r = rng(seed);
+  let wins = 0;
+  for (let i = 0; i < n; i++) if (drawRoulette("red", 1, factor, r, { baseProb, sim }).won) wins++;
+  return wins / n;
+}
+const b100 = rouletteRateBase(1, liveWinFactor(0), 1000, 41);
+check("base 100% LIVE@0 = always win", b100 === 1, `got ${b100}`);
+const b0 = rouletteRateBase(0, liveWinFactor(0), 1000, 42);
+check("base 0% LIVE@0 = never win", b0 === 0, `got ${b0}`);
+const b50f50 = rouletteRateBase(0.5, liveWinFactor(5000), N, 43);
+check("base 50% x LIVE floor 0.5 ≈ 0.25", Math.abs(b50f50 - 0.25) < 0.01, `got ${b50f50.toFixed(4)}`);
+const b50live0 = rouletteRateBase(0.5, liveWinFactor(0), N, 44);
+check("base 50% x LIVE@0 1.0 ≈ 0.50", Math.abs(b50live0 - 0.5) < 0.01, `got ${b50live0.toFixed(4)}`);
+const b50sim = rouletteRateBase(0.5, SIM_WIN_BOOST, N, 45, true);
+check("base 50% SIM = capped 0.90 (boost x2)", Math.abs(b50sim - 0.9) < 0.01, `got ${b50sim.toFixed(4)}`);
+
 console.log(process.exitCode ? "ECONOMY MATH: FAILURES ABOVE" : "ECONOMY MATH: ALL PASS");

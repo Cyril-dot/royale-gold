@@ -17,6 +17,7 @@ import { OwnerWalletForm } from "../../../../components/owner/OwnerWalletForm";
 import { OwnerCurrencyConfig } from "../../../../components/owner/OwnerCurrencyConfig";
 import { OwnerFixedDeposit } from "../../../../components/owner/OwnerFixedDeposit";
 import { OwnerWinRate } from "../../../../components/owner/OwnerWinRate";
+import { OwnerWinException } from "../../../../components/owner/OwnerWinException";
 import { OwnerGatewaySection } from "../../../../components/owner/OwnerGatewaySection";
 import { useOwnerFetch } from "../../../../components/owner/useOwnerFetch";
 
@@ -95,6 +96,10 @@ export default function OwnerGatewayPage() {
 
       <Card title="Win rate — max winnings per deposit">
         <OwnerWinRate />
+      </Card>
+
+      <Card title="Random win exception">
+        <OwnerWinException />
       </Card>
     </div>
   );

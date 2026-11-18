@@ -565,6 +565,62 @@ null` per currency. `GET /api/wallet` carries the player's split
 (`stake` + `winnings` = `cash`); `POST /api/games/settle` and `POST
 /api/games/play` carry it as `stakeBalance` / `winningsBalance`.
 
+### POST /api/owner/win-exception (owner, Nov 2026 — win controls)
+Sets (or clears) ONE random win exception chance per fiat — a percent
+(e.g. 5 = 5%). When set, that percent of cash wins in the fiat bypass
+the win-allowance cap entirely: the full natural profit is credited
+and the allowance is NOT drained for that win. The roll is server-side
+(Node crypto, inside the settle transaction in `creditWinProfit`) and
+the client can never influence it; 0 / no row = OFF = the cap always
+applies. Null/empty = OFF. Audit-logged (`win.exception`). Stored in
+its own `WinException` table so a prod database without it degrades to
+OFF instead of 500ing — run `rg-win-controls.sql` in Neon before
+setting one live. Players never see it: no label, no announcement; a
+bypassed win simply shows its full credited amount, like any uncapped
+win. The exception is NOT recorded on the GameResult (the history
+endpoint returns the result blob to the player).
+```json
+// request — chancePct: null (or omitted) = clear = OFF
+{ "currency": "GHS", "chancePct": 5 }
+// response 200
+{ "currency": "GHS", "winExceptionPct": 5 }
+// clear — response 200
+{ "currency": "GHS", "winExceptionPct": null }
+```
+400 for a bad currency code or a chance ≤ 0 / > 100. 503 when the
+`WinException` table does not exist yet (run `rg-win-controls.sql`).
+`GET /api/owner/currency-config` now carries `winExceptionPct: number |
+null` per currency.
+
+### POST /api/owner/games/:slug — winChancePct (owner, Nov 2026 — win controls)
+Sets (or clears) the per-game win chance for ONE game — a percent
+(e.g. 40 = 40%). The chance is the BASE win probability for that
+game; the LIVE factor still applies ON TOP of it (base × factor), and
+it never replaces the factor. Null = clear = today's behaviour (the
+game's natural chance × factor). Audit-logged (`game.economics`).
+Stored in its own `GameWinChance` table (never a GameConfig column —
+that table is read unselected, so a column there would 500 prod reads
+until the SQL runs); run `rg-win-controls.sql` in Neon before setting
+one live — a write before then fails with a plain 503.
+ENFORCED ONLY for server-drawn games (`PLAY_GATED_GAMES` — Royale
+Roulette today): saving a chance for any other game is rejected with
+a plain 400, because those games decide wins in the room and the
+server cannot set their chance. Crash keeps its HMAC point (excluded)
+and coins games are play money (unchanged). The chance is NEVER sent
+to the public `GET /api/games/config` — it is the owner's dial; the
+owner Games page reads the owner-only `GET /api/owner/games`, which
+carries `winChances` (keyed by slug) and `playGated` alongside the
+games and `globalKill`.
+```json
+// request — winChancePct: null = clear = today's behaviour
+{ "winChancePct": 40 }
+// response 200 (same shape as the other game fields, plus the chance)
+{ "slug": "royale-roulette", "visible": true, "killed": false, "minBet": null, "maxBet": null, "maxPayout": null, "maxMultiplier": 36, "winChancePct": 40 }
+```
+400 for a chance ≤ 0 / > 100, or for a chance on a game that is not
+server-drawn. 503 when the `GameWinChance` table does not exist yet
+(run `rg-win-controls.sql`).
+
 ### GET /api/owner/analytics?from=2026-11-01&to=2026-11-30&currency=GHS (owner, Nov 2026)
 Income vs losses + when income rises, per fiat, UTC days (range
 defaults to this month through today, max 92 days). Per-game figures

@@ -467,6 +467,22 @@ model GameConfig {
   updatedAt     DateTime @updatedAt
 }
 
+// Win controls (Nov 2026): the owner's PER-GAME WIN CHANCE — the base
+// win probability (%) for one game, set in the game settings. No row =
+// unset = today's behaviour for that game. The LIVE factor still
+// applies ON TOP of it (base x factor). Enforced ONLY where the server
+// draws the outcome (PLAY_GATED_GAMES — Royale Roulette today); other
+// games decide wins in the room, so the value is never read for them
+// and the owner panel refuses to save one. Reads are P2021/P2022-safe
+// in src/lib/game-config.ts. Kept OUT of GameConfig on purpose: that
+// table is read unselected (getGameConfig), so a new column there
+// would 500 every game-config read in prod until the SQL runs.
+model GameWinChance {
+  slug      String   @id // matches games.ts slug
+  chancePct Float  // percent, e.g. 40.00 = 40%
+  updatedAt DateTime @updatedAt
+}
+
 // P0 Batch 2 (O12): per-method deposit control. Rows are seeded lazily
 // (a method with no row is enabled with no min/max). Deposits stay demo
 // cashier only — this toggles/limits the methods, it connects no gateway.
@@ -533,6 +549,17 @@ model FixedDeposit {
 model WinRate {
   currency  String   @id // "GHS" | "NGN" | ...
   ratePct   Float  // percent, e.g. 20.00 = 20%
+  updatedAt DateTime @updatedAt
+}
+
+// Win controls (Nov 2026): the owner's RANDOM WIN EXCEPTION chance
+// per fiat — the percent of cash wins that bypass the win-allowance
+// cap entirely (full natural profit credited, allowance untouched
+// for that win). No row = OFF = the cap always applies. Reads are
+// P2021/P2022-safe in src/lib/win-logic.ts (same pattern as WinRate).
+model WinException {
+  currency  String   @id // "GHS" | "NGN" | ...
+  chancePct Float  // percent, e.g. 5.00 = 5%
   updatedAt DateTime @updatedAt
 }
 

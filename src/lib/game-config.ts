@@ -15,8 +15,15 @@ import { getGame, ALL_GAMES, type GameDef } from "./games";
 import { dec, round2 } from "./money";
 import { symbolFor } from "./country";
 import { getAllFixedDeposits } from "./fixed-deposit";
-import { getAllWinRates } from "./win-logic";
+import { getAllWinRates, getAllWinExceptionChances } from "./win-logic";
 import type { Prisma } from "@prisma/client";
+
+/** Prisma P2021 = table missing, P2022 = column missing — both mean
+ * "this database predates the feature" (the 17 Nov owner-500s lesson). */
+function isMissingTable(err: unknown): boolean {
+  const code = (err as { code?: string }).code;
+  return code === "P2021" || code === "P2022";
+}
 
 /** Deposit methods the demo cashier accepts (same list as the deposit route). */
 export const PAYMENT_METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
@@ -87,14 +94,19 @@ export interface CurrencyConfigShape {
   // across all games (server-enforced, src/lib/win-logic.ts).
   // Populated the same way, from the WinRate table (P2021/P2022-safe).
   winRatePct: number | null;
+  // Random win exception (Nov 2026, win controls): null = OFF (the
+  // cap always applies). Set = that percent of cash wins in this fiat
+  // bypass the win-allowance cap entirely. Populated the same way,
+  // from the WinException table (P2021/P2022-safe).
+  winExceptionPct: number | null;
 }
 
 /** Seed defaults — the owner panel can change every one of these. */
 export const CURRENCY_DEFAULTS: Record<string, CurrencyConfigShape> = {
-  GHS: { currency: "GHS", symbol: "GH₵", minDeposit: 1, minStake: 1, conversionRate: 5, decayStep: 100, withdrawalOwnerThreshold: 500, enabled: true, fixedDepositAmount: null, winRatePct: null },
+  GHS: { currency: "GHS", symbol: "GH₵", minDeposit: 1, minStake: 1, conversionRate: 5, decayStep: 100, withdrawalOwnerThreshold: 500, enabled: true, fixedDepositAmount: null, winRatePct: null, winExceptionPct: null },
   // NGN seed values are 100x the GHS ones (same "effort") — Chuks sets
   // his own numbers in the owner panel; these are NOT the 7UP limits.
-  NGN: { currency: "NGN", symbol: "₦", minDeposit: 100, minStake: 100, conversionRate: 500, decayStep: 10000, withdrawalOwnerThreshold: 50000, enabled: true, fixedDepositAmount: null, winRatePct: null },
+  NGN: { currency: "NGN", symbol: "₦", minDeposit: 100, minStake: 100, conversionRate: 500, decayStep: 10000, withdrawalOwnerThreshold: 50000, enabled: true, fixedDepositAmount: null, winRatePct: null, winExceptionPct: null },
 };
 
 function currencyRowToShape(row: {
@@ -119,6 +131,7 @@ function currencyRowToShape(row: {
     // Fixed amount is merged by the getters below (separate table).
     fixedDepositAmount: null,
     winRatePct: null,
+    winExceptionPct: null,
   };
 }
 
@@ -157,6 +170,7 @@ export async function getCurrencyConfig(
         enabled: true,
         fixedDepositAmount: null,
         winRatePct: null,
+        winExceptionPct: null,
       };
     }
   }
@@ -164,7 +178,8 @@ export async function getCurrencyConfig(
   // table — P2021/P2022-safe, so a prod DB without the table yet reads OFF.
   const fixed = await getAllFixedDeposits();
   const rates = await getAllWinRates();
-  return { ...base, fixedDepositAmount: fixed[code] ?? null, winRatePct: rates[code] ?? null };
+  const exceptions = await getAllWinExceptionChances();
+  return { ...base, fixedDepositAmount: fixed[code] ?? null, winRatePct: rates[code] ?? null, winExceptionPct: exceptions[code] ?? null };
 }
 
 /** Every known currency row (seed rows included), for the owner editor. */
@@ -173,10 +188,12 @@ export async function getAllCurrencyConfigs(): Promise<CurrencyConfigShape[]> {
   const byCode = new Map(rows.map((r) => [r.currency, currencyRowToShape(r)]));
   const fixed = await getAllFixedDeposits();
   const rates = await getAllWinRates();
+  const exceptions = await getAllWinExceptionChances();
   const attach = (s: CurrencyConfigShape): CurrencyConfigShape => ({
     ...s,
     fixedDepositAmount: fixed[s.currency.toUpperCase()] ?? null,
     winRatePct: rates[s.currency.toUpperCase()] ?? null,
+    winExceptionPct: exceptions[s.currency.toUpperCase()] ?? null,
   });
   const out: CurrencyConfigShape[] = [];
   for (const code of Object.keys(CURRENCY_DEFAULTS)) {
@@ -295,6 +312,45 @@ export async function getAllGameConfigs(): Promise<EffectiveGameConfig[]> {
   const rows = await prisma.gameConfig.findMany();
   const bySlug = new Map(rows.map((r) => [r.slug, r]));
   return ALL_GAMES.map((g) => effectiveGameConfig(g, bySlug.get(g.slug) ?? null));
+}
+
+/**
+ * Win controls (Nov 2026): the owner's per-game win chance — the BASE
+ * win probability (%) for one game. Null = unset = today's behaviour.
+ * P2021/P2022-safe (missing table → null / {}): a prod DB without the
+ * table yet plays every game at its natural chance and never 500s.
+ * Enforced ONLY where the server draws the outcome (PLAY_GATED_GAMES
+ * in src/lib/play.ts — Royale Roulette today). Other games decide wins
+ * in the room and never read this — the owner panel refuses to save a
+ * chance for them, so a stored value can never promise what the code
+ * cannot deliver.
+ */
+export async function getGameWinChance(slug: string): Promise<number | null> {
+  try {
+    const row = await prisma.gameWinChance.findUnique({ where: { slug }, select: { chancePct: true } });
+    if (!row) return null;
+    const v = dec(row.chancePct);
+    return v > 0 && v <= 100 ? round2(v) : null;
+  } catch (err) {
+    if (isMissingTable(err)) return null;
+    throw err;
+  }
+}
+
+/** Every per-game win chance, keyed by slug — P2021/P2022-safe (missing table → {}). */
+export async function getAllGameWinChances(): Promise<Record<string, number>> {
+  try {
+    const rows = await prisma.gameWinChance.findMany({ select: { slug: true, chancePct: true } });
+    const out: Record<string, number> = {};
+    for (const r of rows) {
+      const v = dec(r.chancePct);
+      if (v > 0 && v <= 100) out[r.slug] = round2(v);
+    }
+    return out;
+  } catch (err) {
+    if (isMissingTable(err)) return {};
+    throw err;
+  }
 }
 
 /** True when the game cannot be played at all right now. */

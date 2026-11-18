@@ -161,7 +161,12 @@ export async function settleGame(
     if (currency === "cash") {
       const profit = Math.max(0, round2(effPayout - stake));
       if (profit > 0) {
-        const credited = await creditWinProfit(tx, userId, fiatCurrency, profit);
+        // The exception flag is deliberately NOT returned to the
+        // client and NOT stored on the GameResult: GET /api/games/history
+        // returns the result blob to the player, and the cap (and its
+        // exceptions) stays silent. The credited payout is all any
+        // surface ever shows.
+        const { credited } = await creditWinProfit(tx, userId, fiatCurrency, profit);
         effPayout = round2(stake + credited);
       }
     }

@@ -20,6 +20,14 @@
 // - Cash only. Coins are play money, never withdrawable — untouched.
 // - The LIVE win-chance factor (economy.ts) is UNCHANGED — the cap is
 //   a hard limit ON TOP of it, not a replacement.
+// - RANDOM WIN EXCEPTION (Nov 2026, win controls): the owner can set
+//   a per-fiat exception chance (WinException table). On a cash win,
+//   that percent of wins bypass the cap entirely — the full natural
+//   profit is credited and the allowance is NOT drained for that win.
+//   The roll is server-side only (Node crypto, inside the settle
+//   transaction, so the exception and the credit are atomic) and the
+//   client can never influence it. No row / 0% = OFF = the cap always
+//   applies. Silent like the cap: no label, no announcement.
 // - Manual credits (admin bonus, jackpot pay, cashback, promo match,
 //   tournament / loyalty prizes) land in the Stake portion, never in
 //   Winnings, and never drain the allowance — they are not game-round
@@ -40,6 +48,7 @@
 // so the balance move, the allowance drain and the winnings credit are
 // atomic. The global-prisma variants are for reads only.
 import type { Prisma } from "@prisma/client";
+import { randomInt } from "crypto";
 import { prisma } from "./prisma";
 import { dec, round2 } from "./money";
 
@@ -57,6 +66,89 @@ function isMissingTable(err: unknown): boolean {
 
 /** Rate bounds: a percent of the deposit, 0 < rate <= 100. */
 export const WIN_RATE_MAX_PCT = 100;
+
+/** Exception-chance bounds: a percent of wins, 0 < chance <= 100. */
+export const WIN_EXCEPTION_MAX_PCT = 100;
+
+/** The random win exception chance (%) for one fiat, or null when OFF / table missing. */
+export async function getWinExceptionChance(currency: string): Promise<number | null> {
+  const code = (currency || "GHS").toUpperCase();
+  try {
+    const row = await prisma.winException.findUnique({ where: { currency: code }, select: { chancePct: true } });
+    if (!row) return null;
+    const v = dec(row.chancePct);
+    return v > 0 && v <= WIN_EXCEPTION_MAX_PCT ? round2(v) : null;
+  } catch (err) {
+    if (isMissingTable(err)) return null;
+    throw err;
+  }
+}
+
+/** Every exception chance, keyed by fiat — P2021/P2022-safe (missing table → {}). */
+export async function getAllWinExceptionChances(): Promise<Record<string, number>> {
+  try {
+    const rows = await prisma.winException.findMany({ select: { currency: true, chancePct: true } });
+    const out: Record<string, number> = {};
+    for (const r of rows) {
+      const v = dec(r.chancePct);
+      if (v > 0 && v <= WIN_EXCEPTION_MAX_PCT) out[r.currency.toUpperCase()] = round2(v);
+    }
+    return out;
+  } catch (err) {
+    if (isMissingTable(err)) return {};
+    throw err;
+  }
+}
+
+/**
+ * Owner set/clear. chancePct null = clear (delete the row = OFF).
+ * Throws a plain Error with a 503 message when the table is missing
+ * in prod — the route maps it to 503 so the owner knows to run the SQL.
+ * Always audit-logs (action "win.exception").
+ */
+export async function setWinExceptionChance(
+  actorId: string,
+  currency: string,
+  chancePct: number | null,
+): Promise<number | null> {
+  const code = (currency || "GHS").toUpperCase();
+  if (!/^[A-Z]{3}$/.test(code)) throw new Error("currency must be a 3-letter code (e.g. GHS, NGN)");
+  let next: number | null = null;
+  if (chancePct !== null) {
+    if (typeof chancePct !== "number" || !Number.isFinite(chancePct) || chancePct <= 0 || chancePct > WIN_EXCEPTION_MAX_PCT) {
+      throw new Error(`Win exception chance must be a percent above 0 and at most ${WIN_EXCEPTION_MAX_PCT}`);
+    }
+    next = round2(chancePct);
+  }
+  try {
+    if (next === null) {
+      await prisma.winException.deleteMany({ where: { currency: code } });
+    } else {
+      await prisma.winException.upsert({
+        where: { currency: code },
+        update: { chancePct: next },
+        create: { currency: code, chancePct: next },
+      });
+    }
+  } catch (err) {
+    if (isMissingTable(err)) {
+      throw new Error("Win exception chances are not set up yet — run rg-win-controls.sql in Neon first");
+    }
+    throw err;
+  }
+  await prisma.auditLog.create({
+    data: {
+      actorId,
+      action: "win.exception",
+      targetId: code,
+      detail:
+        next === null
+          ? `Win exception chance for ${code} cleared — the win cap always applies again`
+          : `Win exception chance for ${code} set to ${next}% — about ${next} in 100 cash wins bypass the win cap entirely`,
+    },
+  });
+  return next;
+}
 
 /** The win rate (%) for one fiat, or null when OFF / table missing. */
 export async function getWinRate(currency: string): Promise<number | null> {
@@ -178,40 +270,67 @@ export async function topUpAllowance(
 
 /**
  * Credit a game profit (payout - stake, > 0) under the cap, inside the
- * settle transaction. Returns the profit actually credited:
+ * settle transaction. Returns the profit actually credited and whether
+ * the random win exception fired:
  * - Rate OFF (or tables missing): the full profit — but it still lands
  *   in Winnings, so the split works with the cap off too.
  * - Rate ON: min(profit, remaining allowance); the allowance is
  *   drained by exactly the credited amount.
+ * - Rate ON + exception roll hits: the FULL profit, allowance
+ *   untouched for this win (exception: true).
  * The credited profit is added to the WinWallet winnings sub-ledger.
  * Silent by design — no message, no label; the caller credits
- * stake + returned profit as the payout.
+ * stake + returned profit as the payout. The exception roll is
+ * server-side only (Node crypto, inside this transaction, so the
+ * exception and the credit are atomic); the client can never
+ * influence it. The WinException read is wrapped on its own: a prod
+ * DB with the rate tables but WITHOUT WinException yet (the
+ * rg-win-controls.sql gap) degrades to "no exception" — the cap
+ * applies normally — instead of the outer catch returning the full
+ * profit for every win.
  */
 export async function creditWinProfit(
   tx: Tx,
   userId: string,
   fiatCurrency: string,
   profit: number,
-): Promise<number> {
+): Promise<{ credited: number; exception: boolean }> {
   const code = (fiatCurrency || "GHS").toUpperCase();
   const p = round2(profit);
-  if (p <= 0) return 0;
+  if (p <= 0) return { credited: 0, exception: false };
   try {
     const rateRow = await tx.winRate.findUnique({ where: { currency: code }, select: { ratePct: true } });
     const rate = rateRow ? dec(rateRow.ratePct) : 0;
     let credited = p;
+    let exception = false;
     if (rate > 0 && rate <= WIN_RATE_MAX_PCT) {
-      const allow = await tx.winAllowance.findUnique({
-        where: { userId_fiatCurrency: { userId, fiatCurrency: code } },
-        select: { remaining: true },
-      });
-      const remaining = round2(dec(allow?.remaining));
-      credited = Math.min(p, Math.max(0, remaining));
-      if (credited > 0) {
-        await tx.winAllowance.update({
+      let chance = 0;
+      try {
+        const excRow = await tx.winException.findUnique({ where: { currency: code }, select: { chancePct: true } });
+        const v = excRow ? dec(excRow.chancePct) : 0;
+        chance = v > 0 && v <= WIN_EXCEPTION_MAX_PCT ? v : 0;
+      } catch (err) {
+        if (!isMissingTable(err)) throw err;
+      }
+      // chancePct is stored to 2dp, so chance * 100 is an integer
+      // 0..10000 and randomInt(0, 10000) < threshold is exact:
+      // 5% -> 500/10000, 5.25% -> 525/10000, 100% -> always.
+      if (chance > 0 && randomInt(0, 10000) < Math.round(chance * 100)) {
+        exception = true;
+      }
+      if (!exception) {
+        const allow = await tx.winAllowance.findUnique({
           where: { userId_fiatCurrency: { userId, fiatCurrency: code } },
-          data: { remaining: round2(remaining - credited) },
+          select: { remaining: true },
         });
+        const remaining = round2(dec(allow?.remaining));
+        credited = Math.min(p, Math.max(0, remaining));
+        if (credited > 0) {
+          await tx.winAllowance.update({
+            where: { userId_fiatCurrency: { userId, fiatCurrency: code } },
+            data: { remaining: round2(remaining - credited) },
+          });
+        }
       }
     }
     if (credited > 0) {
@@ -222,9 +341,9 @@ export async function creditWinProfit(
         create: { userId, fiatCurrency: code, winnings: credited },
       });
     }
-    return round2(credited);
+    return { credited: round2(credited), exception };
   } catch (err) {
-    if (isMissingTable(err)) return p;
+    if (isMissingTable(err)) return { credited: p, exception: false };
     throw err;
   }
 }

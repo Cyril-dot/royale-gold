@@ -33,6 +33,11 @@ interface OwnerGameCfg {
   maxPayout: number | null;
   maxMultiplier: number;
   note: string;
+  // Win controls (Nov 2026): the owner's per-game win chance (null =
+  // unset = today's behaviour) and whether the server draws this game
+  // — the chance is only enforced for server-drawn games.
+  winChancePct: number | null;
+  playGated: boolean;
 }
 
 export default function OwnerGamesPage() {
@@ -41,9 +46,27 @@ export default function OwnerGamesPage() {
   const [killAction, setKillAction] = useState<"pause" | "resume" | null>(null);
   const [killBusy, setKillBusy] = useState(false);
 
-  const url = useMemo(() => (user ? "/api/games/config" : null), [user]);
-  const { data, err, loading, reload } = useOwnerFetch<{ globalKill: boolean; games: OwnerGameCfg[] }>(url);
-  const games = useMemo(() => data?.games ?? [], [data]);
+  // Win controls (Nov 2026): the owner Games page loads the
+  // OWNER-ONLY endpoint, not the public /api/games/config — the
+  // per-game win chance is the owner's dial and must never reach
+  // players. The endpoint also carries globalKill, so nothing else
+  // about this page changes.
+  const url = useMemo(() => (user ? "/api/owner/games" : null), [user]);
+  const { data, err, loading, reload } = useOwnerFetch<{
+    globalKill: boolean;
+    games: OwnerGameCfg[];
+    winChances: Record<string, number>;
+    playGated: string[];
+  }>(url);
+  const games = useMemo(() => {
+    const chances = data?.winChances ?? {};
+    const gated = new Set(data?.playGated ?? []);
+    return (data?.games ?? []).map((g) => ({
+      ...g,
+      winChancePct: chances[g.slug] ?? null,
+      playGated: gated.has(g.slug),
+    }));
+  }, [data]);
   const globalKill = data?.globalKill ?? false;
 
   const filtered = useMemo(() => {
@@ -107,6 +130,10 @@ export default function OwnerGamesPage() {
           aria-label="Search games"
           enterKeyHint="search"
         />
+        <p>
+          Win chance can be set for server-drawn games — Royale Roulette only today. Other games decide wins
+          in the room, so the server cannot set their chance; moving a game to server draws is a separate build.
+        </p>
         {loading || (data === null && !err) ? (
           <Skeleton lines={5} />
         ) : err ? (

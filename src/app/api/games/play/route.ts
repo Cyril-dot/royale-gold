@@ -12,6 +12,7 @@ import { settleGame } from "@/lib/settle";
 import {
   getCurrencyConfig,
   getGameConfig,
+  getGameWinChance,
   getPlatformSettings,
   isGameBlocked,
   platformMinStakeFiat,
@@ -105,7 +106,18 @@ export async function POST(req: Request) {
 
     const lifetimeDeposited = await getLifetimeDeposited(user.id, fiatCurrency);
     const factor = winFactorFor({ mode, currency: game.currency, lifetimeDeposited, decayStep: currencyCfg.decayStep });
-    const { pocket, won, mult } = drawRoulette(betKind as RouletteBetKind, pick, factor);
+    // Win controls (Nov 2026): the owner's per-game win chance is the
+    // BASE probability for this game; the LIVE factor still applies on
+    // top of it (base x factor, inside drawRoulette). Unset = today's
+    // behaviour (natural probability x factor). P2021/P2022-safe — a
+    // prod DB without the table reads null. Only play-gated games
+    // reach this route, so this is the one place the chance is
+    // enforced; other games decide wins in the room and never read it.
+    const baseChance = await getGameWinChance(game.slug);
+    const { pocket, won, mult } = drawRoulette(betKind as RouletteBetKind, pick, factor, undefined, {
+      baseProb: baseChance != null ? baseChance / 100 : undefined,
+      sim: mode === "SIM",
+    });
     // P0 Batch 2 (O10): the owner's max-payout cap applies to the drawn
     // payout too (SIM and REAL alike) — settleGame re-caps on the REAL path.
     let payout = round2(stake * mult);

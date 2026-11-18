@@ -16,13 +16,17 @@ import { ConfirmDialog } from "../staff-ui/Dialog";
 import { FormField, Input } from "../staff-ui/Form";
 
 export function OwnerGameRow({ g, onSave }: {
-  g: { slug: string; name: string; currency: string; visible: boolean; killed: boolean; minBet: number | null; maxBet: number | null; maxPayout: number | null; maxMultiplier: number; note: string };
+  g: { slug: string; name: string; currency: string; visible: boolean; killed: boolean; minBet: number | null; maxBet: number | null; maxPayout: number | null; maxMultiplier: number; note: string; winChancePct: number | null; playGated: boolean };
   onSave: (slug: string, patch: Record<string, unknown>) => Promise<void>;
 }) {
   const [minBet, setMinBet] = useState(g.minBet == null ? "" : String(g.minBet));
   const [maxBet, setMaxBet] = useState(g.maxBet == null ? "" : String(g.maxBet));
   const [maxPayout, setMaxPayout] = useState(g.maxPayout == null ? "" : String(g.maxPayout));
   const [maxMult, setMaxMult] = useState(String(g.maxMultiplier));
+  // Win controls (Nov 2026): the per-game win chance — shown only for
+  // server-drawn games (the server enforces it there and nowhere
+  // else). Empty = clear the chance (back to today's behaviour).
+  const [winChance, setWinChance] = useState(g.winChancePct == null ? "" : String(g.winChancePct));
   const [busy, setBusy] = useState(false);
   const [killConfirm, setKillConfirm] = useState(false);
   const unit = g.currency === "coins" ? "coins" : "GH₵";
@@ -43,6 +47,12 @@ export function OwnerGameRow({ g, onSave }: {
     if (b !== g.maxBet) patch.maxBet = b;
     if (c !== g.maxPayout) patch.maxPayout = c;
     if (d !== null && d !== g.maxMultiplier) patch.maxMultiplier = d;
+    if (g.playGated) {
+      const w = numOrNull(winChance);
+      if (Number.isNaN(w)) return;
+      if (w !== null && (w <= 0 || w > 100)) return;
+      if (w !== g.winChancePct) patch.winChancePct = w;
+    }
     if (Object.keys(patch).length === 0) return;
     setBusy(true);
     try { await onSave(g.slug, patch); } finally { setBusy(false); }
@@ -97,7 +107,19 @@ export function OwnerGameRow({ g, onSave }: {
         <FormField label="Max ×">
           <Input type="number" min={0.01} step={0.01} value={maxMult} onChange={(e) => setMaxMult(e.target.value)} aria-label={`${g.name} maximum multiplier`} />
         </FormField>
+        {g.playGated ? (
+          <FormField label="Win chance (%)">
+            <Input type="number" min={0.01} max={100} step={0.01} inputMode="decimal" value={winChance} onChange={(e) => setWinChance(e.target.value)} placeholder="Default" aria-label={`${g.name} win chance percent`} />
+          </FormField>
+        ) : null}
       </div>
+      {g.playGated ? (
+        <p>
+          {g.winChancePct !== null
+            ? `Win chance ${g.winChancePct}% — the base chance for this game; the LIVE factor still applies on top of it.`
+            : "Win chance unset — this game plays at its natural chance, with the LIVE factor on top."}
+        </p>
+      ) : null}
       <Button variant="primary" size="sm" disabled={busy} loading={busy} onClick={() => void save()}>
         Save
       </Button>
