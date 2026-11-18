@@ -59,9 +59,17 @@ export interface DepositReportRow {
 
 export async function depositsReport(userIds: string[], from: Date, to: Date, fiatCurrency: string = "GHS"): Promise<DepositReportRow[]> {
   if (userIds.length === 0) return [];
+  // Phase 6: explicit select (same 500-pattern fix as 3833bdf) — an
+  // unselected findMany also selects DepositEvent.providerPayload,
+  // a column prod Neon does not have yet (Phase 2 SQL unrun).
   const rows = await prisma.depositEvent.findMany({
     where: { userId: { in: userIds }, fiatCurrency, createdAt: { gte: from, lte: to } },
-    include: {
+    select: {
+      createdAt: true,
+      amount: true,
+      method: true,
+      commission: true,
+      fiatCurrency: true,
       user: { select: { name: true, email: true, phone: true } },
       admin: { select: { name: true } },
     },
@@ -146,9 +154,22 @@ export interface WithdrawalReportRow {
 
 export async function withdrawalsReport(userIds: string[], from: Date, to: Date, fiatCurrency: string = "GHS"): Promise<WithdrawalReportRow[]> {
   if (userIds.length === 0) return [];
+  // Phase 6: explicit select (same 500-pattern fix as 3833bdf) — an
+  // unselected findMany also selects Withdrawal.accountType /
+  // accountName / accountDetail, columns prod Neon does not have yet
+  // (rg-withdrawal-account.sql unrun).
   const rows = await prisma.withdrawal.findMany({
     where: { userId: { in: userIds }, fiatCurrency, createdAt: { gte: from, lte: to } },
-    include: { user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } } },
+    select: {
+      id: true,
+      userId: true,
+      createdAt: true,
+      amount: true,
+      method: true,
+      status: true,
+      fiatCurrency: true,
+      user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
   const flags = await annotateWithdrawalFlags(rows.map((w) => ({ id: w.id, userId: w.userId, amount: dec(w.amount), user: w.user })));

@@ -1,52 +1,37 @@
-// Admin dashboard — Referrals (round 11). The round-10 referral section,
-// re-housed unchanged in content, plus the referred-users list. A referred
-// user now opens as a real page (/admin/players/[id]) instead of an overlay.
-
+// Admin dashboard — Referrals (Phase 6 restyle). The referral codes +
+// promo codes + referred-users list, on the shared DataTable with masked
+// contacts (audited Reveal). List / Tree are real routes per Chuks's tab
+// rule — this page is the List; the tree lives at /admin/referrals/tree.
+// Same endpoints as before; no behaviour change.
 "use client";
 
-import { Suspense, useRef, useState } from "react";
-import Link from "next/link";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api, fmtMoney } from "../../../lib/api";
+import { api } from "../../../lib/api";
+import { fmtStaffMoney } from "../../../components/staff-ui/format";
 import { symbolFor } from "../../../lib/country";
 import { useStore } from "../../../lib/store";
-import { useAdminContext, useAdminReferrals, useAdminDownline, useAdminPromoCodes, copyText, shareLink, type DownlineNode } from "../../../lib/admin-client";
+import { useStaffFetch } from "../../../components/staff-ui/useStaffFetch";
+import { PageHeader } from "../../../components/staff-ui/PageHeader";
+import { Card } from "../../../components/staff-ui/Card";
+import { DataTable, type DataColumn } from "../../../components/staff-ui/DataTable";
+import { Tabs } from "../../../components/staff-ui/Tabs";
+import { StatusPill } from "../../../components/staff-ui/Badge";
+import { Button } from "../../../components/staff-ui/Button";
+import { Input, Select, FormField } from "../../../components/staff-ui/Form";
+import { CopyButton } from "../../../components/staff-ui/CopyButton";
+import { Skeleton, ErrorState } from "../../../components/staff-ui/Feedback";
+import { AdminContactValue } from "../../../components/admin/AdminReveal";
 import { canAccessSection } from "../../../lib/rbac";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
+import { shareLink, type AdminIdentity, type PromoCodeRow, type ReferralsData } from "../../../lib/admin-client";
+
+type ReferredUser = ReferralsData["referredUsers"][number];
 
 export default function AdminReferralsPage() {
   return (
-    <main className="rg48-page-main rg23 admin-fb">
-      <div className="wrap">
-        <Suspense fallback={null}>
-          <AdminReferralsInner />
-        </Suspense>
-      </div>
-    </main>
-  );
-}
-
-// P0 Batch 4 (A9): one downline tree node — the player, what they
-// deposited, and the commission earned on them. Renders recursively;
-// the endpoint already caps at 3 levels (deeper = more below).
-function DownlineTreeNode({ n, playerHref }: { n: DownlineNode; playerHref: (id: string) => string }) {
-  return (
-    <li className="b4-tree-node">
-      <div className="b4-tree-card">
-        <Link href={playerHref(n.id)}><b>{n.name}</b></Link>
-        <span>{n.contact || "—"}</span>
-        <span>Deposited {fmtMoney(n.totalDeposited, n.fiatCurrency ?? "GHS")}</span>
-        <span>Commission {fmtMoney(n.commission, n.fiatCurrency ?? "GHS")}</span>
-      </div>
-      {n.children.length > 0 && (
-        <ul className="b4-tree">
-          {n.children.map((c) => (
-            <DownlineTreeNode key={c.id} n={c} playerHref={playerHref} />
-          ))}
-        </ul>
-      )}
-      {n.deeper && <p className="b4-tree-more">+ more below (this view stops at 3 levels)</p>}
-    </li>
+    <Suspense fallback={<Skeleton lines={6} title />}>
+      <AdminReferralsInner />
+    </Suspense>
   );
 }
 
@@ -54,45 +39,38 @@ function AdminReferralsInner() {
   const { user, toast } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ctx, err: ctxErr } = useAdminContext(previewId);
-  const { data, err: refErr, load } = useAdminReferrals(previewId);
-  // P0 Batch 4 (A9): the downline tree — a second view of the same
-  // referrals (List / Tree tabs, same pattern as the commission tabs).
-  const { tree, err: treeErr } = useAdminDownline(previewId);
-  // P1 Batch 1 (A18): promo codes — any player can redeem them, unlike
-  // referral codes (one per user, tied to the admin).
-  const { data: promoData, err: promoErr, load: loadPromos } = useAdminPromoCodes(previewId);
+  const preview = !!previewId;
+  const [newCode, setNewCode] = useState("");
+  const [busy, setBusy] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [promoAmount, setPromoAmount] = useState("");
   const [promoCurrency, setPromoCurrency] = useState<"cash" | "coins">("cash");
   const [promoMaxUses, setPromoMaxUses] = useState("10");
   const [promoExpires, setPromoExpires] = useState("");
   const [promoBusy, setPromoBusy] = useState(false);
-  const [view, setView] = useState<"list" | "tree">("list");
-  const [newCode, setNewCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState<{ id: string; kind: "code" | "link" } | null>(null);
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
 
-  if (!user) return <AdminLoginPrompt />;
-  if (ctxErr) return <AdminError err={ctxErr} />;
-  if (!ctx) return <p>Loading admin panel…</p>;
-  // P0 Batch 3 (O3): the server 403s this section too — this is the
-  // friendly face of that denial (the owner bypasses it in preview).
-  if (!previewId && !canAccessSection(user, "referrals")) return <AdminDenied section="referrals" />;
-  if (refErr) return <AdminError err={refErr} />;
-  if (!data) return <p>Loading admin panel…</p>;
+  const ctxUrl = useMemo(() => {
+    if (!user) return null;
+    return previewId ? `/api/owner/admins/${previewId}/preview` : "/api/admin/context";
+  }, [user, previewId]);
+  const ctx = useStaffFetch<{ admin: AdminIdentity }>(ctxUrl);
+  const refUrl = useMemo(() => {
+    if (!user) return null;
+    return previewId ? `/api/owner/admins/${previewId}/preview` : "/api/admin/referrals";
+  }, [user, previewId]);
+  const ref = useStaffFetch<ReferralsData>(refUrl);
+  const promoUrl = useMemo(() => {
+    if (!user) return null;
+    return previewId ? `/api/admin/promo-codes?adminId=${previewId}` : "/api/admin/promo-codes";
+  }, [user, previewId]);
+  const promos = useStaffFetch<{ codes: PromoCodeRow[] }>(promoUrl);
 
-  const ov = { admin: ctx.admin, ...data };
-
-  const copyRef = (id: string, kind: "code" | "link", text: string, doneMsg: string) => {
-    void copyText(text).then(() => {
-      setCopied({ id, kind });
-      toast(doneMsg, "win");
-      if (copyTimer.current) clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => setCopied(null), 1600);
-    }).catch(() => toast("Copy failed — long-press the text to copy it", "lose"));
-  };
+  const data = ref.data;
+  const admin = ctx.data?.admin;
+  const err = ctx.err || ref.err;
 
   const createCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,17 +79,21 @@ function AdminReferralsInner() {
       await api("/api/admin/codes", { method: "POST", body: JSON.stringify({ code: newCode.trim() || undefined }) });
       setNewCode("");
       toast("Referral code created", "win");
-      await load();
+      ref.reload();
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Could not create code", "lose");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // P1 Batch 1 (A18): create a promo code.
   const createPromo = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = Number(promoAmount);
-    if (!Number.isFinite(amount) || amount <= 0) { toast("Enter a bonus amount above 0", "lose"); return; }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast("Enter a bonus amount above 0", "lose");
+      return;
+    }
     setPromoBusy(true);
     try {
       await api("/api/admin/promo-codes", {
@@ -128,138 +110,273 @@ function AdminReferralsInner() {
       setPromoAmount("");
       setPromoExpires("");
       toast("Promo code created", "win");
-      await loadPromos();
+      promos.reload();
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Could not create promo code", "lose");
-    } finally { setPromoBusy(false); }
+    } finally {
+      setPromoBusy(false);
+    }
   };
 
-  const playerHref = (id: string) => (previewId ? `/admin/players/${id}?preview=${previewId}` : `/admin/players/${id}`);
+  if (!user) return null;
+  if (!previewId && !canAccessSection(user, "referrals")) {
+    return (
+      <ErrorState
+        title="No access to this section."
+        text="You do not have access to the Referrals section. Ask the owner to grant you access from the Owner panel."
+      />
+    );
+  }
+
+  const withPreview = (href: string) => (previewId ? `${href}?preview=${previewId}` : href);
+  const playerHref = (id: string) => withPreview(`/admin/players/${id}`);
+  const needle = q.trim().toLowerCase();
+  const users = (data?.referredUsers ?? []).filter(
+    (u) => !needle || `${u.name} ${u.email ?? ""} ${u.phone ?? ""} ${u.referralCodeUsed ?? ""}`.toLowerCase().includes(needle),
+  );
+  const totalPages = Math.max(1, Math.ceil(users.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = users.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const userColumns: DataColumn<ReferredUser>[] = [
+    {
+      key: "player",
+      label: "Player",
+      render: (u) => u.name,
+      sub: (u) => `Joined ${new Date(u.createdAt).toLocaleDateString("en-GB")}`,
+    },
+    {
+      key: "contact",
+      label: "Contact",
+      render: (u) => <AdminContactValue userId={u.id} contact={u.email || u.phone} preview={preview} />,
+      // The phone card renders details, not the cell — the masked
+      // component (with audited Reveal) must live here too, never the
+      // raw contact (D1: masked by default on every width).
+      details: (u) => [
+        ["Contact", <AdminContactValue key="contact-value" userId={u.id} contact={u.email || u.phone} preview={preview} />],
+      ],
+    },
+    {
+      key: "code",
+      label: "Code used",
+      render: (u) => (u.referralCodeUsed ? <span className="st-mono">{u.referralCodeUsed}</span> : "—"),
+      details: (u) => [["Code used", u.referralCodeUsed ?? "—"]],
+    },
+  ];
+
+  const promoColumns: DataColumn<PromoCodeRow>[] = [
+    {
+      key: "code",
+      label: "Code",
+      render: (c) => <span className="st-mono">{c.code}</span>,
+    },
+    {
+      key: "bonus",
+      label: "Bonus",
+      render: (c) =>
+        c.bonusCurrency === "cash" ? fmtStaffMoney(c.bonusAmount, user?.currency ?? "GHS") : `${c.bonusAmount} coins`,
+      details: (c) => [
+        ["Bonus", c.bonusCurrency === "cash" ? fmtStaffMoney(c.bonusAmount, user?.currency ?? "GHS") : `${c.bonusAmount} coins`],
+      ],
+    },
+    {
+      key: "uses",
+      label: "Uses left",
+      render: (c) => `${c.usesLeft} of ${c.maxUses}`,
+      details: (c) => [["Uses left", `${c.usesLeft} of ${c.maxUses}`]],
+    },
+    {
+      key: "expiry",
+      label: "Expiry",
+      render: (c) => (c.expired ? "Expired" : c.expiresAt ? `Expires ${new Date(c.expiresAt).toLocaleDateString("en-GB")}` : "No expiry"),
+      details: (c) => [
+        ["Expiry", c.expired ? "Expired" : c.expiresAt ? `Expires ${new Date(c.expiresAt).toLocaleDateString("en-GB")}` : "No expiry"],
+      ],
+    },
+  ];
 
   return (
-    <>
-      {previewId ? <AdminPreviewBanner name={ov.admin.name} /> : null}
-      <div className="rg48-hbar-in">
-        <Link className="gp-back" href={previewId ? `/admin?preview=${previewId}` : "/admin"} aria-label="Back to admin overview"><span className="gp-back-coin">←</span></Link>
-        <h2>Referrals</h2>
-      </div>
-      <p className="rg48-sub">{ov.admin.name} · {ov.admin.email} · {ov.admin.commissionPct}% commission{ov.admin.active ? "" : " · DEACTIVATED"}</p>
-      <AdminNav />
-      <section className="admin-sec referral-sec">
-        <h3>Referral — share your link</h3>
-        <p className="referral-sub">Your link earns you <b>{ov.admin.commissionPct}% commission</b> on their deposits. New players get <b>5 extra coins</b>.</p>
-        {ov.codes.length === 0 && <p>No codes yet — create one below.</p>}
-        {ov.codes.map((c) => (
-          <div key={c.id} className="code-row referral-row">
-            <b className="code-chip">{c.code}</b>
-            <span className="code-state">{c.active ? "Active" : "Inactive"}</span>
-            <span className="referral-copy">
-              <button className={`btn btn-ghost btn-sm${copied?.id === c.id && copied?.kind === "code" ? " done" : ""}`} type="button" onClick={() => copyRef(c.id, "code", c.code, "Referral code copied")}>
-                {copied?.id === c.id && copied?.kind === "code" ? "Copied ✓" : "Copy code"}
-              </button>
-              <button className={`btn btn-ghost btn-sm${copied?.id === c.id && copied?.kind === "link" ? " done" : ""}`} type="button" onClick={() => copyRef(c.id, "link", shareLink(c.code), "Referral link copied")}>
-                {copied?.id === c.id && copied?.kind === "link" ? "Copied ✓" : "Copy link"}
-              </button>
-            </span>
-            <span className="code-link">{shareLink(c.code)}</span>
-          </div>
-        ))}
-        {!previewId && (
-          <form className="code-form" onSubmit={createCode}>
-            <input type="text" placeholder="Custom code e.g. RG-GOLD1 (blank = auto)" value={newCode} onChange={(e) => setNewCode(e.target.value.toUpperCase())} pattern="RG-[A-Z0-9]{4,12}" title="RG- followed by 4–12 letters or digits" />
-            <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Creating…" : "Create code"}</button>
-          </form>
-        )}
-      </section>
-      {/* P1 Batch 1 (A18): promo codes — any player can redeem one (unlike
-          referral codes, which are one per user and tie the player to
-          this admin). The list shows uses left and who redeemed each
-          code. The create form is hidden in preview. */}
-      <section className="admin-sec">
-        <h3>Promo codes</h3>
-        <p className="rg48-sub">Any player can redeem a promo code for a bonus — it is not tied to a referral. Expired or fully-used codes are rejected.</p>
-        {promoErr ? <p className="rg48-err">{promoErr}</p> : !promoData ? <p>Loading promo codes…</p> : promoData.codes.length === 0 ? (
-          <p>No promo codes yet.</p>
-        ) : (
-          <div className="promo-list">
-            {promoData.codes.map((c) => (
-              <div key={c.id} className="promo-row">
-                <b className="code-chip sm">{c.code}</b>
-                <span>{c.bonusCurrency === "cash" ? fmtMoney(c.bonusAmount, user?.currency ?? "GHS") : `${c.bonusAmount} coins`}</span>
-                <span>{c.usesLeft} of {c.maxUses} left</span>
-                <span>{c.expired ? "Expired" : c.expiresAt ? `Expires ${new Date(c.expiresAt).toLocaleDateString("en-GB")}` : "No expiry"}</span>
-                {c.redemptions.length > 0 ? (
-                  <span className="promo-redeemers">Redeemed by: {c.redemptions.map((r) => `${r.userName} (${new Date(r.redeemedAt).toLocaleDateString("en-GB")})`).join(", ")}</span>
-                ) : null}
+    <div>
+      <PageHeader
+        title="Referrals"
+        sub={
+          admin
+            ? `${admin.name} · ${admin.commissionPct}% commission${admin.active ? "" : " · DEACTIVATED"}`
+            : "Your referral codes, promo codes and referred players."
+        }
+        backHref={withPreview("/admin")}
+        backLabel="Overview"
+      />
+      <Tabs
+        label="Referrals views"
+        items={[
+          { id: "list", label: "List", href: withPreview("/admin/referrals"), exact: true },
+          { id: "tree", label: "Tree", href: withPreview("/admin/referrals/tree") },
+        ]}
+      />
+      {err ? (
+        <ErrorState title="Could not load referrals." text={err} onRetry={() => { ctx.reload(); ref.reload(); promos.reload(); }} />
+      ) : !data ? (
+        <Skeleton lines={6} title />
+      ) : (
+        <>
+          <Card
+            title="Referral — share your link"
+            sub={`Your link earns you ${admin?.commissionPct ?? 10}% commission on their deposits. New players get 5 extra coins.`}
+          >
+            {data.codes.length === 0 ? <p>No codes yet — create one below.</p> : null}
+            {data.codes.map((c) => (
+              <div key={c.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span className="st-mono">
+                  <b>{c.code}</b>
+                </span>{" "}
+                <StatusPill status={c.active ? "Active" : "Inactive"} />
+                <span className="st-btn-row">
+                  <CopyButton text={c.code} label="Copy code" />
+                  <CopyButton text={shareLink(c.code)} label="Copy link" />
+                </span>
+                <span className="st-mono">{shareLink(c.code)}</span>
               </div>
             ))}
-          </div>
-        )}
-        {!previewId && (
-          <form className="pd-adjust" onSubmit={createPromo}>
-            <div className="pd-adjust-row">
-              <label>Code (optional)
-                <input type="text" placeholder="Blank = auto" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} aria-label="Promo code" />
-              </label>
-              <label>Bonus amount
-                <input type="number" min={0} step={promoCurrency === "cash" ? "0.01" : "1"} inputMode="decimal" placeholder={promoCurrency === "cash" ? "0.00" : "0"} value={promoAmount} onChange={(e) => setPromoAmount(e.target.value)} aria-label="Promo bonus amount" required />
-              </label>
-              <label>Bonus in
-                <select value={promoCurrency} onChange={(e) => setPromoCurrency(e.target.value as "cash" | "coins")} aria-label="Promo bonus currency">
-                  <option value="cash">Cash ({symbolFor(user?.currency ?? "GHS")})</option>
-                  <option value="coins">Coins</option>
-                </select>
-              </label>
-              <label>Max uses
-                <input type="number" min={1} step={1} inputMode="numeric" value={promoMaxUses} onChange={(e) => setPromoMaxUses(e.target.value)} aria-label="Promo max uses" required />
-              </label>
-              <label>Expiry (optional)
-                <input type="date" value={promoExpires} onChange={(e) => setPromoExpires(e.target.value)} aria-label="Promo expiry" />
-              </label>
-            </div>
-            <button className="btn btn-gold" type="submit" disabled={promoBusy}>{promoBusy ? "Creating…" : "Create promo code"}</button>
-          </form>
-        )}
-      </section>
-      <div className="ac-tabs" role="tablist" aria-label="Referrals views">
-        <button type="button" role="tab" id="ref-tab-list" aria-selected={view === "list"} aria-controls="ref-panel-list" className={`ac-tab${view === "list" ? " ac-tab-active" : ""}`} onClick={() => setView("list")}>List</button>
-        <button type="button" role="tab" id="ref-tab-tree" aria-selected={view === "tree"} aria-controls="ref-panel-tree" className={`ac-tab${view === "tree" ? " ac-tab-active" : ""}`} onClick={() => setView("tree")}>Tree</button>
-      </div>
-      {view === "list" ? (
-      <div role="tabpanel" id="ref-panel-list" aria-labelledby="ref-tab-list">
-      <section className="admin-sec">
-        <h3>Referred users ({ov.referredUsers.length}) · {ov.coinsGiven} coins given · {ov.redemptions} redemptions</h3>
-        {ov.referredUsers.length === 0 ? <p>No referred users yet.</p> : (
-          <div className="user-list">
-            {ov.referredUsers.map((u) => (
-              <Link key={u.id} className="user-row" href={playerHref(u.id)}>
-                <b>{u.name}</b><span>{u.email || u.phone || "—"}</span>{u.referralCodeUsed ? <span className="code-chip sm">{u.referralCodeUsed}</span> : <span aria-hidden="true" />}<span>Joined {new Date(u.createdAt).toLocaleDateString("en-GB")}</span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-      </div>
-      ) : (
-      <div role="tabpanel" id="ref-panel-tree" aria-labelledby="ref-tab-tree">
-      <section className="admin-sec">
-        <h3>Downline tree</h3>
-        <p className="rg48-sub">You at the top, your players below — with what each deposited and the commission earned on them.</p>
-        {treeErr ? <p>Could not load the tree.</p> : !tree ? <p>Loading tree…</p> : tree.children.length === 0 ? (
-          <p>No referred users yet.</p>
-        ) : (
-          <div className="b4-tree-root">
-            <div className="b4-tree-card b4-tree-root-card"><b>{tree.root.name}</b><span>{tree.children.length} direct {tree.children.length === 1 ? "referral" : "referrals"}</span></div>
-            <ul className="b4-tree">
-              {tree.children.map((n) => (
-                <DownlineTreeNode key={n.id} n={n} playerHref={playerHref} />
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-      </div>
+            {!preview ? (
+              <form onSubmit={createCode} style={{ marginTop: 12 }}>
+                <FormField label="Custom code" hint="Blank = auto. RG- followed by 4–12 letters or digits.">
+                  <Input
+                    type="text"
+                    placeholder="Custom code e.g. RG-GOLD1 (blank = auto)"
+                    value={newCode}
+                    onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                    pattern="RG-[A-Z0-9]{4,12}"
+                    title="RG- followed by 4–12 letters or digits"
+                    aria-label="Custom referral code"
+                  />
+                </FormField>
+                <Button type="submit" loading={busy}>
+                  Create code
+                </Button>
+              </form>
+            ) : null}
+          </Card>
+
+          <Card
+            title="Promo codes"
+            sub="Any player can redeem a promo code for a bonus — it is not tied to a referral. Expired or fully-used codes are rejected."
+          >
+            <DataTable<PromoCodeRow>
+              viewId="admin-promo-codes"
+              columns={promoColumns}
+              rows={promos.data?.codes ?? []}
+              total={promos.data?.codes.length ?? 0}
+              page={1}
+              pageSize={25}
+              onPageChange={() => {}}
+              loading={promos.loading}
+              error={promos.err}
+              onRetry={promos.reload}
+              emptyTitle="No promo codes yet."
+              emptyText="Create one below — any player can redeem it for a bonus."
+              expandable
+              expandRender={(c) =>
+                c.redemptions.length > 0 ? (
+                  <p>
+                    Redeemed by:{" "}
+                    {c.redemptions.map((r) => `${r.userName} (${new Date(r.redeemedAt).toLocaleDateString("en-GB")})`).join(", ")}
+                  </p>
+                ) : (
+                  <p>No redemptions yet.</p>
+                )
+              }
+            />
+            {!preview ? (
+              <form onSubmit={createPromo} style={{ marginTop: 12 }}>
+                <div className="st-form-row st-form-row-2">
+                  <FormField label="Code (optional)">
+                    <Input
+                      type="text"
+                      placeholder="Blank = auto"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                      aria-label="Promo code"
+                    />
+                  </FormField>
+                  <FormField label="Bonus amount" required>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={promoCurrency === "cash" ? "0.01" : "1"}
+                      inputMode="decimal"
+                      placeholder={promoCurrency === "cash" ? "0.00" : "0"}
+                      value={promoAmount}
+                      onChange={(e) => setPromoAmount(e.target.value)}
+                      aria-label="Promo bonus amount"
+                      required
+                    />
+                  </FormField>
+                  <FormField label="Bonus in">
+                    <Select
+                      value={promoCurrency}
+                      onChange={(e) => setPromoCurrency(e.target.value as "cash" | "coins")}
+                      aria-label="Promo bonus currency"
+                    >
+                      <option value="cash">Cash ({symbolFor(user?.currency ?? "GHS")})</option>
+                      <option value="coins">Coins</option>
+                    </Select>
+                  </FormField>
+                  <FormField label="Max uses" required>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      value={promoMaxUses}
+                      onChange={(e) => setPromoMaxUses(e.target.value)}
+                      aria-label="Promo max uses"
+                      required
+                    />
+                  </FormField>
+                  <FormField label="Expiry (optional)">
+                    <Input
+                      type="date"
+                      value={promoExpires}
+                      onChange={(e) => setPromoExpires(e.target.value)}
+                      aria-label="Promo expiry"
+                    />
+                  </FormField>
+                </div>
+                <Button type="submit" loading={promoBusy}>
+                  Create promo code
+                </Button>
+              </form>
+            ) : null}
+          </Card>
+
+          <Card
+            title={`Referred users (${data.referredUsers.length}) · ${data.coinsGiven} coins given · ${data.redemptions} redemptions`}
+          >
+            <DataTable<ReferredUser>
+              viewId="admin-referrals"
+              columns={userColumns}
+              rows={pageRows}
+              total={users.length}
+              page={safePage}
+              pageSize={pageSize}
+              onPageChange={(p) => setPage(p)}
+              search={q}
+              onSearchChange={(v) => {
+                setQ(v);
+                setPage(1);
+              }}
+              searchPlaceholder="Search name, contact or code…"
+              loading={ref.loading}
+              error={ref.err}
+              onRetry={ref.reload}
+              emptyTitle="No referred users yet."
+              emptyText="Players who sign up with your code show up here."
+              rowHref={(u) => playerHref(u.id)}
+            />
+          </Card>
+        </>
       )}
-    </>
+    </div>
   );
 }

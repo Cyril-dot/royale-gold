@@ -1,21 +1,31 @@
-// Admin dashboard — CRM campaigns (P2 Batch 1, A25). An admin's named
+// Admin dashboard — CRM campaigns (Phase 6 restyle). An admin's named
 // message to all their players, one segment, or hand-picked players.
 // The recipient count is previewed from the real tables BEFORE the
-// campaign is created or sent (same resolver as the send, so the
-// number shown is the number that gets the message). Sending creates
-// one in-app Notification row per recipient (in-app only — no email,
-// SMS or push) + an AuditLog "campaign.send" row. A campaign sends
-// ONCE — no resend, no edit after sending.
-
+// campaign is created or sent (same resolver as the send, so the number
+// shown is the number that gets the message). Sending creates one
+// in-app Notification row per recipient (in-app only — no email, SMS or
+// push) + an AuditLog "campaign.send" row. A campaign sends ONCE — no
+// resend, no edit after sending. Send goes through the shared
+// ConfirmDialog; it takes no reason — the endpoint cannot record one.
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../../lib/store";
 import { api } from "../../../lib/api";
-import { useAdminContext, useAdminCampaigns, useAdminSegments } from "../../../lib/admin-client";
+import { useStaffFetch } from "../../../components/staff-ui/useStaffFetch";
+import { PageHeader } from "../../../components/staff-ui/PageHeader";
+import { Card } from "../../../components/staff-ui/Card";
+import { DataTable, type DataColumn } from "../../../components/staff-ui/DataTable";
+import { StatusPill } from "../../../components/staff-ui/Badge";
+import { ConfirmDialog } from "../../../components/staff-ui/Dialog";
+import { Button } from "../../../components/staff-ui/Button";
+import { Input, Select, FormField } from "../../../components/staff-ui/Form";
+import { Segmented } from "../../../components/staff-ui/Tabs";
+import { Skeleton, ErrorState } from "../../../components/staff-ui/Feedback";
+import { AdminContactValue } from "../../../components/admin/AdminReveal";
 import { canAccessSection } from "../../../lib/rbac";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
+import type { CampaignRow, PlayerSegmentRow } from "../../../lib/admin-client";
 
 const SEGMENT_OPTIONS = [
   { key: "new", label: "New" },
@@ -25,13 +35,36 @@ const SEGMENT_OPTIONS = [
   { key: "at-risk", label: "At risk" },
 ];
 
+interface SegmentsData {
+  players: PlayerSegmentRow[];
+  counts: Record<string, number>;
+  total: number;
+}
+
+export default function AdminCampaignsPage() {
+  return (
+    <Suspense fallback={<Skeleton lines={6} title />}>
+      <AdminCampaignsInner />
+    </Suspense>
+  );
+}
+
 function AdminCampaignsInner() {
   const { user, toast } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ctx, err: ctxErr } = useAdminContext(previewId);
-  const { data, err, load } = useAdminCampaigns(previewId);
-  const { data: seg } = useAdminSegments(previewId);
+  const preview = !!previewId;
+
+  const listUrl = useMemo(() => {
+    if (!user) return null;
+    return previewId ? `/api/owner/campaigns?adminId=${previewId}` : "/api/admin/campaigns";
+  }, [user, previewId]);
+  const list = useStaffFetch<{ campaigns: CampaignRow[] }>(listUrl);
+  const segUrl = useMemo(() => {
+    if (!user) return null;
+    return previewId ? `/api/admin/players/segments?adminId=${previewId}` : "/api/admin/players/segments";
+  }, [user, previewId]);
+  const seg = useStaffFetch<SegmentsData>(segUrl);
 
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
@@ -39,13 +72,16 @@ function AdminCampaignsInner() {
   const [segment, setSegment] = useState("active");
   const [picked, setPicked] = useState<string[]>([]);
   const [pickerQ, setPickerQ] = useState("");
-  const [preview, setPreview] = useState<{ count: number; sample: { id: string; name: string; contact: string | null }[] } | null>(null);
+  const [previewCount, setPreviewCount] = useState<{ count: number; sample: { id: string; name: string; contact: string | null }[] } | null>(null);
   const [previewErr, setPreviewErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [sendBusy, setSendBusy] = useState("");
+  const [confirmSend, setConfirmSend] = useState<CampaignRow | null>(null);
+  const [sendBusy, setSendBusy] = useState(false);
 
   // The recipient preview — re-resolved from the real tables whenever
   // the audience changes, so the count shown is the count that sends.
+  // setState happens only inside the async callback (the shape the
+  // lint rule accepts), never synchronously in the effect body.
   useEffect(() => {
     if (previewId) return;
     let live = true;
@@ -53,23 +89,41 @@ function AdminCampaignsInner() {
     if (audience === "segment") qs.set("segment", segment);
     if (audience === "players") qs.set("players", picked.join(","));
     api<{ count: number; sample: { id: string; name: string; contact: string | null }[] }>(`/api/admin/campaigns/preview?${qs.toString()}`)
-      .then((r) => { if (live) { setPreview(r); setPreviewErr(""); } })
-      .catch((ex) => { if (live) { setPreview(null); setPreviewErr(ex instanceof Error ? ex.message : "Preview failed"); } });
-    return () => { live = false; };
+      .then((r) => {
+        if (live) {
+          setPreviewCount(r);
+          setPreviewErr("");
+        }
+      })
+      .catch((ex) => {
+        if (live) {
+          setPreviewCount(null);
+          setPreviewErr(ex instanceof Error ? ex.message : "Preview failed");
+        }
+      });
+    return () => {
+      live = false;
+    };
   }, [previewId, audience, segment, picked]);
 
-  if (!user) return <AdminLoginPrompt />;
-  if (ctxErr) return <AdminError err={ctxErr} />;
-  if (!ctx) return <p>Loading admin panel…</p>;
-  if (!previewId && !canAccessSection(user, "campaigns")) return <AdminDenied section="campaigns" />;
+  if (!user) return null;
+  if (!previewId && !canAccessSection(user, "campaigns")) {
+    return (
+      <ErrorState
+        title="No access to this section."
+        text="You do not have access to the Campaigns section. Ask the owner to grant you access from the Owner panel."
+      />
+    );
+  }
 
-  const campaigns = data?.campaigns ?? [];
+  const withPreview = (href: string) => (previewId ? `${href}?preview=${previewId}` : href);
+  const campaigns = list.data?.campaigns ?? [];
   const drafts = campaigns.filter((c) => c.status === "draft");
   const sent = campaigns.filter((c) => c.status === "sent");
-  const players = seg?.players ?? [];
+  const players = seg.data?.players ?? [];
   const needle = pickerQ.trim().toLowerCase();
-  const pickerList = players.filter((p) =>
-    !needle || [p.name, p.email || "", p.phone || ""].join(" ").toLowerCase().includes(needle),
+  const pickerList = players.filter(
+    (p) => !needle || [p.name, p.email || "", p.phone || ""].join(" ").toLowerCase().includes(needle),
   );
 
   const togglePicked = (id: string) => {
@@ -78,8 +132,14 @@ function AdminCampaignsInner() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim().length < 2 || message.trim().length < 2) { toast("Write a name and a message first", "lose"); return; }
-    if (audience === "players" && picked.length === 0) { toast("Pick at least one player", "lose"); return; }
+    if (name.trim().length < 2 || message.trim().length < 2) {
+      toast("Write a name and a message first", "lose");
+      return;
+    }
+    if (audience === "players" && picked.length === 0) {
+      toast("Pick at least one player", "lose");
+      return;
+    }
     setBusy(true);
     try {
       await api("/api/admin/campaigns", {
@@ -92,145 +152,246 @@ function AdminCampaignsInner() {
           ...(audience === "players" ? { targetPlayerIds: picked } : {}),
         }),
       });
-      toast(`Draft created — reaches ${preview?.count ?? "?"} players`, "win");
+      toast(`Draft created — reaches ${previewCount?.count ?? "?"} players`, "win");
       setName("");
       setMessage("");
       setPicked([]);
-      await load();
+      list.reload();
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Campaign failed", "lose");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const send = async (id: string, cname: string) => {
-    setSendBusy(id);
+  const send = async () => {
+    if (!confirmSend) return;
+    setSendBusy(true);
     try {
-      const r = await api<{ campaign: { recipientCount: number } }>(`/api/admin/campaigns/${id}/send`, { method: "POST" });
-      toast(`"${cname}" sent to ${r.campaign.recipientCount} players`, "win");
-      await load();
+      const r = await api<{ campaign: { recipientCount: number } }>(`/api/admin/campaigns/${confirmSend.id}/send`, { method: "POST" });
+      toast(`"${confirmSend.name}" sent to ${r.campaign.recipientCount} players`, "win");
+      setConfirmSend(null);
+      list.reload();
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Send failed", "lose");
-    } finally { setSendBusy(""); }
+    } finally {
+      setSendBusy(false);
+    }
   };
 
-  return (
-    <>
-      {previewId ? <AdminPreviewBanner name={ctx.admin.name} /> : null}
-      <div className="rg48-hbar-in">
-        <h2>CRM <em>campaigns</em></h2>
-      </div>
-      <p className="rg48-sub">Message your players in-app — all of them, one segment, or hand-picked players. A campaign sends once: no resend, no edit after sending. In-app only — no email, SMS or push.</p>
-      <AdminNav />
+  const draftColumns: DataColumn<CampaignRow>[] = [
+    {
+      key: "name",
+      label: "Draft",
+      render: (c) => c.name,
+      sub: (c) => `${c.audienceLabel} · created ${new Date(c.createdAt).toLocaleDateString("en-GB")}`,
+    },
+    {
+      key: "recipients",
+      label: "Recipients",
+      render: (c) => String(c.recipientCount),
+      details: (c) => [["Recipients", String(c.recipientCount)]],
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: () => <StatusPill status="draft" />,
+      details: () => [["Status", "draft"]],
+    },
+  ];
+  const sentColumns: DataColumn<CampaignRow>[] = [
+    {
+      key: "name",
+      label: "Campaign",
+      render: (c) => c.name,
+      sub: (c) =>
+        `${c.audienceLabel} · sent ${c.sentAt ? new Date(c.sentAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}`,
+    },
+    {
+      key: "recipients",
+      label: "Recipients",
+      render: (c) => String(c.recipientCount),
+      details: (c) => [["Recipients", String(c.recipientCount)]],
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: () => <StatusPill status="sent" />,
+      details: () => [["Status", "sent"]],
+    },
+  ];
+  const messageExpand = (c: CampaignRow) => <p>{c.message}</p>;
 
-      {!previewId && (
-        <section className="admin-sec">
-          <h3>New campaign</h3>
-          <form className="pd-note-form" onSubmit={create}>
-            <input type="text" placeholder="Campaign name — e.g. Weekend boost" value={name} onChange={(e) => setName(e.target.value)} aria-label="Campaign name" maxLength={120} />
-            <textarea placeholder="Message — what do your players need to hear?" value={message} onChange={(e) => setMessage(e.target.value)} aria-label="Campaign message" rows={3} maxLength={2000} />
-            <div className="money-chips" role="group" aria-label="Audience">
-              <button type="button" className={audience === "all" ? "on" : ""} onClick={() => setAudience("all")}>All my players</button>
-              <button type="button" className={audience === "segment" ? "on" : ""} onClick={() => setAudience("segment")}>One segment</button>
-              <button type="button" className={audience === "players" ? "on" : ""} onClick={() => setAudience("players")}>Hand-picked players</button>
+  return (
+    <div>
+      <PageHeader
+        title="CRM campaigns"
+        sub="Message your players in-app — all of them, one segment, or hand-picked players. A campaign sends once: no resend, no edit after sending. In-app only — no email, SMS or push."
+        backHref={withPreview("/admin")}
+        backLabel="Overview"
+      />
+
+      {!preview ? (
+        <Card title="New campaign">
+          <form onSubmit={create}>
+            <div className="st-form-row">
+              <FormField label="Campaign name" required>
+                <Input
+                  type="text"
+                  placeholder="Campaign name — e.g. Weekend boost"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  aria-label="Campaign name"
+                  maxLength={120}
+                />
+              </FormField>
+              <FormField label="Message" required>
+                <textarea
+                  className="st-input"
+                  placeholder="Message — what do your players need to hear?"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  aria-label="Campaign message"
+                  rows={3}
+                  maxLength={2000}
+                />
+              </FormField>
             </div>
-            {audience === "segment" && (
-              <label className="pd-adjust-reason">Segment
-                <select value={segment} onChange={(e) => setSegment(e.target.value)} aria-label="Segment">
-                  {SEGMENT_OPTIONS.map((s) => (
-                    <option key={s.key} value={s.key}>{s.label} ({seg?.counts[s.key as keyof typeof seg.counts] ?? 0})</option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {audience === "players" && (
-              <>
-                <label className="players-search">
-                  <input type="search" placeholder="Search players to pick" value={pickerQ} onChange={(e) => setPickerQ(e.target.value)} aria-label="Search players" />
-                </label>
-                <div className="cmp-picker">
+            <Segmented
+              label="Audience"
+              value={audience}
+              onChange={(id) => setAudience(id as "all" | "segment" | "players")}
+              items={[
+                { id: "all", label: "All my players" },
+                { id: "segment", label: "One segment" },
+                { id: "players", label: "Hand-picked players" },
+              ]}
+            />
+            {audience === "segment" ? (
+              <div style={{ marginTop: 12 }}>
+                <FormField label="Segment">
+                  <Select value={segment} onChange={(e) => setSegment(e.target.value)} aria-label="Segment">
+                    {SEGMENT_OPTIONS.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        {s.label} ({seg.data?.counts[s.key] ?? 0})
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
+            ) : null}
+            {audience === "players" ? (
+              <div style={{ marginTop: 12 }}>
+                <FormField label="Search players to pick">
+                  <Input
+                    type="search"
+                    placeholder="Search players to pick"
+                    value={pickerQ}
+                    onChange={(e) => setPickerQ(e.target.value)}
+                    aria-label="Search players"
+                  />
+                </FormField>
+                <div>
                   {pickerList.length === 0 ? (
                     <p>No players match.</p>
                   ) : (
                     pickerList.map((p) => (
-                      <label key={p.id} className="cmp-pick">
+                      <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0" }}>
                         <input type="checkbox" checked={picked.includes(p.id)} onChange={() => togglePicked(p.id)} />
-                        <span><b>{p.name}</b> {p.email || p.phone || ""}</span>
+                        <span>
+                          <b>{p.name}</b>{" "}
+                          <AdminContactValue userId={p.id} contact={p.email || p.phone} preview={preview} />
+                        </span>
                       </label>
                     ))
                   )}
                 </div>
-                <p className="rg48-mini">{picked.length} picked.</p>
-              </>
-            )}
+                <p>{picked.length} picked.</p>
+              </div>
+            ) : null}
             {previewErr ? (
-              <p className="rg48-err">{previewErr}</p>
-            ) : preview ? (
-              <p className="rg48-sub">
-                Reaches <b>{preview.count} {preview.count === 1 ? "player" : "players"}</b>
-                {preview.sample.length > 0 ? ` — ${preview.sample.map((s) => s.name).join(", ")}${preview.count > preview.sample.length ? ", …" : ""}` : ""}.
+              <p className="st-field-error" role="alert">
+                {previewErr}
+              </p>
+            ) : previewCount ? (
+              <p>
+                Reaches <b>{previewCount.count} {previewCount.count === 1 ? "player" : "players"}</b>
+                {previewCount.sample.length > 0
+                  ? ` — ${previewCount.sample.map((s) => s.name).join(", ")}${previewCount.count > previewCount.sample.length ? ", …" : ""}`
+                  : ""}
+                .
               </p>
             ) : (
-              <p className="rg48-sub">Counting recipients…</p>
+              <p>Counting recipients…</p>
             )}
-            <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Creating…" : "Create draft"}</button>
+            <Button type="submit" loading={busy}>
+              Create draft
+            </Button>
           </form>
-        </section>
-      )}
+        </Card>
+      ) : null}
 
-      <section className="admin-sec">
-        <h3>Drafts ({drafts.length})</h3>
-        {err ? <p className="rg48-err">{err}</p> : null}
-        {!data ? (
-          <p>Loading campaigns…</p>
-        ) : drafts.length === 0 ? (
-          <p>No drafts — create one above.</p>
-        ) : (
-          <div className="cmp-list">
-            {drafts.map((c) => (
-              <article key={c.id} className="cmp-row">
-                <div className="cmp-head"><b>{c.name}</b><span className="tk-status tk-open">draft</span></div>
-                <p>{c.message}</p>
-                <p className="rg48-sub">{c.audienceLabel} · created {new Date(c.createdAt).toLocaleDateString("en-GB")}</p>
-                {!previewId && (
-                  <button className="btn btn-gold" type="button" disabled={sendBusy === c.id} onClick={() => void send(c.id, c.name)}>
-                    {sendBusy === c.id ? "Sending…" : `Send to ${c.recipientCount} ${c.recipientCount === 1 ? "player" : "players"}`}
-                  </button>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <Card title={`Drafts (${drafts.length})`}>
+        <DataTable<CampaignRow>
+          viewId="admin-campaigns-drafts"
+          columns={draftColumns}
+          rows={drafts}
+          total={drafts.length}
+          page={1}
+          pageSize={25}
+          onPageChange={() => {}}
+          loading={list.loading}
+          error={list.err}
+          onRetry={list.reload}
+          emptyTitle="No drafts."
+          emptyText="Create one above — a draft sends once, then it cannot be edited or resent."
+          expandable
+          expandRender={messageExpand}
+          rowActions={
+            preview
+              ? []
+              : [{ label: "Send", onClick: (c) => setConfirmSend(c) }]
+          }
+        />
+      </Card>
 
-      <section className="admin-sec">
-        <h3>Sent ({sent.length})</h3>
-        {sent.length === 0 ? (
-          <p>Nothing sent yet.</p>
-        ) : (
-          <div className="cmp-list">
-            {sent.map((c) => (
-              <article key={c.id} className="cmp-row">
-                <div className="cmp-head"><b>{c.name}</b><span className="tk-status tk-closed">sent</span></div>
-                <p>{c.message}</p>
-                <p className="rg48-sub">{c.audienceLabel} · sent {c.sentAt ? new Date(c.sentAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</p>
-              </article>
-            ))}
-          </div>
-        )}
-        <p className="rg48-mini">Sent campaigns cannot be resent or edited — create a new one to message again.</p>
-      </section>
-    </>
-  );
-}
+      <Card title={`Sent (${sent.length})`} sub="Sent campaigns cannot be resent or edited — create a new one to message again.">
+        <DataTable<CampaignRow>
+          viewId="admin-campaigns-sent"
+          columns={sentColumns}
+          rows={sent}
+          total={sent.length}
+          page={1}
+          pageSize={25}
+          onPageChange={() => {}}
+          loading={list.loading}
+          error={list.err}
+          onRetry={list.reload}
+          emptyTitle="Nothing sent yet."
+          emptyText="Sent campaigns show up here."
+          expandable
+          expandRender={messageExpand}
+        />
+      </Card>
 
-export default function AdminCampaignsPage() {
-  return (
-    <main className="rg48-page-main rg23 admin-fb">
-      <div className="wrap">
-        <Suspense fallback={<p>Loading admin panel…</p>}>
-          <AdminCampaignsInner />
-        </Suspense>
-      </div>
-    </main>
+      <ConfirmDialog
+        open={confirmSend !== null}
+        onClose={() => setConfirmSend(null)}
+        onConfirm={() => void send()}
+        title="Send campaign"
+        body="This sends once to every recipient's in-app inbox. It cannot be resent, edited or unsent. In-app only — no email, SMS or push."
+        facts={
+          confirmSend
+            ? [
+                { label: "Campaign", value: confirmSend.name },
+                { label: "Recipients", value: `${confirmSend.recipientCount} ${confirmSend.recipientCount === 1 ? "player" : "players"}` },
+                { label: "Audience", value: confirmSend.audienceLabel },
+              ]
+            : []
+        }
+        confirmLabel="Send now"
+        busy={sendBusy}
+      />
+    </div>
   );
 }

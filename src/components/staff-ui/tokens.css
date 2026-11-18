@@ -2021,3 +2021,54 @@
 .staff .st-cardlist-row.st-row-selected {
   background: rgba(242, 194, 48, 0.1);
 }
+
+/* Downline tree (Phase 6, admin Referrals / Tree). Mirrors the old
+   .b4-tree rules so the tree keeps its shape once legacy CSS goes. */
+.staff .st-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+  border-left: 1px solid rgba(242, 194, 48, 0.35);
+}
+.staff .st-tree-node {
+  margin: 10px 0;
+}
+.staff .st-tree-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  background: rgba(4, 6, 13, 0.35);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+.staff .st-tree-card b {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.staff .st-tree-card b a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.staff .st-tree-card span {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* Preformatted tool output (Phase 6, admin Lookup). Mirrors the old
+   .lookup-pre rule so the JSON block keeps its shape once legacy CSS goes. */
+.staff .st-pre {
+  background: #070812;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}

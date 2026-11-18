@@ -1,24 +1,29 @@
-// Admin dashboard — Bet lookup + provably-fair verify (P1 Batch 1,
-// A16). Three tools on one page:
+// Admin dashboard — Bet lookup + provably-fair verify (Phase 6 restyle).
+// Three tools on one page:
 //   1. Look up ANY round by its id (game, stake, payout, result, date).
 //   2. Look up a player's rounds in a date range.
-//   3. Verify a crash round: recompute the crash point from the
-//      revealed server seed and compare the seed hash — the seed is
-//      returned only for a FINISHED round, never a live one.
-// An admin sees only their own players' rounds; the owner previews one
-// admin's rounds with ?preview=<adminId>. The round id is the
-// GameResult id (shown on the player detail bet history).
-
+//   3. Verify a crash round: recompute the crash point from the revealed
+//      server seed and compare the seed hash — the seed is returned only
+//      for a FINISHED round, never a live one.
+// Restyle only — no new lookup powers. Ids, seeds and hashes now have
+// Copy buttons; player contacts are masked with audited Reveal.
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../../lib/store";
 import { api, fmtMoney } from "../../../lib/api";
 import { todayStr } from "../../../lib/money";
-import { useAdminContext, useAdminPlayers } from "../../../lib/admin-client";
+import { useStaffFetch } from "../../../components/staff-ui/useStaffFetch";
+import { PageHeader } from "../../../components/staff-ui/PageHeader";
+import { Card } from "../../../components/staff-ui/Card";
+import { DataTable, type DataColumn } from "../../../components/staff-ui/DataTable";
+import { Button } from "../../../components/staff-ui/Button";
+import { Input, Select, FormField } from "../../../components/staff-ui/Form";
+import { CopyButton } from "../../../components/staff-ui/CopyButton";
+import { Skeleton, ErrorState } from "../../../components/staff-ui/Feedback";
+import { AdminContactValue } from "../../../components/admin/AdminReveal";
 import { canAccessSection } from "../../../lib/rbac";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
 
 interface LookupRound {
   id: string;
@@ -57,12 +62,41 @@ interface RecentRound {
   finished: boolean;
 }
 
+interface LookupPlayer {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+}
+
+export default function AdminLookupPage() {
+  return (
+    <Suspense fallback={<Skeleton lines={6} title />}>
+      <AdminLookupInner />
+    </Suspense>
+  );
+}
+
+function moneyOrCoins(r: LookupRound, n: number, signed: boolean, fiat: string): string {
+  if (r.currency === "coins") return `${signed && n >= 0 ? "+" : ""}${Math.round(n)} coins`;
+  const abs = fmtMoney(Math.abs(n), r.fiatCurrency ?? fiat);
+  if (!signed) return abs;
+  return n >= 0 ? `+${abs}` : `−${abs}`;
+}
+
 function AdminLookupInner() {
   const { user } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ctx, err: ctxErr } = useAdminContext(previewId);
-  const { players, err: playersErr } = useAdminPlayers(previewId);
+  const preview = !!previewId;
+  const fiat = user?.currency ?? "GHS";
+
+  const playersUrl = useMemo(() => {
+    if (!user) return null;
+    return previewId ? `/api/admin/players/segments?adminId=${previewId}` : "/api/admin/players";
+  }, [user, previewId]);
+  const playersFetch = useStaffFetch<{ players?: LookupPlayer[]; referredUsers?: LookupPlayer[] }>(playersUrl);
+  const players = playersFetch.data?.players ?? playersFetch.data?.referredUsers ?? [];
 
   const [roundId, setRoundId] = useState("");
   const [round, setRound] = useState<LookupRound | null>(null);
@@ -84,19 +118,27 @@ function AdminLookupInner() {
 
   const [recent, setRecent] = useState<RecentRound[] | null>(null);
   const [recentErr, setRecentErr] = useState("");
+  const [recentBusy, setRecentBusy] = useState(false);
 
-  if (!user) return <AdminLoginPrompt />;
-  if (ctxErr) return <AdminError err={ctxErr} />;
-  if (!ctx) return <p>Loading admin panel…</p>;
-  // P0 Batch 3 (O3): the server 403s this section too.
-  if (!previewId && !canAccessSection(user, "lookup")) return <AdminDenied section="lookup" />;
-  if (playersErr) return <AdminError err={playersErr} />;
+  if (!user) return null;
+  if (!previewId && !canAccessSection(user, "lookup")) {
+    return (
+      <ErrorState
+        title="No access to this section."
+        text="You do not have access to the Lookup section. Ask the owner to grant you access from the Owner panel."
+      />
+    );
+  }
 
+  const withPreview = (href: string) => (previewId ? `${href}?preview=${previewId}` : href);
   const adminSuffix = previewId ? `&adminId=${previewId}` : "";
 
   const lookupRound = async () => {
     const id = roundId.trim();
-    if (!id) { setRoundErr("Enter a round id."); return; }
+    if (!id) {
+      setRoundErr("Enter a round id.");
+      return;
+    }
     setRoundBusy(true);
     setRoundErr("");
     try {
@@ -105,11 +147,16 @@ function AdminLookupInner() {
     } catch (ex) {
       setRound(null);
       setRoundErr(ex instanceof Error ? ex.message : "Lookup failed.");
-    } finally { setRoundBusy(false); }
+    } finally {
+      setRoundBusy(false);
+    }
   };
 
   const lookupPlayer = async () => {
-    if (!lookupUser) { setPlayerErr("Pick a player."); return; }
+    if (!lookupUser) {
+      setPlayerErr("Pick a player.");
+      return;
+    }
     setPlayerBusy(true);
     setPlayerErr("");
     try {
@@ -125,12 +172,17 @@ function AdminLookupInner() {
     } catch (ex) {
       setPlayerRounds(null);
       setPlayerErr(ex instanceof Error ? ex.message : "Lookup failed.");
-    } finally { setPlayerBusy(false); }
+    } finally {
+      setPlayerBusy(false);
+    }
   };
 
   const verifyRound = async (id?: string) => {
     const rid = (id ?? verifyId).trim();
-    if (!rid) { setVerifyErr("Enter a crash round id."); return; }
+    if (!rid) {
+      setVerifyErr("Enter a crash round id.");
+      return;
+    }
     setVerifyBusy(true);
     setVerifyErr("");
     try {
@@ -140,142 +192,298 @@ function AdminLookupInner() {
     } catch (ex) {
       setVerify(null);
       setVerifyErr(ex instanceof Error ? ex.message : "Verify failed.");
-    } finally { setVerifyBusy(false); }
+    } finally {
+      setVerifyBusy(false);
+    }
   };
 
   const loadRecent = async () => {
     setRecentErr("");
+    setRecentBusy(true);
     try {
       const r = await api<{ rounds: RecentRound[] }>("/api/admin/lookup/recent-rounds");
       setRecent(r.rounds);
     } catch (ex) {
       setRecentErr(ex instanceof Error ? ex.message : "Could not load recent rounds.");
+    } finally {
+      setRecentBusy(false);
     }
   };
 
-  const roundRows = (r: LookupRound) => (
-    <>
-      <div className="sum-cards">
-        <div className="sum-card"><span>Game</span><b>{r.gameName}</b></div>
-        <div className="sum-card"><span>Stake</span><b>{r.currency === "coins" ? `${Math.round(r.stake)} coins` : fmtMoney(r.stake, r.fiatCurrency ?? user?.currency ?? "GHS")}</b></div>
-        <div className="sum-card"><span>Payout</span><b>{r.currency === "coins" ? `${Math.round(r.payout)} coins` : fmtMoney(r.payout, r.fiatCurrency ?? user?.currency ?? "GHS")}</b></div>
-        <div className="sum-card"><span>Net</span><b>{r.currency === "coins" ? `${r.net >= 0 ? "+" : ""}${Math.round(r.net)} coins` : `${r.net >= 0 ? "+" : "−"}${fmtMoney(Math.abs(r.net), r.fiatCurrency ?? user?.currency ?? "GHS")}`}</b></div>
-      </div>
-      <p className="rg48-sub">Player: {r.userName}{r.userContact ? ` · ${r.userContact}` : ""} · {new Date(r.createdAt).toLocaleString("en-GB")}</p>
-      <p className="rg48-sub">Round id: <code>{r.id}</code></p>
-      <pre className="lookup-pre">{JSON.stringify(r.result, null, 2)}</pre>
-    </>
-  );
+  const roundColumns: DataColumn<LookupRound>[] = [
+    {
+      key: "game",
+      label: "Game",
+      render: (r) => r.gameName,
+    },
+    {
+      key: "stake",
+      label: "Stake",
+      render: (r) => moneyOrCoins(r, r.stake, false, fiat),
+      details: (r) => [["Stake", moneyOrCoins(r, r.stake, false, fiat)]],
+    },
+    {
+      key: "net",
+      label: "Net",
+      render: (r) => (
+        <span className={r.net >= 0 ? "st-ok-text" : "st-bad-text"}>{moneyOrCoins(r, r.net, true, fiat)}</span>
+      ),
+      details: (r) => [["Net", moneyOrCoins(r, r.net, true, fiat)]],
+    },
+    {
+      key: "time",
+      label: "Time",
+      render: (r) =>
+        new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+      details: (r) => [
+        [
+          "Time",
+          new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+        ],
+      ],
+    },
+  ];
+
+  const recentColumns: DataColumn<RecentRound>[] = [
+    {
+      key: "point",
+      label: "Crash point",
+      render: (r) => `×${r.crashPoint.toFixed(2)}`,
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (r) => (r.finished ? "Finished" : "Live"),
+      details: (r) => [["Status", r.finished ? "Finished" : "Live"]],
+    },
+    {
+      key: "round",
+      label: "Round",
+      render: (r) => <code>{r.roundId.slice(0, 12)}…</code>,
+      details: (r) => [["Round", r.roundId]],
+    },
+    {
+      key: "time",
+      label: "Time",
+      render: (r) =>
+        new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+      details: (r) => [
+        [
+          "Time",
+          new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+        ],
+      ],
+    },
+  ];
 
   return (
-    <>
-      {previewId ? <AdminPreviewBanner name={ctx.admin.name} /> : null}
-      <div className="rg48-hbar-in">
-        <h2>Bet lookup</h2>
-      </div>
-      <p className="rg48-sub">Look up any round by its id, or a player’s rounds by date. Crash rounds can be verified against their seed hash below.</p>
-      <AdminNav />
+    <div>
+      <PageHeader
+        title="Bet lookup"
+        sub="Look up any round by its id, or a player's rounds by date. Crash rounds can be verified against their seed hash below."
+        backHref={withPreview("/admin")}
+        backLabel="Overview"
+      />
 
-      <section className="admin-sec">
-        <h3>Look up a round</h3>
-        <div className="lookup-form">
-          <input
-            type="text"
-            placeholder="Round id (from the player’s bet history)"
-            value={roundId}
-            onChange={(e) => setRoundId(e.target.value)}
-            aria-label="Round id"
-          />
-          <button className="btn btn-gold" type="button" disabled={roundBusy} onClick={() => void lookupRound()}>Look up</button>
+      <Card title="Look up a round">
+        <div className="st-form-row">
+          <FormField label="Round id">
+            <Input
+              type="text"
+              placeholder="Round id (from the player's bet history)"
+              value={roundId}
+              onChange={(e) => setRoundId(e.target.value)}
+              aria-label="Round id"
+            />
+          </FormField>
         </div>
-        {roundErr ? <p className="rg48-err">{roundErr}</p> : null}
-        {round ? roundRows(round) : null}
-      </section>
+        <Button loading={roundBusy} onClick={() => void lookupRound()}>
+          Look up
+        </Button>
+        {roundErr ? (
+          <p className="st-field-error" role="alert">
+            {roundErr}
+          </p>
+        ) : null}
+        {round ? (
+          <div style={{ marginTop: 12 }}>
+            <div className="st-kpi-grid">
+              <div className="st-kpi st-kpi-static">
+                <span className="st-kpi-label">Game</span>
+                <span className="st-kpi-value">{round.gameName}</span>
+              </div>
+              <div className="st-kpi st-kpi-static">
+                <span className="st-kpi-label">Stake</span>
+                <span className="st-kpi-value">{moneyOrCoins(round, round.stake, false, fiat)}</span>
+              </div>
+              <div className="st-kpi st-kpi-static">
+                <span className="st-kpi-label">Payout</span>
+                <span className="st-kpi-value">{moneyOrCoins(round, round.payout, false, fiat)}</span>
+              </div>
+              <div className="st-kpi st-kpi-static">
+                <span className="st-kpi-label">Net</span>
+                <span className="st-kpi-value">{moneyOrCoins(round, round.net, true, fiat)}</span>
+              </div>
+            </div>
+            <p>
+              Player: {round.userName}{" "}
+              <AdminContactValue userId={round.userId} contact={round.userContact} preview={preview} /> ·{" "}
+              {new Date(round.createdAt).toLocaleString("en-GB")}
+            </p>
+            <p>
+              Round id: <code className="st-mono">{round.id}</code> <CopyButton text={round.id} label="Copy round id" />
+            </p>
+            <pre className="st-pre">{JSON.stringify(round.result, null, 2)}</pre>
+          </div>
+        ) : null}
+      </Card>
 
-      <section className="admin-sec">
-        <h3>Look up a player’s rounds</h3>
-        <div className="lookup-form">
-          <select value={lookupUser} onChange={(e) => setLookupUser(e.target.value)} aria-label="Player">
-            <option value="">Pick a player…</option>
-            {(players ?? []).map((p) => (
-              <option key={p.id} value={p.id}>{p.name}{p.email ? ` — ${p.email}` : ""}</option>
-            ))}
-          </select>
-          <label>From <input type="date" value={from} max={todayStr()} onChange={(e) => setFrom(e.target.value)} /></label>
-          <label>To <input type="date" value={to} max={todayStr()} onChange={(e) => setTo(e.target.value)} /></label>
-          <button className="btn btn-gold" type="button" disabled={playerBusy} onClick={() => void lookupPlayer()}>Look up</button>
+      <Card title="Look up a player's rounds">
+        <div className="st-form-row st-form-row-2">
+          <FormField label="Player">
+            <Select value={lookupUser} onChange={(e) => setLookupUser(e.target.value)} aria-label="Player">
+              <option value="">Pick a player…</option>
+              {players.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.email ? ` — ${p.email}` : ""}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="From">
+            <Input type="date" value={from} max={todayStr()} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
+          </FormField>
+          <FormField label="To">
+            <Input type="date" value={to} max={todayStr()} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
+          </FormField>
         </div>
-        {playerErr ? <p className="rg48-err">{playerErr}</p> : null}
+        <Button loading={playerBusy} onClick={() => void lookupPlayer()}>
+          Look up
+        </Button>
+        {playerErr ? (
+          <p className="st-field-error" role="alert">
+            {playerErr}
+          </p>
+        ) : null}
+        {playersFetch.err ? (
+          <p className="st-field-error" role="alert">
+            {playersFetch.err}
+          </p>
+        ) : null}
         {playerRounds !== null ? (
           playerRounds.length === 0 ? (
             <p>No rounds for {playerName} in that range.</p>
           ) : (
-            <div className="user-list">
-              {playerRounds.map((r) => (
-                <button key={r.id} type="button" className="user-row" onClick={() => { setRoundId(r.id); setRound(r); setRoundErr(""); }}>
-                  <b>{r.gameName}</b><span>{r.currency === "coins" ? `${Math.round(r.stake)} coins` : fmtMoney(r.stake, r.fiatCurrency ?? user?.currency ?? "GHS")}</span><span className={r.net >= 0 ? "lk-win" : "lk-lose"}>{r.net >= 0 ? "+" : "−"}{r.currency === "coins" ? `${Math.round(Math.abs(r.net))} coins` : fmtMoney(Math.abs(r.net), r.fiatCurrency ?? user?.currency ?? "GHS")}</span><span>{new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
-                </button>
-              ))}
+            <div style={{ marginTop: 12 }}>
+              <DataTable<LookupRound>
+                viewId="admin-lookup-player"
+                columns={roundColumns}
+                rows={playerRounds}
+                total={playerRounds.length}
+                page={1}
+                pageSize={25}
+                onPageChange={() => {}}
+                emptyTitle="No rounds."
+                emptyText="No rounds for this player in that range."
+                onSelect={(r) => {
+                  setRoundId(r.id);
+                  setRound(r);
+                  setRoundErr("");
+                }}
+              />
             </div>
           )
         ) : null}
-      </section>
+      </Card>
 
-      <section className="admin-sec">
-        <h3>Provably-fair verify (crash games)</h3>
-        <p className="rg48-sub">The seed is revealed only for a finished round — a live round’s seed stays secret.</p>
-        <div className="lookup-form">
-          <input
-            type="text"
-            placeholder="Crash round id"
-            value={verifyId}
-            onChange={(e) => setVerifyId(e.target.value)}
-            aria-label="Crash round id"
-          />
-          <button className="btn btn-gold" type="button" disabled={verifyBusy} onClick={() => void verifyRound()}>Verify</button>
+      <Card
+        title="Provably-fair verify (crash games)"
+        sub="The seed is revealed only for a finished round — a live round's seed stays secret."
+      >
+        <div className="st-form-row">
+          <FormField label="Crash round id">
+            <Input
+              type="text"
+              placeholder="Crash round id"
+              value={verifyId}
+              onChange={(e) => setVerifyId(e.target.value)}
+              aria-label="Crash round id"
+            />
+          </FormField>
         </div>
-        {verifyErr ? <p className="rg48-err">{verifyErr}</p> : null}
+        <Button loading={verifyBusy} onClick={() => void verifyRound()}>
+          Verify
+        </Button>
+        {verifyErr ? (
+          <p className="st-field-error" role="alert">
+            {verifyErr}
+          </p>
+        ) : null}
         {verify ? (
-          <div className="verify-box">
-            <p>Round id: <code>{verify.roundId}</code></p>
-            <p>Issued hash: <code>{verify.hash}</code></p>
-            <p>Client seed: <code>{verify.clientSeed}</code> · Nonce: {verify.nonce}</p>
+          <div style={{ marginTop: 12 }}>
+            <p>
+              Round id: <code className="st-mono">{verify.roundId}</code> <CopyButton text={verify.roundId} label="Copy round id" />
+            </p>
+            <p>
+              Issued hash: <code className="st-mono">{verify.hash}</code> <CopyButton text={verify.hash} label="Copy hash" />
+            </p>
+            <p>
+              Client seed: <code className="st-mono">{verify.clientSeed}</code> <CopyButton text={verify.clientSeed} label="Copy client seed" /> · Nonce:{" "}
+              {verify.nonce}
+            </p>
             {!verify.finished ? (
-              <p><b>This round is still live</b> — the seed is revealed only after it finishes.</p>
+              <p>
+                <b>This round is still live</b> — the seed is revealed only after it finishes.
+              </p>
             ) : (
               <>
-                <p>Server seed: <code>{verify.serverSeed}</code></p>
-                <p>Crash point: ×{verify.crashPoint?.toFixed(2)} · Recomputed: ×{verify.recomputedPoint?.toFixed(2)}</p>
-                <p className={verify.pointMatch ? "lk-win" : "lk-lose"}>Crash point: {verify.pointMatch ? "MATCHES — the round was fair" : "DOES NOT MATCH"}</p>
-                <p className={verify.hashMatch ? "lk-win" : "lk-lose"}>Seed hash: {verify.hashMatch ? "MATCHES — the seed is the one issued" : "DOES NOT MATCH"}</p>
+                <p>
+                  Server seed: <code className="st-mono">{verify.serverSeed}</code>{" "}
+                  {verify.serverSeed ? <CopyButton text={verify.serverSeed} label="Copy server seed" /> : null}
+                </p>
+                <p>
+                  Crash point: ×{verify.crashPoint?.toFixed(2)} · Recomputed: ×{verify.recomputedPoint?.toFixed(2)}
+                </p>
+                <p className={verify.pointMatch ? "st-ok-text" : "st-bad-text"}>
+                  Crash point: {verify.pointMatch ? "MATCHES — the round was fair" : "DOES NOT MATCH"}
+                </p>
+                <p className={verify.hashMatch ? "st-ok-text" : "st-bad-text"}>
+                  Seed hash: {verify.hashMatch ? "MATCHES — the seed is the one issued" : "DOES NOT MATCH"}
+                </p>
               </>
             )}
           </div>
         ) : null}
-        <h4>Recent crash rounds</h4>
+        <h4 style={{ marginTop: 16 }}>Recent crash rounds</h4>
         {recent === null ? (
-          <button className="btn btn-ghost" type="button" onClick={() => void loadRecent()}>Load recent rounds</button>
+          <Button variant="secondary" loading={recentBusy} onClick={() => void loadRecent()}>
+            Load recent rounds
+          </Button>
         ) : recent.length === 0 ? (
           <p>No crash rounds issued yet — play a crash game (Aviator Gold, Jet Fly, Car Crash, Balloon Burst) and come back.</p>
         ) : (
-          <div className="user-list">
-            {recent.map((r) => (
-              <button key={r.roundId} type="button" className="user-row" onClick={() => void verifyRound(r.roundId)}>
-                <b>×{r.crashPoint.toFixed(2)}</b><span>{r.finished ? "Finished" : "Live"}</span><span><code>{r.roundId.slice(0, 12)}…</code></span><span>{new Date(r.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
-              </button>
-            ))}
+          <div style={{ marginTop: 12 }}>
+            <DataTable<RecentRound & { id: string }>
+              viewId="admin-lookup-recent"
+              columns={recentColumns as DataColumn<RecentRound & { id: string }>[]}
+              rows={recent.map((r) => ({ ...r, id: r.roundId }))}
+              total={recent.length}
+              page={1}
+              pageSize={25}
+              onPageChange={() => {}}
+              emptyTitle="No crash rounds."
+              emptyText="No crash rounds issued yet."
+              onSelect={(r) => void verifyRound(r.roundId)}
+            />
           </div>
         )}
-        {recentErr ? <p className="rg48-err">{recentErr}</p> : null}
-      </section>
-    </>
-  );
-}
-
-export default function AdminLookupPage() {
-  return (
-    <Suspense fallback={<p>Loading admin panel…</p>}>
-      <AdminLookupInner />
-    </Suspense>
+        {recentErr ? (
+          <p className="st-field-error" role="alert">
+            {recentErr}
+          </p>
+        ) : null}
+      </Card>
+    </div>
   );
 }

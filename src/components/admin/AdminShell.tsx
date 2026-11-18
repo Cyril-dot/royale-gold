@@ -12,8 +12,8 @@
 //   - the global command palette (⌘K): jump to any admin page, find a
 //     player in the downline, safe quick actions only (no money-moving
 //     actions).
-// Phase 6 pages still render their old AdminNav strip inside this shell
-// until they migrate — the shell does not remove it for them.
+// All 14 admin pages render inside this shell (Phase 6) — the old
+// AdminNav strip is gone; the shell is the only nav.
 "use client";
 
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";

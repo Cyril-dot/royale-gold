@@ -1,30 +1,34 @@
-// Admin dashboard — Commission (round 11). Day detail (date picker +
-// deposits table) and history (every active day) behind tabs (Round 31:
-// same treatment as the owner commission tabs, Round 30). A deposit row opens
-// the player as a real page (/admin/players/[id]); a history row picks
-// that day. Same endpoints as the old commission tab.
-
+// Admin dashboard — Commission (Phase 6 restyle). Day detail: one day's
+// deposits with the rule that priced them (RevShare / Turnover / Legacy).
+// The History view is its own route (/admin/commission/history) per
+// Chuks's tab rule. The per-day figure and the rollup figure are shown
+// exactly as the endpoints return them — the 2026-11-14 stamped-vs-rules
+// disagreement is a pre-existing flag, not reconciled here.
 "use client";
 
-import { Suspense, useState } from "react";
-import Link from "next/link";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { fmtMoney } from "../../../lib/api";
-import CurrencyChips from "../../../components/CurrencyChips";
+import { fmtStaffMoney } from "../../../components/staff-ui/format";
 import { useStore } from "../../../lib/store";
-import { useAdminContext, useAdminDay, useAdminHistory, todayStr } from "../../../lib/admin-client";
+import { useStaffFetch } from "../../../components/staff-ui/useStaffFetch";
+import { PageHeader } from "../../../components/staff-ui/PageHeader";
+import { Card, KpiTile } from "../../../components/staff-ui/Card";
+import { DataTable, type DataColumn } from "../../../components/staff-ui/DataTable";
+import { Tabs } from "../../../components/staff-ui/Tabs";
+import { Input, FormField } from "../../../components/staff-ui/Form";
+import { Skeleton, ErrorState } from "../../../components/staff-ui/Feedback";
+import { AdminContactValue } from "../../../components/admin/AdminReveal";
+import CurrencyChips from "../../../components/CurrencyChips";
 import { canAccessSection } from "../../../lib/rbac";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
+import { todayStr, type AdminIdentity, type DayDetail } from "../../../lib/admin-client";
+
+type DayDeposit = DayDetail["deposits"][number];
 
 export default function AdminCommissionPage() {
   return (
-    <main className="rg48-page-main rg23 admin-fb">
-      <div className="wrap">
-        <Suspense fallback={null}>
-          <AdminCommissionInner />
-        </Suspense>
-      </div>
-    </main>
+    <Suspense fallback={<Skeleton lines={6} title />}>
+      <AdminCommissionInner />
+    </Suspense>
   );
 }
 
@@ -33,117 +37,186 @@ function AdminCommissionInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ctx, err: ctxErr } = useAdminContext(previewId);
-  // Phase 1 country-based (Nov 2026): the currency filter — the day +
-  // history figures are in ONE fiat only. Defaults to the admin's own
-  // currency (or ?currency= from the overview link).
+  const preview = !!previewId;
   const [fiatSel, setFiatSel] = useState<string | null>(null);
   const fiat = fiatSel ?? sp.get("currency") ?? user?.currency ?? "GHS";
-  const { days: history, err: histErr } = useAdminHistory(previewId, fiat);
-  const [date, setDate] = useState(() => sp.get("date") || todayStr());
-  const { day } = useAdminDay(previewId, date, fiat);
-  // Round 31: the Day detail and History views were stacked cards on one
-  // long page; now a tab bar switches between them (same treatment as
-  // the owner commission tabs, Round 30). The other view unmounts.
-  const [tab, setTab] = useState<"day" | "history">("day");
+  const date = sp.get("date") || todayStr();
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
 
-  if (!user) return <AdminLoginPrompt />;
-  if (ctxErr) return <AdminError err={ctxErr} />;
-  if (!ctx) return <p>Loading admin panel…</p>;
-  // P0 Batch 3 (O3): the server 403s this section too.
-  if (!previewId && !canAccessSection(user, "commission")) return <AdminDenied section="commission" />;
-  if (histErr) return <AdminError err={histErr} />;
-  if (!history) return <p>Loading admin panel…</p>;
+  const ctxUrl = useMemo(() => {
+    if (!user) return null;
+    return previewId ? `/api/owner/admins/${previewId}/preview` : "/api/admin/context";
+  }, [user, previewId]);
+  const ctx = useStaffFetch<{ admin: AdminIdentity }>(ctxUrl);
+  const dayUrl = useMemo(() => {
+    if (!user || !date) return null;
+    const base = previewId
+      ? `/api/owner/commission?adminId=${previewId}&date=${date}`
+      : `/api/admin/commission?date=${date}`;
+    return `${base}&currency=${encodeURIComponent(fiat)}`;
+  }, [user, previewId, date, fiat]);
+  const dayFetch = useStaffFetch<DayDetail>(dayUrl);
+  const day = dayFetch.data;
 
-  const ov = { admin: ctx.admin, history };
+  if (!user) return null;
+  if (!previewId && !canAccessSection(user, "commission")) {
+    return (
+      <ErrorState
+        title="No access to this section."
+        text="You do not have access to the Commission section. Ask the owner to grant you access from the Owner panel."
+      />
+    );
+  }
 
-  const playerHref = (id: string) => (previewId ? `/admin/players/${id}?preview=${previewId}` : `/admin/players/${id}`);
-  const goPlayer = (id: string) => router.push(playerHref(id));
+  const withPreview = (href: string) => (previewId ? `${href}?preview=${previewId}` : href);
+  const playerHref = (id: string) => withPreview(`/admin/players/${id}`);
+  const admin = ctx.data?.admin;
+  const childAdmins = day?.scope.childAdmins ?? [];
+
+  const pickDate = (v: string) => {
+    if (!v) return;
+    const params = new URLSearchParams(sp.toString());
+    params.set("date", v);
+    router.replace(`/admin/commission?${params.toString()}`);
+    setPage(1);
+  };
+
+  const needle = q.trim().toLowerCase();
+  const deposits = (day?.deposits ?? []).filter(
+    (d) => !needle || `${d.userName} ${d.userContact} ${d.method}`.toLowerCase().includes(needle),
+  );
+  const totalPages = Math.max(1, Math.ceil(deposits.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = deposits.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const columns: DataColumn<DayDeposit>[] = [
+    {
+      key: "user",
+      label: "User",
+      render: (d) => d.userName,
+    },
+    {
+      key: "contact",
+      label: "Contact",
+      render: (d) => <AdminContactValue userId={d.userId} contact={d.userContact} preview={preview} />,
+      // The phone card renders details, not the cell — the masked
+      // component (with audited Reveal) must live here too, never the
+      // raw contact (D1: masked by default on every width).
+      details: (d) => [
+        ["Contact", <AdminContactValue key="contact-value" userId={d.userId} contact={d.userContact} preview={preview} />],
+      ],
+    },
+    {
+      key: "amount",
+      label: "Amount",
+      render: (d) => fmtStaffMoney(d.amount, d.fiatCurrency ?? fiat),
+      details: (d) => [["Amount", fmtStaffMoney(d.amount, d.fiatCurrency ?? fiat)]],
+    },
+    {
+      key: "time",
+      label: "Time",
+      render: (d) => new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+      details: (d) => [
+        ["Time", new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })],
+      ],
+    },
+    {
+      key: "method",
+      label: "Method",
+      render: (d) => d.method,
+      details: (d) => [["Method", d.method]],
+    },
+    {
+      key: "commission",
+      label: "Commission",
+      render: (d) => `${fmtStaffMoney(d.commission, d.fiatCurrency ?? fiat)} (${d.pctInForce}%)`,
+      details: (d) => [["Commission", `${fmtStaffMoney(d.commission, d.fiatCurrency ?? fiat)} (${d.pctInForce}%)`]],
+    },
+    ...(childAdmins.length > 0
+      ? [
+          {
+            key: "admin",
+            label: "Admin",
+            render: (d: DayDeposit) => d.adminName || "—",
+            details: (d: DayDeposit) => [["Admin", d.adminName || "—"]] as [string, ReactNode][],
+          } as DataColumn<DayDeposit>,
+        ]
+      : []),
+  ];
+
+  const modelCaption = day
+    ? day.totals.model === "revshare"
+      ? `RevShare ${day.totals.rate}% of net loss · stakes ${fmtStaffMoney(day.totals.totalStakes ?? 0, day.fiatCurrency ?? fiat)} − payouts ${fmtStaffMoney(day.totals.totalPayouts ?? 0, day.fiatCurrency ?? fiat)}`
+      : day.totals.model === "turnover"
+        ? `Turnover ${day.totals.rate}% of stakes · stakes ${fmtStaffMoney(day.totals.totalStakes ?? 0, day.fiatCurrency ?? fiat)}`
+        : day.totals.model === "mixed"
+          ? "Mixed — your downline and child downlines priced on different rules"
+          : "Legacy — flat % of deposits (no rule set)"
+    : "";
 
   return (
-    <>
-      {previewId ? <AdminPreviewBanner name={ov.admin.name} /> : null}
-      <div className="rg48-hbar-in">
-        <Link className="gp-back" href={previewId ? `/admin?preview=${previewId}` : "/admin"} aria-label="Back to admin overview"><span className="gp-back-coin">←</span></Link>
-        <h2>Commission</h2>
-      </div>
-      <p className="rg48-sub">{ov.admin.name} · {ov.admin.email} · {ov.admin.commissionPct}% commission{ov.admin.active ? "" : " · DEACTIVATED"}</p>
-      <AdminNav />
+    <div>
+      <PageHeader
+        title="Commission"
+        sub={
+          admin
+            ? `${admin.name} · ${admin.commissionPct}% commission${admin.active ? "" : " · DEACTIVATED"}`
+            : "Commission earned on your downline's deposits."
+        }
+        backHref={withPreview("/admin")}
+        backLabel="Overview"
+      />
+      <Tabs
+        label="Commission views"
+        items={[
+          { id: "day", label: "Day detail", href: withPreview("/admin/commission"), exact: true },
+          { id: "history", label: "History", href: withPreview("/admin/commission/history") },
+        ]}
+      />
       <CurrencyChips value={fiat} onChange={setFiatSel} label="Commission currency" />
-      <section className="admin-sec ac-commission">
-        <h3>Commission</h3>
-        {/* P1 Batch 4 (O24): when this admin has child admins, the
-            figures below roll their downlines in — read-only. */}
-        {day && day.scope.childAdmins.length > 0 && (
-          <p className="rg48-mini">
-            Includes your child admins&apos; downlines: {day.scope.childAdmins.map((c) => c.name).join(", ")}.
-          </p>
-        )}
-        <div className="ac-tabs" role="tablist" aria-label="Commission views">
-          <button type="button" role="tab" id="ac-tab-day" aria-selected={tab === "day"} aria-controls="ac-panel-day" className={`ac-tab${tab === "day" ? " ac-tab-active" : ""}`} onClick={() => setTab("day")}>Day detail</button>
-          <button type="button" role="tab" id="ac-tab-history" aria-selected={tab === "history"} aria-controls="ac-panel-history" className={`ac-tab${tab === "history" ? " ac-tab-active" : ""}`} onClick={() => setTab("history")}>History</button>
-        </div>
-        {tab === "day" ? (
-          <div role="tabpanel" id="ac-panel-day" aria-labelledby="ac-tab-day">
-            <label className="date-pick">Pick a day <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} /></label>
-            {day ? (
-              <>
-                <div className="sum-cards">
-                  <div className="sum-card"><span>Deposits</span><b>{day.totals.deposits}</b></div>
-                  <div className="sum-card"><span>Total deposited</span><b>{fmtMoney(day.totals.totalAmount, day.fiatCurrency ?? fiat)}</b></div>
-                  <div className="sum-card"><span>Commission</span><b>{fmtMoney(day.totals.totalCommission, day.fiatCurrency ?? fiat)}</b></div>
-                </div>
-                <p className="ac-day-cap">Commission on {day.date}</p>
-                {/* P0 Batch 3 (O4): the rule that priced this day — RevShare
-                    pays on net loss (stakes − payouts), Turnover on stakes,
-                    Legacy is the old flat % of deposits. */}
-                <p className="ac-model-cap">
-                  {day.totals.model === "revshare"
-                    ? `RevShare ${day.totals.rate}% of net loss · stakes ${fmtMoney(day.totals.totalStakes ?? 0, day.fiatCurrency ?? fiat)} − payouts ${fmtMoney(day.totals.totalPayouts ?? 0, day.fiatCurrency ?? fiat)}`
-                    : day.totals.model === "turnover"
-                      ? `Turnover ${day.totals.rate}% of stakes · stakes ${fmtMoney(day.totals.totalStakes ?? 0, day.fiatCurrency ?? fiat)}`
-                      : day.totals.model === "mixed"
-                        ? "Mixed — your downline and child downlines priced on different rules"
-                        : "Legacy — flat % of deposits (no rule set)"}
-                </p>
-                {day.deposits.length === 0 ? (
-                  <p className="bh-empty">No deposits that day.</p>
-                ) : (
-                  <div className="rg48-twrap">
-                    <table className="dep-table">
-                      <thead><tr><th>User</th><th>Contact</th><th>Amount</th><th>Time</th><th>Method</th><th>Commission</th>{day.scope.childAdmins.length > 0 && <th>Admin</th>}</tr></thead>
-                      <tbody>
-                        {day.deposits.map((d) => (
-                          <tr key={d.id} onClick={() => goPlayer(d.userId)} onKeyDown={(e) => { if (e.key === "Enter") goPlayer(d.userId); }} tabIndex={0} className="clickable">
-                            <td>{d.userName}</td><td>{d.userContact}</td><td>{fmtMoney(d.amount, d.fiatCurrency ?? fiat)}</td><td>{new Date(d.time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</td><td>{d.method}</td><td>{fmtMoney(d.commission, d.fiatCurrency ?? fiat)} ({d.pctInForce}%)</td>{day.scope.childAdmins.length > 0 && <td>{d.adminName || "—"}</td>}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            ) : <p>Loading day…</p>}
+      {ctx.err ? (
+        <ErrorState title="Could not load commission." text={ctx.err} onRetry={ctx.reload} />
+      ) : dayFetch.err ? (
+        <ErrorState title="Could not load this day." text={dayFetch.err} onRetry={dayFetch.reload} />
+      ) : !day ? (
+        <Skeleton lines={6} title />
+      ) : (
+        <Card title="Commission" sub={childAdmins.length > 0 ? `Includes your child admins' downlines: ${childAdmins.map((c) => c.name).join(", ")}.` : undefined}>
+          <FormField label="Pick a day">
+            <Input type="date" value={date} max={todayStr()} onChange={(e) => pickDate(e.target.value)} aria-label="Pick a day" />
+          </FormField>
+          <div className="st-kpi-grid">
+            <KpiTile label="Deposits" value={String(day.totals.deposits)} />
+            <KpiTile label="Total deposited" value={fmtStaffMoney(day.totals.totalAmount, day.fiatCurrency ?? fiat)} />
+            <KpiTile label="Commission" value={fmtStaffMoney(day.totals.totalCommission, day.fiatCurrency ?? fiat)} />
           </div>
-        ) : (
-          <div role="tabpanel" id="ac-panel-history" aria-labelledby="ac-tab-history">
-            {ov.history.length === 0 ? <p>No commission days yet.</p> : (
-              <div className="rg48-twrap">
-                <table className="dep-table">
-                  <thead><tr><th>Date</th><th>Deposits</th><th>Total deposited</th><th>Commission</th><th>Model</th></tr></thead>
-                  <tbody>
-                    {ov.history.map((h) => (
-                      <tr key={h.date} onClick={() => { setDate(h.date); setTab("day"); }} onKeyDown={(e) => { if (e.key === "Enter") { setDate(h.date); setTab("day"); } }} tabIndex={0} className="clickable">
-                        <td>{h.date}</td><td>{h.deposits}</td><td>{fmtMoney(h.totalAmount, h.fiatCurrency ?? fiat)}</td><td>{fmtMoney(h.totalCommission, h.fiatCurrency ?? fiat)}</td><td>{h.model === "revshare" ? `RevShare ${h.rate}%` : h.model === "turnover" ? `Turnover ${h.rate}%` : h.model === "mixed" ? "Mixed" : "Legacy"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-    </>
+          <p>Commission on {day.date}</p>
+          <p>{modelCaption}</p>
+          <DataTable<DayDeposit>
+            viewId="admin-commission-day"
+            columns={columns}
+            rows={pageRows}
+            total={deposits.length}
+            page={safePage}
+            pageSize={pageSize}
+            onPageChange={(p) => setPage(p)}
+            search={q}
+            onSearchChange={(v) => {
+              setQ(v);
+              setPage(1);
+            }}
+            searchPlaceholder="Search player, contact or method…"
+            loading={dayFetch.loading}
+            error={dayFetch.err}
+            onRetry={dayFetch.reload}
+            emptyTitle="No deposits that day."
+            emptyText="No deposits from your downline on this day in this currency."
+            rowHref={(d) => playerHref(d.userId)}
+          />
+        </Card>
+      )}
+    </div>
   );
 }

@@ -5,7 +5,7 @@
 // backwards compatible: existing admins keep full access until the owner
 // restricts them. The owner bypasses every permission check.
 //
-// Sections map 1:1 to the admin panel tabs (AdminNav) and to the admin
+// Sections map 1:1 to the admin panel nav (AdminShell) and to the admin
 // API routes they guard. Every admin API route calls requirePermission
 // after requireRole("admin"); every admin page hides the nav tab and
 // shows a denial when the admin lacks the section.
