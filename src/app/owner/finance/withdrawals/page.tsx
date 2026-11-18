@@ -1,5 +1,5 @@
 // Owner Withdrawals (Phase 3 restyle) — split out of the old one-page
-// owner panel (src/app/owner/legacy/page.tsx). Same endpoints, same
+// owner panel (deleted in Phase 4). Same endpoints, same
 // behaviour, staff-ui throughout: DataTable + CardList on phone, status
 // chips, flagged-only filter, risk flags + KYC badges the list endpoint
 // already returned (the Phase 2 split never displayed them), Approve /

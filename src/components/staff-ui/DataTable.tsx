@@ -361,6 +361,19 @@ export function DataTable<T extends { id: string }>({
                       ))}
                     </dl>
                   ) : null}
+                  {expandable ? (
+                    <div className="st-cardlist-expand">
+                      <button
+                        type="button"
+                        className="st-copy-btn"
+                        aria-expanded={expandedId === row.id}
+                        onClick={() => setExpandedId(expandedId === row.id ? null : row.id)}
+                      >
+                        {expandedId === row.id ? "Hide" : "Details"}
+                      </button>
+                      {expandedId === row.id && expandRender ? expandRender(row) : null}
+                    </div>
+                  ) : null}
                   {rowActions.length > 0 ? (
                     <div className="st-cardlist-actions">
                       {rowActions.map((a) => (

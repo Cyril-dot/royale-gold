@@ -1,5 +1,5 @@
 // Owner Commission (Phase 3 restyle) — split out of the old one-page
-// owner panel (src/app/owner/legacy/page.tsx). Same endpoints, same
+// owner panel (deleted in Phase 4). Same endpoints, same
 // behaviour, staff-ui throughout: rules form + table, per-day viewer /
 // rollup switch (a Segmented choice, not navigation — the page stays
 // one route), settlement table + Record payout through the shared

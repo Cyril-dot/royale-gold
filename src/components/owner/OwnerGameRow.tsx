@@ -1,9 +1,20 @@
-import { useState } from "react";
+// Owner Game row — per-game visibility + kill + economics, saved per row.
+// Phase 4 restyle: staff-ui Card / Badge / Button / FormField / Input,
+// per-game kill through the shared ConfirmDialog. Same behaviour as
+// before: number inputs hold text locally so an empty field means
+// "clear the override" (back to the catalogue default) instead of 0,
+// Save sends only the fields that actually changed, and the kill
+// endpoint records the change in the audit log (it takes no reason,
+// so none is collected here).
+"use client";
 
-// P0 Batch 2 — one game row: visibility + kill toggles and the four
-// economics fields, saved per row. Number inputs hold text locally so
-// an empty field means "clear the override" (back to the catalogue
-// default) instead of 0.
+import { useState } from "react";
+import { Card } from "../staff-ui/Card";
+import { Button } from "../staff-ui/Button";
+import { Badge } from "../staff-ui/Badge";
+import { ConfirmDialog } from "../staff-ui/Dialog";
+import { FormField, Input } from "../staff-ui/Form";
+
 export function OwnerGameRow({ g, onSave }: {
   g: { slug: string; name: string; currency: string; visible: boolean; killed: boolean; minBet: number | null; maxBet: number | null; maxPayout: number | null; maxMultiplier: number; note: string };
   onSave: (slug: string, patch: Record<string, unknown>) => Promise<void>;
@@ -13,6 +24,7 @@ export function OwnerGameRow({ g, onSave }: {
   const [maxPayout, setMaxPayout] = useState(g.maxPayout == null ? "" : String(g.maxPayout));
   const [maxMult, setMaxMult] = useState(String(g.maxMultiplier));
   const [busy, setBusy] = useState(false);
+  const [killConfirm, setKillConfirm] = useState(false);
   const unit = g.currency === "coins" ? "coins" : "GH₵";
   const numOrNull = (s: string): number | null => {
     const t = s.trim();
@@ -35,42 +47,74 @@ export function OwnerGameRow({ g, onSave }: {
     setBusy(true);
     try { await onSave(g.slug, patch); } finally { setBusy(false); }
   };
+  const kill = async () => {
+    setKillConfirm(false);
+    setBusy(true);
+    try { await onSave(g.slug, { killed: true }); } finally { setBusy(false); }
+  };
+  const unkill = async () => {
+    setBusy(true);
+    try { await onSave(g.slug, { killed: false }); } finally { setBusy(false); }
+  };
   return (
-    <div className={`ow-game-row${g.killed ? " ow-game-killed" : ""}${!g.visible ? " ow-game-hidden" : ""}`}>
-      <div className="ow-game-head">
-        <b>{g.name}</b>
-        <span className="ow-game-cur">{g.currency === "coins" ? "Coins" : "Cash"}</span>
-        <span className="ow-game-mult">max ×{g.maxMultiplier}</span>
-        {g.killed && <span className="ow-game-flag bad">KILLED</span>}
-        {!g.visible && <span className="ow-game-flag">HIDDEN</span>}
+    <Card title={g.name} sub={g.note}>
+      <div className="st-chip-row" role="group" aria-label={`${g.name} status`}>
+        <Badge variant={g.currency === "coins" ? "info" : "muted"}>{g.currency === "coins" ? "Coins" : "Cash"}</Badge>
+        <Badge variant="muted">max ×{g.maxMultiplier}</Badge>
+        {g.killed ? <Badge variant="danger">Killed</Badge> : null}
+        {!g.visible ? <Badge variant="warn">Hidden</Badge> : null}
       </div>
-      <p className="ow-game-note">{g.note}</p>
-      <div className="ow-game-toggles">
-        <button
-          type="button"
-          className={`btn btn-sm ${g.visible ? "btn-gold" : "btn-ghost"}`}
+      <div className="st-chip-row" role="group" aria-label={`${g.name} visibility and kill switch`}>
+        <Button
+          variant={g.visible ? "secondary" : "ghost"}
+          size="sm"
           disabled={busy}
           onClick={() => void onSave(g.slug, { visible: !g.visible })}
           aria-pressed={g.visible}
-        >{g.visible ? "Visible" : "Hidden"}</button>
-        <button
-          type="button"
-          className={`btn btn-sm ${g.killed ? "btn-danger" : "btn-ghost"}`}
-          disabled={busy}
-          onClick={() => {
-            if (!g.killed && !window.confirm(`Kill ${g.name}? No one can play it until you unkill it.`)) return;
-            void onSave(g.slug, { killed: !g.killed });
-          }}
-          aria-pressed={g.killed}
-        >{g.killed ? "Killed — tap to resume" : "Kill switch"}</button>
+        >
+          {g.visible ? "Visible" : "Hidden"}
+        </Button>
+        {g.killed ? (
+          <Button variant="danger" size="sm" disabled={busy} onClick={() => void unkill()} aria-pressed={g.killed}>
+            Killed — tap to resume
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setKillConfirm(true)} aria-pressed={g.killed}>
+            Kill switch
+          </Button>
+        )}
       </div>
-      <div className="ow-game-econ">
-        <label>Min bet ({unit}) <input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={minBet} onChange={(e) => setMinBet(e.target.value)} placeholder="Default" aria-label={`${g.name} minimum bet`} /></label>
-        <label>Max bet ({unit}) <input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={maxBet} onChange={(e) => setMaxBet(e.target.value)} placeholder="No cap" aria-label={`${g.name} maximum bet`} /></label>
-        <label>Max payout ({unit}) <input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={maxPayout} onChange={(e) => setMaxPayout(e.target.value)} placeholder="No cap" aria-label={`${g.name} maximum payout`} /></label>
-        <label>Max × <input type="number" min={0.01} step={0.01} value={maxMult} onChange={(e) => setMaxMult(e.target.value)} aria-label={`${g.name} maximum multiplier`} /></label>
-        <button className="btn btn-gold btn-sm" type="button" disabled={busy} onClick={() => void save()}>Save</button>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 12 }}>
+        <FormField label={`Min bet (${unit})`}>
+          <Input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={minBet} onChange={(e) => setMinBet(e.target.value)} placeholder="Default" aria-label={`${g.name} minimum bet`} />
+        </FormField>
+        <FormField label={`Max bet (${unit})`}>
+          <Input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={maxBet} onChange={(e) => setMaxBet(e.target.value)} placeholder="No cap" aria-label={`${g.name} maximum bet`} />
+        </FormField>
+        <FormField label={`Max payout (${unit})`}>
+          <Input type="number" min={0} step={g.currency === "coins" ? 1 : 0.01} value={maxPayout} onChange={(e) => setMaxPayout(e.target.value)} placeholder="No cap" aria-label={`${g.name} maximum payout`} />
+        </FormField>
+        <FormField label="Max ×">
+          <Input type="number" min={0.01} step={0.01} value={maxMult} onChange={(e) => setMaxMult(e.target.value)} aria-label={`${g.name} maximum multiplier`} />
+        </FormField>
       </div>
-    </div>
+      <Button variant="primary" size="sm" disabled={busy} loading={busy} onClick={() => void save()}>
+        Save
+      </Button>
+      <ConfirmDialog
+        open={killConfirm}
+        onClose={() => setKillConfirm(false)}
+        onConfirm={() => void kill()}
+        title={`Kill ${g.name}`}
+        body="No one can play this game until you unkill it. Other games are not affected."
+        facts={[
+          { label: "Game", value: g.name },
+          { label: "Effect", value: "This game stops for every player" },
+        ]}
+        confirmLabel="Kill game"
+        danger
+        busy={busy}
+      />
+    </Card>
   );
 }

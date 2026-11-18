@@ -1,101 +1,259 @@
-// Owner Brands (Phase 2) — split out of the old one-page owner panel
-// (src/app/owner/legacy/page.tsx). Same sections, same endpoints, same
-// behaviour — now its own route, loading only its own data.
+// Owner Brands (Phase 4 restyle) — split out of the old one-page owner panel
+// (deleted in Phase 4). Same endpoints, same behaviour,
+// staff-ui throughout. D4: brands stay under Settings and stay config
+// records only — a brand does NOT change any page, game or URL (no
+// per-brand routing or theming). That label stays visible on the page.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { api } from "../../../../lib/api";
 import { useStore } from "../../../../lib/store";
 import { OwnerRangeBar } from "../../../../components/owner/OwnerRangeBar";
 import { PageHeader } from "../../../../components/staff-ui/PageHeader";
+import { Card } from "../../../../components/staff-ui/Card";
+import { Button } from "../../../../components/staff-ui/Button";
+import { FormField, Input } from "../../../../components/staff-ui/Form";
+import { Badge } from "../../../../components/staff-ui/Badge";
+import { DataTable, type DataColumn } from "../../../../components/staff-ui/DataTable";
+import { Skeleton, ErrorState } from "../../../../components/staff-ui/Feedback";
+import { useOwnerFetch } from "../../../../components/owner/useOwnerFetch";
+
+// O33: multi-brand support — CONFIG records only. A brand does NOT
+// change any page, game or URL (no per-brand routing or theming).
+interface BrandRow {
+  id: string;
+  name: string;
+  slug: string;
+  siteName: string;
+  primaryColor: string;
+  secondaryColor: string;
+  active: boolean;
+  createdAt: string;
+}
+
+function ColourSwatches({ b }: { b: BrandRow }): ReactNode {
+  return (
+    <span>
+      <span
+        title={`Primary ${b.primaryColor}`}
+        style={{ display: "inline-block", width: 14, height: 14, borderRadius: 3, background: b.primaryColor, verticalAlign: "middle" }}
+      />{" "}
+      <span
+        title={`Secondary ${b.secondaryColor}`}
+        style={{ display: "inline-block", width: 14, height: 14, borderRadius: 3, background: b.secondaryColor, verticalAlign: "middle" }}
+      />
+    </span>
+  );
+}
+
+/** The create-brand form. Colour picks are kept after a save, exactly
+ *  as before — only the name / slug / site fields clear. */
+function BrandForm({ onSaved }: { onSaved: () => void }) {
+  const { toast } = useStore();
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [site, setSite] = useState("");
+  const [primary, setPrimary] = useState("#F2C230");
+  const [secondary, setSecondary] = useState("#0C2B22");
+  const [busy, setBusy] = useState(false);
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api("/api/owner/brands", {
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim(),
+          slug: slug.trim(),
+          siteName: site.trim() || undefined,
+          primaryColor: primary,
+          secondaryColor: secondary,
+        }),
+      });
+      toast(`Brand “${name.trim()}” created`, "win");
+      setName("");
+      setSlug("");
+      setSite("");
+      onSaved();
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Brand failed", "lose");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form onSubmit={create}>
+      <FormField label="Name" required>
+        <Input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={60}
+          aria-label="Brand name"
+          placeholder="e.g. Royale Gold"
+          required
+        />
+      </FormField>
+      <FormField label="Slug" required>
+        <Input
+          type="text"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+          maxLength={40}
+          aria-label="Brand slug"
+          placeholder="e.g. royale-gold"
+          required
+        />
+      </FormField>
+      <FormField label="Site name" hint="Defaults to the name.">
+        <Input
+          type="text"
+          value={site}
+          onChange={(e) => setSite(e.target.value)}
+          maxLength={60}
+          aria-label="Brand site name"
+          placeholder="Defaults to the name"
+        />
+      </FormField>
+      <FormField label="Primary colour">
+        <span>
+          <input
+            type="color"
+            value={primary}
+            onChange={(e) => setPrimary(e.target.value)}
+            aria-label="Brand primary colour"
+            style={{ minHeight: 44, minWidth: 56 }}
+          />{" "}
+          {primary}
+        </span>
+      </FormField>
+      <FormField label="Secondary colour">
+        <span>
+          <input
+            type="color"
+            value={secondary}
+            onChange={(e) => setSecondary(e.target.value)}
+            aria-label="Brand secondary colour"
+            style={{ minHeight: 44, minWidth: 56 }}
+          />{" "}
+          {secondary}
+        </span>
+      </FormField>
+      <Button variant="primary" type="submit" loading={busy}>
+        Create brand
+      </Button>
+    </form>
+  );
+}
 
 export default function OwnerBrandsPage() {
   const { user, toast } = useStore();
-  // O33: multi-brand support — CONFIG records only. A brand does NOT
-  // change any page, game or URL (no per-brand routing or theming).
-  interface BrandRow { id: string; name: string; slug: string; siteName: string; primaryColor: string; secondaryColor: string; active: boolean; createdAt: string }
-  const [brands, setBrands] = useState<BrandRow[] | null>(null);
-  const [brName, setBrName] = useState("");
-  const [brSlug, setBrSlug] = useState("");
-  const [brSite, setBrSite] = useState("");
-  const [brPrimary, setBrPrimary] = useState("#F2C230");
-  const [brSecondary, setBrSecondary] = useState("#0C2B22");
-  const [brBusy, setBrBusy] = useState(false);
-  const [brToggleBusy, setBrToggleBusy] = useState<string | null>(null);
-  const loadBrands = useCallback(async () => {
-    try { setBrands((await api<{ brands: BrandRow[] }>("/api/owner/brands")).brands); } catch { setBrands([]); }
-  }, []);
-  useEffect(() => { if (user) void loadBrands(); }, [loadBrands, user]);
-  const createBrand = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBrBusy(true);
-    try {
-      await api("/api/owner/brands", { method: "POST", body: JSON.stringify({ name: brName.trim(), slug: brSlug.trim(), siteName: brSite.trim() || undefined, primaryColor: brPrimary, secondaryColor: brSecondary }) });
-      toast(`Brand “${brName.trim()}” created`, "win");
-      setBrName(""); setBrSlug(""); setBrSite("");
-      await loadBrands();
-    } catch (ex) {
-      toast(ex instanceof Error ? ex.message : "Brand failed", "lose");
-    } finally { setBrBusy(false); }
-  };
+  const url = useMemo(() => (user ? "/api/owner/brands" : null), [user]);
+  const { data, err, loading, reload } = useOwnerFetch<{ brands: BrandRow[] }>(url);
+  const brands = data?.brands ?? [];
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(brands.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = brands.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const [toggleBusy, setToggleBusy] = useState<string | null>(null);
+
+  // Toggling a brand changes nothing on any page, game or URL (config
+  // record only) — a plain one-tap toggle, no danger confirm.
   const toggleBrand = async (b: BrandRow) => {
-    setBrToggleBusy(b.id);
+    setToggleBusy(b.id);
     try {
       await api(`/api/owner/brands/${b.id}/toggle`, { method: "POST" });
       toast(`Brand “${b.name}” ${b.active ? "disabled" : "enabled"}`, "win");
-      await loadBrands();
+      reload();
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : "Could not toggle the brand", "lose");
-    } finally { setBrToggleBusy(null); }
+    } finally {
+      setToggleBusy(null);
+    }
   };
+
+  const columns: DataColumn<BrandRow>[] = [
+    {
+      key: "brand",
+      label: "Brand",
+      render: (b) => b.name,
+      sub: (b) => b.siteName,
+    },
+    {
+      key: "slug",
+      label: "Slug",
+      render: (b) => b.slug,
+      details: (b) => [["Slug", b.slug]],
+    },
+    {
+      key: "site",
+      label: "Site name",
+      render: (b) => b.siteName,
+      details: (b) => [["Site name", b.siteName]],
+    },
+    {
+      key: "colours",
+      label: "Colours",
+      render: (b) => <ColourSwatches b={b} />,
+      details: (b) => [
+        ["Colours", <ColourSwatches key={`c-${b.id}`} b={b} />],
+        ["Primary", b.primaryColor],
+        ["Secondary", b.secondaryColor],
+      ],
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (b) => (b.active ? <Badge variant="ok">Active</Badge> : <Badge variant="muted">Inactive</Badge>),
+      details: (b) => [
+        ["Status", b.active ? <Badge key="st" variant="ok">Active</Badge> : <Badge key="st" variant="muted">Inactive</Badge>],
+      ],
+    },
+  ];
+
   return (
     <div>
       <PageHeader title="Brands" sub="Config records only — a brand changes no page, game or URL." />
       <OwnerRangeBar />
-      <section className="admin-sec">
-      <h3>Brands</h3>
-      <form className="owner-add" onSubmit={createBrand}>
-        <div className="pd-adjust-row">
-          <label>Name
-            <input type="text" value={brName} onChange={(e) => setBrName(e.target.value)} maxLength={60} aria-label="Brand name" placeholder="e.g. Royale Gold" />
-          </label>
-          <label>Slug
-            <input type="text" value={brSlug} onChange={(e) => setBrSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} maxLength={40} aria-label="Brand slug" placeholder="e.g. royale-gold" />
-          </label>
-          <label>Site name
-            <input type="text" value={brSite} onChange={(e) => setBrSite(e.target.value)} maxLength={60} aria-label="Brand site name" placeholder="Defaults to the name" />
-          </label>
-          <label>Primary colour
-            <input type="color" value={brPrimary} onChange={(e) => setBrPrimary(e.target.value)} aria-label="Brand primary colour" />
-          </label>
-          <label>Secondary colour
-            <input type="color" value={brSecondary} onChange={(e) => setBrSecondary(e.target.value)} aria-label="Brand secondary colour" />
-          </label>
-          <button className="btn btn-gold" type="submit" disabled={brBusy}>{brBusy ? "Creating…" : "Create brand"}</button>
-        </div>
-      </form>
-      {brands === null ? <p>Loading brands…</p> : brands.length === 0 ? (
-        <p>No brands yet.</p>
+      {loading ? (
+        <Skeleton lines={5} title />
+      ) : err ? (
+        <ErrorState text={err} onRetry={reload} />
       ) : (
-        <div className="rg48-twrap">
-          <table className="dep-table">
-            <thead><tr><th>Brand</th><th>Slug</th><th>Site name</th><th>Colours</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              {brands.map((b) => (
-                <tr key={b.id}>
-                  <td>{b.name}</td>
-                  <td>{b.slug}</td>
-                  <td>{b.siteName}</td>
-                  <td><span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 3, background: b.primaryColor, verticalAlign: "middle" }} /> <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 3, background: b.secondaryColor, verticalAlign: "middle" }} /></td>
-                  <td>{b.active ? "Active" : "Inactive"}</td>
-                  <td><button className="btn btn-ghost btn-sm" type="button" disabled={brToggleBusy === b.id} onClick={() => void toggleBrand(b)}>{brToggleBusy === b.id ? "…" : b.active ? "Disable" : "Enable"}</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <Card title="Create brand" sub="Config records — no effect on pages yet.">
+            <BrandForm onSaved={reload} />
+          </Card>
+          <Card title="Brands">
+            <DataTable<BrandRow>
+              viewId="owner-brands"
+              columns={columns}
+              rows={pageRows}
+              total={brands.length}
+              page={safePage}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              loading={false}
+              error={null}
+              emptyTitle="No brands yet."
+              emptyText="Create the first brand above. It is a config record only — it changes no page, game or URL."
+              rowActions={[
+                {
+                  label: "Enable",
+                  onClick: (b) => void toggleBrand(b),
+                  disabled: (b) => b.active || toggleBusy === b.id,
+                },
+                {
+                  label: "Disable",
+                  onClick: (b) => void toggleBrand(b),
+                  disabled: (b) => !b.active || toggleBusy === b.id,
+                },
+              ]}
+            />
+          </Card>
+        </>
       )}
-      </section>
     </div>
   );
 }

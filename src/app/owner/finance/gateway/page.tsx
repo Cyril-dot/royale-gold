@@ -1,5 +1,5 @@
 // Owner Gateway & payments (Phase 3 restyle) — split out of the old
-// one-page owner panel (src/app/owner/legacy/page.tsx). Same endpoints,
+// one-page owner panel (deleted in Phase 4). Same endpoints,
 // same behaviour, staff-ui throughout: payment-method cards, PayTeller
 // gateway section, wallet config, currency settings.
 "use client";

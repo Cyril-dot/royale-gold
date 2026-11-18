@@ -485,11 +485,6 @@
   border-radius: 50%;
   flex: none;
 }
-.staff .st-legacy-link {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--muted);
-}
 /* KPI tile — value (Outfit bold, tabular) + label + sub-line + delta. */
 .staff .st-kpi-grid {
   display: grid;
@@ -562,6 +557,33 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+/* Checkbox list (permissions matrix) + button row — 44px rows. */
+.staff .st-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.staff .st-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.staff .st-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--gold);
+  flex-shrink: 0;
+}
+.staff .st-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
 }
 .staff .st-chip {
   display: inline-flex;
@@ -1335,6 +1357,18 @@
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 12px;
+}
+.staff .st-cardlist-expand {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.staff .st-cardlist-expand > *:not(button) {
+  align-self: stretch;
 }
 .staff .st-cardlist-more dt {
   color: var(--faint);

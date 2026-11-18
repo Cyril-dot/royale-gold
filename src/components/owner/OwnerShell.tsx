@@ -1,5 +1,5 @@
 // OwnerShell — the owner panel's shell (Phase 2). Wraps every /owner
-// route except the legacy monolith:
+// route:
 //   - OwnerProvider (fiat + global date range + admins)
 //   - the owner guard (login prompt / not-the-owner), same copy as the
 //     old page — authorisation itself stays server-side (requireRole)
@@ -7,12 +7,9 @@
 //     (Home · Finance · Payouts · People · More — More opens the drawer)
 //   - the global command palette (⌘K): jump to any owner page, find a
 //     player or admin, run safe quick actions (no money-moving actions).
-// The legacy monolith at /owner/legacy renders bare (no AppShell), so
-// the old page stays pixel-identical until Phase 4 deletes it.
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
 import { api } from "../../lib/api";
 import { useStore } from "../../lib/store";
 import { copyText } from "../../lib/admin-client";
@@ -97,7 +94,6 @@ const PAGE_ACTIONS: PaletteAction[] = OWNER_NAV_GROUPS.flatMap((g) =>
 
 function OwnerShellInner({ children }: { children: ReactNode }) {
   const { user, openAuth, toast } = useStore();
-  const pathname = usePathname();
   const { admins, loadAdmins } = useOwner();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [playerActions, setPlayerActions] = useState<PaletteAction[]>([]);
@@ -178,13 +174,6 @@ function OwnerShellInner({ children }: { children: ReactNode }) {
             .catch(() => toast("Could not copy the webhook URL", "lose"));
         },
       },
-      {
-        id: "quick:legacy",
-        group: "Quick actions",
-        label: "Open the classic owner panel",
-        sub: "The old one-page view (until Phase 4 removes it)",
-        href: "/owner/legacy",
-      },
     ],
     [toast],
   );
@@ -193,11 +182,6 @@ function OwnerShellInner({ children }: { children: ReactNode }) {
     () => [...PAGE_ACTIONS, ...playerActions, ...adminActions, ...quickActions],
     [playerActions, adminActions, quickActions],
   );
-
-  // The legacy monolith keeps its own strip + pill tabs — no AppShell.
-  if (pathname === "/owner/legacy" || pathname?.startsWith("/owner/legacy/")) {
-    return <>{children}</>;
-  }
 
   if (!user) {
     return (

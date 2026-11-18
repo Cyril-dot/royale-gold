@@ -1,5 +1,5 @@
 // Owner Cashier (Phase 3 restyle) — split out of the old one-page owner
-// panel (src/app/owner/legacy/page.tsx). Same endpoint, same behaviour,
+// panel (deleted in Phase 4). Same endpoint, same behaviour,
 // staff-ui throughout: per-method table (totals as a row and as tiles)
 // plus the reconciliation tiles. No explainer note is re-added.
 "use client";

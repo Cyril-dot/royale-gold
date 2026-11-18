@@ -1,5 +1,5 @@
 // Owner Ledger (Phase 3 restyle) — split out of the old one-page owner
-// panel (src/app/owner/legacy/page.tsx). Same endpoint, same behaviour,
+// panel (deleted in Phase 4). Same endpoint, same behaviour,
 // staff-ui throughout: DataTable + CardList on phone, type chips, search,
 // date range, admin filter, KPI tiles, masked contacts with audited
 // Reveal, and a CSV export of the rows on screen (contacts masked —

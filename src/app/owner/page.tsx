@@ -4,8 +4,7 @@
 // queues + top admins + recent activity. The range bar drives it
 // (default Last 7 days, PRIME carry-over); refetch on window focus so
 // the live numbers never sit stale. Tiles drill down to the real
-// routes (never dead numbers). The old one-page panel still lives at
-// /owner/legacy until Phase 4 deletes it.
+// routes (never dead numbers).
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -419,11 +418,6 @@ export default function OwnerCommandCenterPage() {
           </div>
         )}
       </Card>
-
-      <p className="st-legacy-link">
-        Still on the old view? <Link href="/owner/legacy">Open the classic owner panel</Link> — it goes away in
-        Phase 4.
-      </p>
     </div>
   );
 }

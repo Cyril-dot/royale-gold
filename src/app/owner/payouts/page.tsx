@@ -1,5 +1,5 @@
 // Owner Payouts (Phase 3 restyle) — split out of the old one-page owner
-// panel (src/app/owner/legacy/page.tsx). Same endpoints, same behaviour,
+// panel (deleted in Phase 4). Same endpoints, same behaviour,
 // staff-ui throughout, plus the Phase 3 depth: a month calendar and a
 // list view beyond the 14-day strip, a per-admin commission-center view
 // (that admin's deposits that day + payout history) inside Details, and

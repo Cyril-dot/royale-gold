@@ -1,5 +1,5 @@
 // Owner Profit & loss (Phase 3 restyle) — split out of the old one-page
-// owner panel (src/app/owner/legacy/page.tsx). Same endpoint, same
+// owner panel (deleted in Phase 4). Same endpoint, same
 // behaviour, staff-ui throughout: Segmented presets, DateRange for
 // custom, KPI tiles. A failed load now says so with a Retry instead of
 // sitting on "Loading P&L…" forever (the old catch set pnl null).

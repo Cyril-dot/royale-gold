@@ -20,7 +20,6 @@ import "./games-v17-quick.css";
 import "./games-v17-gamespage.css";
 import "./games-v18.css";
 import "./account-v27.css";
-import "./owner-commission.css";
 import "./admin-commission.css";
 import "./admin-players.css";
 import { StoreProvider } from "../lib/store";

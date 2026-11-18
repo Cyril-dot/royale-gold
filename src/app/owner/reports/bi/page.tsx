@@ -1,42 +1,142 @@
-// Owner BI & cohorts (Phase 2) — split out of the old one-page owner panel
-// (src/app/owner/legacy/page.tsx). Same sections, same endpoints, same
-// behaviour — now its own route, loading only its own data.
+// Owner BI & cohorts (Phase 4 restyle) — split out of the old one-page
+// owner panel (deleted in Phase 4). Same endpoints, same
+// behaviour — now its own route, loading only its own data. Staff-ui
+// throughout: KPI tiles, Segmented period picker, staff-ui DateRange,
+// DataTable + CardList on phone for every breakdown, and the shared
+// BarChart (with its table alternative) for daily GGR. Money is
+// per-currency via fmtStaffMoney; coin GGR stays in coins, never added
+// to cash GGR.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { api, fmtMoney } from "../../../../lib/api";
+import { useMemo, useState } from "react";
 import { todayStr } from "../../../../lib/admin-client";
 import { useStore } from "../../../../lib/store";
 import { useOwner } from "../../../../components/owner/OwnerContext";
 import { OwnerRangeBar } from "../../../../components/owner/OwnerRangeBar";
 import { PageHeader } from "../../../../components/staff-ui/PageHeader";
+import { Card, KpiTile } from "../../../../components/staff-ui/Card";
+import { DataTable, type DataColumn } from "../../../../components/staff-ui/DataTable";
+import { Button } from "../../../../components/staff-ui/Button";
+import { Segmented } from "../../../../components/staff-ui/Tabs";
+import { DateRange } from "../../../../components/staff-ui/Form";
+import { BarChart, CHART_COLORS } from "../../../../components/staff-ui/Charts";
+import { Skeleton, ErrorState } from "../../../../components/staff-ui/Feedback";
+import { fmtStaffMoney, fmtStaffInt } from "../../../../components/staff-ui/format";
+import { useOwnerFetch } from "../../../../components/owner/useOwnerFetch";
+
+// P1 Batch 3 (O16/O17): revenue breakdowns + RTP monitor — one shared
+// period, so the two sections always agree on the dates they show.
+interface RevenueGameRow {
+  game: string;
+  name: string;
+  currency: string;
+  rounds: number;
+  stakes: number;
+  payouts: number;
+  ggr: number;
+}
+interface RevenueAdminRow {
+  adminId: string | null;
+  adminName: string;
+  deposits: number;
+  totalDeposited: number;
+  commission: number;
+  ggr: number;
+}
+interface RevenueDayRow {
+  date: string;
+  ggr: number;
+  deposits: number;
+  totalDeposited: number;
+  commission: number;
+}
+interface RevenueMethodRow {
+  method: string;
+  deposits: number;
+  total: number;
+}
+interface RevenueData {
+  from: string;
+  to: string;
+  byGameCash: RevenueGameRow[];
+  byGameCoins: RevenueGameRow[];
+  byAdmin: RevenueAdminRow[];
+  byDay: RevenueDayRow[];
+  byMethod: RevenueMethodRow[];
+  totals: { ggrCash: number; ggrCoins: number; deposits: number; totalDeposited: number; commission: number };
+}
+
+// O26: advanced BI & cohorts — players by joining month, with
+// activity, deposits, stakes, GGR, average deposit + a month-1/2/3
+// retention curve. Read from the real tables, no analytics store.
+interface CohortRow {
+  cohort: string;
+  players: number;
+  activePct: number;
+  totalDeposited: number;
+  totalStaked: number;
+  ggr: number;
+  avgDeposit: number;
+  retention: { m1: number | null; m2: number | null; m3: number | null };
+}
+
+type AnPreset = "today" | "week" | "month" | "custom";
+
+const PRESET_ITEMS = [
+  { id: "today", label: "Today" },
+  { id: "week", label: "Last 7 days" },
+  { id: "month", label: "This month" },
+  { id: "custom", label: "Custom" },
+];
+
+/** Client-side pagination for the small breakdown tables — each table
+ *  keeps its own page; the caller owns rows only. */
+function PagedTable<T extends { id: string }>({
+  viewId,
+  columns,
+  rows,
+  emptyTitle,
+  emptyText,
+}: {
+  viewId: string;
+  columns: DataColumn<T>[];
+  rows: T[];
+  emptyTitle: string;
+  emptyText: string;
+}) {
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  return (
+    <DataTable<T>
+      viewId={viewId}
+      columns={columns}
+      rows={pageRows}
+      total={rows.length}
+      page={safePage}
+      pageSize={pageSize}
+      onPageChange={(p) => setPage(p)}
+      emptyTitle={emptyTitle}
+      emptyText={emptyText}
+    />
+  );
+}
+
+function retentionCell(v: number | null): string {
+  return v === null ? "—" : `${v}%`;
+}
 
 export default function OwnerBiPage() {
   const { user } = useStore();
   const { fiat } = useOwner();
-  // P1 Batch 3 (O16/O17): revenue breakdowns + RTP monitor — one shared
-  // period, so the two sections always agree on the dates they show.
-  interface RevenueGameRow { game: string; name: string; currency: string; rounds: number; stakes: number; payouts: number; ggr: number }
-  interface RevenueAdminRow { adminId: string | null; adminName: string; deposits: number; totalDeposited: number; commission: number; ggr: number }
-  interface RevenueDayRow { date: string; ggr: number; deposits: number; totalDeposited: number; commission: number }
-  interface RevenueMethodRow { method: string; deposits: number; total: number }
-  interface RevenueData { from: string; to: string; byGameCash: RevenueGameRow[]; byGameCoins: RevenueGameRow[]; byAdmin: RevenueAdminRow[]; byDay: RevenueDayRow[]; byMethod: RevenueMethodRow[]; totals: { ggrCash: number; ggrCoins: number; deposits: number; totalDeposited: number; commission: number } }
-  const [anPreset, setAnPreset] = useState<"today" | "week" | "month" | "custom">("month");
+  const [anPreset, setAnPreset] = useState<AnPreset>("month");
   const [anFrom, setAnFrom] = useState("");
   const [anTo, setAnTo] = useState("");
-  const [revenue, setRevenue] = useState<RevenueData | null>(null);
 
-  // O26: advanced BI & cohorts — players by joining month, with
-  // activity, deposits, stakes, GGR, average deposit + a month-1/2/3
-  // retention curve. Read from the real tables, no analytics store.
-  interface CohortRow { cohort: string; players: number; activePct: number; totalDeposited: number; totalStaked: number; ggr: number; avgDeposit: number; retention: { m1: number | null; m2: number | null; m3: number | null } }
-  const [bi, setBi] = useState<{ cohorts: CohortRow[]; totalPlayers: number } | null>(null);
-  const loadBi = useCallback(async () => {
-    try { setBi(await api<{ cohorts: CohortRow[]; totalPlayers: number }>(`/api/owner/bi?currency=${fiat}`)); } catch { setBi(null); }
-  }, [fiat]);
-  useEffect(() => { if (user) void loadBi(); }, [loadBi, user]);
-
-  const loadSplit = useCallback(async () => {
+  const revenueUrl = useMemo(() => {
+    if (!user) return null;
     const today = todayStr();
     let from = today;
     let to = today;
@@ -50,168 +150,315 @@ export default function OwnerBiPage() {
       from = anFrom || today;
       to = anTo || today;
     }
-    try {
-      setRevenue(await api<RevenueData>(`/api/owner/revenue?from=${from}&to=${to}&currency=${fiat}`));
-    } catch { setRevenue(null); }
-  }, [anPreset, anFrom, anTo, fiat]);
-  useEffect(() => { if (user) void loadSplit(); }, [loadSplit, user]);
+    return `/api/owner/revenue?from=${from}&to=${to}&currency=${fiat}`;
+  }, [user, anPreset, anFrom, anTo, fiat]);
+  const { data: revenue, err: revenueErr, loading: revenueLoading, reload: reloadRevenue } =
+    useOwnerFetch<RevenueData>(revenueUrl);
+
+  const biUrl = useMemo(() => (user ? `/api/owner/bi?currency=${fiat}` : null), [user, fiat]);
+  const { data: bi, err: biErr, loading: biLoading, reload: reloadBi } =
+    useOwnerFetch<{ cohorts: CohortRow[]; totalPlayers: number }>(biUrl);
+
+  const gameCashColumns: DataColumn<RevenueGameRow & { id: string }>[] = [
+    {
+      key: "game",
+      label: "Game",
+      render: (g) => g.name,
+      // NOTE: DataTable's phone CardList only reads `details` from
+      // columns AFTER the first — details on the first column never
+      // render. Every detail below lives on its own column.
+    },
+    {
+      key: "rounds",
+      label: "Rounds",
+      render: (g) => fmtStaffInt(g.rounds),
+      details: (g) => [["Rounds", fmtStaffInt(g.rounds)]],
+    },
+    {
+      key: "stakes",
+      label: "Stakes",
+      render: (g) => fmtStaffMoney(g.stakes, fiat),
+      details: (g) => [["Stakes", fmtStaffMoney(g.stakes, fiat)]],
+    },
+    {
+      key: "payouts",
+      label: "Payouts",
+      render: (g) => fmtStaffMoney(g.payouts, fiat),
+      details: (g) => [["Payouts", fmtStaffMoney(g.payouts, fiat)]],
+    },
+    {
+      key: "ggr",
+      label: "GGR",
+      render: (g) => fmtStaffMoney(g.ggr, fiat),
+    },
+  ];
+  const gameCoinsColumns: DataColumn<RevenueGameRow & { id: string }>[] = [
+    { key: "game", label: "Game", render: (g) => g.name },
+    {
+      key: "rounds",
+      label: "Rounds",
+      render: (g) => fmtStaffInt(g.rounds),
+      details: (g) => [["Rounds", fmtStaffInt(g.rounds)]],
+    },
+    {
+      key: "stakes",
+      label: "Stakes",
+      render: (g) => `${fmtStaffInt(g.stakes)} coins`,
+      details: (g) => [["Stakes", `${fmtStaffInt(g.stakes)} coins`]],
+    },
+    {
+      key: "payouts",
+      label: "Payouts",
+      render: (g) => `${fmtStaffInt(g.payouts)} coins`,
+      details: (g) => [["Payouts", `${fmtStaffInt(g.payouts)} coins`]],
+    },
+    { key: "ggr", label: "GGR", render: (g) => `${fmtStaffInt(g.ggr)} coins` },
+  ];
+  const adminColumns: DataColumn<RevenueAdminRow & { id: string }>[] = [
+    { key: "admin", label: "Admin", render: (a) => a.adminName },
+    {
+      key: "deposits",
+      label: "Deposits",
+      render: (a) => fmtStaffInt(a.deposits),
+      details: (a) => [["Deposits", fmtStaffInt(a.deposits)]],
+    },
+    {
+      key: "deposited",
+      label: "Deposited",
+      render: (a) => fmtStaffMoney(a.totalDeposited, fiat),
+      details: (a) => [["Deposited", fmtStaffMoney(a.totalDeposited, fiat)]],
+    },
+    {
+      key: "commission",
+      label: "Commission",
+      render: (a) => fmtStaffMoney(a.commission, fiat),
+      details: (a) => [["Commission", fmtStaffMoney(a.commission, fiat)]],
+    },
+    { key: "ggr", label: "GGR", render: (a) => fmtStaffMoney(a.ggr, fiat) },
+  ];
+  const dayColumns: DataColumn<RevenueDayRow & { id: string }>[] = [
+    { key: "date", label: "Date", render: (d) => d.date },
+    {
+      key: "ggr",
+      label: "GGR",
+      render: (d) => fmtStaffMoney(d.ggr, fiat),
+      details: (d) => [["GGR", fmtStaffMoney(d.ggr, fiat)]],
+    },
+    {
+      key: "deposits",
+      label: "Deposits",
+      render: (d) => fmtStaffInt(d.deposits),
+      details: (d) => [["Deposits", fmtStaffInt(d.deposits)]],
+    },
+    {
+      key: "deposited",
+      label: "Deposited",
+      render: (d) => fmtStaffMoney(d.totalDeposited, fiat),
+      details: (d) => [["Deposited", fmtStaffMoney(d.totalDeposited, fiat)]],
+    },
+    {
+      key: "commission",
+      label: "Commission",
+      render: (d) => fmtStaffMoney(d.commission, fiat),
+      details: (d) => [["Commission", fmtStaffMoney(d.commission, fiat)]],
+    },
+  ];
+  const methodColumns: DataColumn<RevenueMethodRow & { id: string }>[] = [
+    { key: "method", label: "Method", render: (m) => m.method },
+    {
+      key: "deposits",
+      label: "Deposits",
+      render: (m) => fmtStaffInt(m.deposits),
+      details: (m) => [["Deposits", fmtStaffInt(m.deposits)]],
+    },
+    { key: "total", label: "Total", render: (m) => fmtStaffMoney(m.total, fiat) },
+  ];
+  const cohortColumns: DataColumn<CohortRow & { id: string }>[] = [
+    { key: "cohort", label: "Cohort", render: (c) => c.cohort },
+    {
+      key: "players",
+      label: "Players",
+      render: (c) => fmtStaffInt(c.players),
+      details: (c) => [["Players", fmtStaffInt(c.players)]],
+    },
+    {
+      key: "active",
+      label: "Active (30d)",
+      render: (c) => `${c.activePct}%`,
+      details: (c) => [["Active (30d)", `${c.activePct}%`]],
+    },
+    {
+      key: "deposited",
+      label: "Deposited",
+      render: (c) => fmtStaffMoney(c.totalDeposited, fiat),
+      details: (c) => [["Deposited", fmtStaffMoney(c.totalDeposited, fiat)]],
+    },
+    {
+      key: "staked",
+      label: "Staked",
+      render: (c) => fmtStaffMoney(c.totalStaked, fiat),
+      details: (c) => [["Staked", fmtStaffMoney(c.totalStaked, fiat)]],
+    },
+    {
+      key: "ggr",
+      label: "GGR",
+      render: (c) => fmtStaffMoney(c.ggr, fiat),
+      details: (c) => [["GGR", fmtStaffMoney(c.ggr, fiat)]],
+    },
+    {
+      key: "avg",
+      label: "Avg deposit",
+      render: (c) => fmtStaffMoney(c.avgDeposit, fiat),
+      details: (c) => [["Avg deposit", fmtStaffMoney(c.avgDeposit, fiat)]],
+    },
+  ];
+  const retentionColumns: DataColumn<CohortRow & { id: string }>[] = [
+    { key: "cohort", label: "Cohort", render: (c) => c.cohort },
+    {
+      key: "m1",
+      label: "Month 1",
+      render: (c) => retentionCell(c.retention.m1),
+      details: (c) => [["Month 1", retentionCell(c.retention.m1)]],
+    },
+    {
+      key: "m2",
+      label: "Month 2",
+      render: (c) => retentionCell(c.retention.m2),
+      details: (c) => [["Month 2", retentionCell(c.retention.m2)]],
+    },
+    {
+      key: "m3",
+      label: "Month 3",
+      render: (c) => retentionCell(c.retention.m3),
+      details: (c) => [["Month 3", retentionCell(c.retention.m3)]],
+    },
+  ];
+
   return (
     <div>
       <PageHeader title="BI & cohorts" sub="Revenue breakdowns and player cohorts." />
       <OwnerRangeBar />
-      <section className="admin-sec">
-      <h3>Revenue breakdowns</h3>
-      <div className="money-chips" role="group" aria-label="Analytics period">
-        {(["today", "week", "month", "custom"] as const).map((p) => (
-          <button key={p} type="button" className={anPreset === p ? "on" : ""} onClick={() => setAnPreset(p)}>
-            {p === "today" ? "Today" : p === "week" ? "Last 7 days" : p === "month" ? "This month" : "Custom"}
-          </button>
-        ))}
-      </div>
-      {anPreset === "custom" && (
-        <div className="money-dates">
-          <label>From <input type="date" value={anFrom} max={todayStr()} onChange={(e) => setAnFrom(e.target.value)} /></label>
-          <label>To <input type="date" value={anTo} max={todayStr()} onChange={(e) => setAnTo(e.target.value)} /></label>
-        </div>
-      )}
-      {revenue === null ? <p>Loading revenue…</p> : (
-        <>
-          <div className="sum-cards">
-            <div className="sum-card"><span>GGR (cash)</span><b>{fmtMoney(revenue.totals.ggrCash, fiat)}</b></div>
-            <div className="sum-card"><span>GGR (coins)</span><b>{revenue.totals.ggrCoins} coins</b></div>
-            <div className="sum-card"><span>Deposits</span><b>{fmtMoney(revenue.totals.totalDeposited, fiat)}</b></div>
-            <div className="sum-card"><span>Commission</span><b>{fmtMoney(revenue.totals.commission, fiat)}</b></div>
-          </div>
-          <h4>By game — cash (top 5 by GGR are the first five rows)</h4>
-          {revenue.byGameCash.length === 0 ? <p>No cash rounds in this period.</p> : (
-            <div className="rg48-twrap">
-              <table className="dep-table">
-                <thead><tr><th>Game</th><th>Rounds</th><th>Stakes</th><th>Payouts</th><th>GGR</th></tr></thead>
-                <tbody>
-                  {revenue.byGameCash.map((g) => (
-                    <tr key={g.game}><td>{g.name}</td><td>{g.rounds}</td><td>{fmtMoney(g.stakes, fiat)}</td><td>{fmtMoney(g.payouts, fiat)}</td><td>{fmtMoney(g.ggr, fiat)}</td></tr>
-                  ))}
-                </tbody>
-              </table>
+      <Card
+        title="Revenue breakdowns"
+        sub={revenue ? `${revenue.from} to ${revenue.to} · UTC days` : undefined}
+      >
+        <Segmented
+          label="Analytics period"
+          items={PRESET_ITEMS}
+          value={anPreset}
+          onChange={(id) => setAnPreset(id as AnPreset)}
+        />
+        {anPreset === "custom" ? (
+          <DateRange
+            value={{ from: anFrom, to: anTo }}
+            onChange={(v) => {
+              setAnFrom(v.from);
+              setAnTo(v.to);
+            }}
+            label="Custom period"
+            max={todayStr()}
+          />
+        ) : null}
+        {revenueLoading ? (
+          <Skeleton lines={5} />
+        ) : revenueErr ? (
+          <ErrorState text={revenueErr} onRetry={reloadRevenue} />
+        ) : revenue ? (
+          <>
+            <div>
+              <KpiTile label="GGR (cash)" value={fmtStaffMoney(revenue.totals.ggrCash, fiat)} />
+              <KpiTile label="GGR (coins)" value={`${fmtStaffInt(revenue.totals.ggrCoins)} coins`} />
+              <KpiTile label="Deposits" value={fmtStaffMoney(revenue.totals.totalDeposited, fiat)} />
+              <KpiTile label="Commission" value={fmtStaffMoney(revenue.totals.commission, fiat)} />
             </div>
-          )}
-          <h4>By game — coins</h4>
-          {revenue.byGameCoins.length === 0 ? <p>No coin rounds in this period.</p> : (
-            <div className="rg48-twrap">
-              <table className="dep-table">
-                <thead><tr><th>Game</th><th>Rounds</th><th>Stakes</th><th>Payouts</th><th>GGR</th></tr></thead>
-                <tbody>
-                  {revenue.byGameCoins.map((g) => (
-                    <tr key={g.game}><td>{g.name}</td><td>{g.rounds}</td><td>{g.stakes} coins</td><td>{g.payouts} coins</td><td>{g.ggr} coins</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <h4>By admin</h4>
-          <div className="rg48-twrap">
-            <table className="dep-table">
-              <thead><tr><th>Admin</th><th>Deposits</th><th>Deposited</th><th>Commission</th><th>GGR</th></tr></thead>
-              <tbody>
-                {revenue.byAdmin.map((a) => (
-                  <tr key={a.adminId ?? "none"}><td>{a.adminName}</td><td>{a.deposits}</td><td>{fmtMoney(a.totalDeposited, fiat)}</td><td>{fmtMoney(a.commission, fiat)}</td><td>{fmtMoney(a.ggr, fiat)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <h4>By day</h4>
-          {revenue.byDay.length === 0 ? <p>No days in this period.</p> : (
-            <>
-              <div className="p1b3-bars" aria-label="Daily GGR bar chart">
-                {revenue.byDay.map((d) => {
-                  const max = Math.max(0, ...revenue.byDay.map((x) => x.ggr));
-                  const w = max > 0 && d.ggr > 0 ? Math.round((d.ggr / max) * 100) : 0;
-                  return (
-                    <div key={d.date} className="p1b3-bar-row">
-                      <span className="p1b3-bar-label">{d.date.slice(5)}</span>
-                      <span className="p1b3-bar-track"><span className="p1b3-bar-fill" style={{ width: `${w}%` }} /></span>
-                      <b className="p1b3-bar-val">{fmtMoney(d.ggr, fiat)}</b>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="rg48-twrap">
-                <table className="dep-table">
-                  <thead><tr><th>Date</th><th>GGR</th><th>Deposits</th><th>Deposited</th><th>Commission</th></tr></thead>
-                  <tbody>
-                    {revenue.byDay.map((d) => (
-                      <tr key={d.date}><td>{d.date}</td><td>{fmtMoney(d.ggr, fiat)}</td><td>{d.deposits}</td><td>{fmtMoney(d.totalDeposited, fiat)}</td><td>{fmtMoney(d.commission, fiat)}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-          <h4>By payment method</h4>
-          {revenue.byMethod.length === 0 ? <p>No deposits in this period.</p> : (
-            <div className="rg48-twrap">
-              <table className="dep-table">
-                <thead><tr><th>Method</th><th>Deposits</th><th>Total</th></tr></thead>
-                <tbody>
-                  {revenue.byMethod.map((m) => (
-                    <tr key={m.method}><td>{m.method}</td><td>{m.deposits}</td><td>{fmtMoney(m.total, fiat)}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-      </section>
+            <h4>By game — cash</h4>
+            <p>Top 5 by GGR are the first five rows.</p>
+            <PagedTable
+              viewId="owner-revenue-game-cash"
+              columns={gameCashColumns}
+              rows={revenue.byGameCash.map((g) => ({ ...g, id: g.game }))}
+              emptyTitle="No cash rounds in this period."
+              emptyText="No cash rounds in this period."
+            />
+            <h4>By game — coins</h4>
+            <PagedTable
+              viewId="owner-revenue-game-coins"
+              columns={gameCoinsColumns}
+              rows={revenue.byGameCoins.map((g) => ({ ...g, id: g.game }))}
+              emptyTitle="No coin rounds in this period."
+              emptyText="No coin rounds in this period."
+            />
+            <h4>By admin</h4>
+            <PagedTable
+              viewId="owner-revenue-admin"
+              columns={adminColumns}
+              rows={revenue.byAdmin.map((a) => ({ ...a, id: a.adminId ?? "none" }))}
+              emptyTitle="No admins in this period."
+              emptyText="No admin revenue in this period."
+            />
+            <h4>By day</h4>
+            {revenue.byDay.length === 0 ? (
+              <p>No days in this period.</p>
+            ) : (
+              <>
+                <BarChart
+                  labels={revenue.byDay.map((d) => d.date.slice(5))}
+                  series={[{ label: "GGR", color: CHART_COLORS.gold, values: revenue.byDay.map((d) => d.ggr) }]}
+                  formatValue={(v) => fmtStaffMoney(v, fiat)}
+                />
+                <PagedTable
+                  viewId="owner-revenue-day"
+                  columns={dayColumns}
+                  rows={revenue.byDay.map((d) => ({ ...d, id: d.date }))}
+                  emptyTitle="No days in this period."
+                  emptyText="No days in this period."
+                />
+              </>
+            )}
+            <h4>By payment method</h4>
+            <PagedTable
+              viewId="owner-revenue-method"
+              columns={methodColumns}
+              rows={revenue.byMethod.map((m) => ({ ...m, id: m.method }))}
+              emptyTitle="No deposits in this period."
+              emptyText="No deposits in this period."
+            />
+          </>
+        ) : null}
+      </Card>
 
-      <section className="admin-sec">
-      <h3>BI &amp; cohorts</h3>
-      {bi === null ? <p>Loading cohorts…</p> : bi.cohorts.length === 0 ? (
-        <p>No players yet.</p>
-      ) : (
-        <>
-          <div className="sum-cards">
-            <div className="sum-card"><span>Players</span><b>{bi.totalPlayers}</b></div>
-            <div className="sum-card"><span>Cohorts</span><b>{bi.cohorts.length}</b></div>
-          </div>
-          <div className="rg48-twrap">
-            <table className="dep-table">
-              <thead><tr><th>Cohort</th><th>Players</th><th>Active (30d)</th><th>Deposited</th><th>Staked</th><th>GGR</th><th>Avg deposit</th></tr></thead>
-              <tbody>
-                {bi.cohorts.map((c) => (
-                  <tr key={c.cohort}>
-                    <td>{c.cohort}</td>
-                    <td>{c.players}</td>
-                    <td>{c.activePct}%</td>
-                    <td>{fmtMoney(c.totalDeposited, fiat)}</td>
-                    <td>{fmtMoney(c.totalStaked, fiat)}</td>
-                    <td>{fmtMoney(c.ggr, fiat)}</td>
-                    <td>{fmtMoney(c.avgDeposit, fiat)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <h4>Retention curve</h4>
-          <div className="rg48-twrap">
-            <table className="dep-table">
-              <thead><tr><th>Cohort</th><th>Month 1</th><th>Month 2</th><th>Month 3</th></tr></thead>
-              <tbody>
-                {bi.cohorts.map((c) => (
-                  <tr key={c.cohort}>
-                    <td>{c.cohort}</td>
-                    <td>{c.retention.m1 === null ? "—" : `${c.retention.m1}%`}</td>
-                    <td>{c.retention.m2 === null ? "—" : `${c.retention.m2}%`}</td>
-                    <td>{c.retention.m3 === null ? "—" : `${c.retention.m3}%`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button className="btn btn-ghost btn-sm" type="button" onClick={() => void loadBi()}>Refresh cohorts</button>
-        </>
-      )}
-      </section>
+      <Card title="BI & cohorts">
+        {biLoading ? (
+          <Skeleton lines={5} />
+        ) : biErr ? (
+          <ErrorState text={biErr} onRetry={reloadBi} />
+        ) : bi ? (
+          <>
+            <div>
+              <KpiTile label="Players" value={fmtStaffInt(bi.totalPlayers)} />
+              <KpiTile label="Cohorts" value={fmtStaffInt(bi.cohorts.length)} />
+            </div>
+            <PagedTable
+              viewId="owner-cohorts"
+              columns={cohortColumns}
+              rows={bi.cohorts.map((c) => ({ ...c, id: c.cohort }))}
+              emptyTitle="No players yet."
+              emptyText="No cohorts yet."
+            />
+            <h4>Retention curve</h4>
+            <PagedTable
+              viewId="owner-retention"
+              columns={retentionColumns}
+              rows={bi.cohorts.map((c) => ({ ...c, id: c.cohort }))}
+              emptyTitle="No players yet."
+              emptyText="No retention data yet."
+            />
+            <Button variant="ghost" size="sm" onClick={() => void reloadBi()}>
+              Refresh cohorts
+            </Button>
+          </>
+        ) : null}
+      </Card>
     </div>
   );
 }
