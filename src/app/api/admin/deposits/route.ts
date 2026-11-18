@@ -5,7 +5,7 @@
 import { requireRole } from "@/lib/auth";
 import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
-import { fail, ok, toErrorResponse } from "@/lib/http";
+import { ok, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
 // P0 Batch 3 (O4): the deposits tab's commission total is the rules-engine
 // figure for the filtered date range — not the sum of the stamped row
@@ -37,7 +37,16 @@ export async function GET(req: Request) {
         ...(method ? { method } : {}),
         createdAt: { gte: fromD, lte: toD },
       },
-      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      // Phase 5 (admin 500s): select only the columns this route maps —
+      // an unfiltered select also pulls newer columns (providerPayload)
+      // that prod may not have yet, and the whole query throws.
+      // (Prisma takes either select or include — the relation lives
+      // inside select here.)
+      select: {
+        id: true, userId: true, adminId: true, amount: true, method: true,
+        commission: true, pctInForce: true, fiatCurrency: true, createdAt: true,
+        user: { select: { id: true, name: true, email: true, phone: true } },
+      },
       orderBy: { createdAt: "desc" },
       take: 200,
     });

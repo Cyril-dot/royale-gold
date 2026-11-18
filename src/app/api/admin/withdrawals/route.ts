@@ -6,7 +6,7 @@
 import { requireRole } from "@/lib/auth";
 import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
-import { fail, ok, toErrorResponse } from "@/lib/http";
+import { ok, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
 import { annotateWithdrawalFlags } from "@/lib/withdrawals";
 import { getKycSettings } from "@/lib/kyc-settings";
@@ -25,7 +25,17 @@ export async function GET(req: Request) {
     const fiatCurrency = (sp.get("currency") || admin.currency || "GHS").toUpperCase();
     const rows = await prisma.withdrawal.findMany({
       where: { adminId: admin.id, fiatCurrency, ...(status ? { status } : {}) },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } } },
+      // Phase 5 (admin 500s): select only the columns this route maps —
+      // an unfiltered select also pulls newer columns
+      // (accountType/accountName/accountDetail) that prod may not have
+      // yet, and the whole query throws. (Prisma takes either select or
+      // include — the relation lives inside select here.)
+      select: {
+        id: true, userId: true, adminId: true, amount: true, method: true,
+        fiatCurrency: true, status: true, reason: true, decidedBy: true,
+        createdAt: true, decidedAt: true,
+        user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } },
+      },
       orderBy: { createdAt: "desc" },
       take: limit,
     });

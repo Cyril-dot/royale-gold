@@ -28,6 +28,7 @@ export function MaskedValue({
   onReveal,
   revealedValue,
   onHide,
+  hideReveal = false,
 }: {
   value: string;
   kind?: MaskKind;
@@ -40,6 +41,9 @@ export function MaskedValue({
    *  the parent owns the state; onReveal is not used. */
   revealedValue?: string | null;
   onHide?: () => void;
+  /** Owner preview is read-only: show the masked value with no Reveal
+   *  control at all (the owner reveals through the owner kinds). */
+  hideReveal?: boolean;
 }) {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,7 +82,7 @@ export function MaskedValue({
         <button type="button" className="st-copy-btn" onClick={hide}>
           Hide
         </button>
-      ) : onReveal ? (
+      ) : hideReveal ? null : onReveal ? (
         <button type="button" className="st-copy-btn" disabled={busy} onClick={() => void reveal()}>
           {busy ? "Revealing…" : "Reveal"}
         </button>

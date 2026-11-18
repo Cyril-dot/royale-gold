@@ -22,6 +22,9 @@ export interface TabItem {
   label: string;
   href: string;
   count?: number;
+  /** Exact path match only — for tabs whose href is a prefix of a
+   *  sibling tab's href (e.g. /admin/players/[id] vs /money). */
+  exact?: boolean;
 }
 
 /** Route-based tabs — each tab is a link to its own page. */
@@ -29,6 +32,7 @@ export function Tabs({ items, label }: { items: TabItem[]; label: string }) {
   const pathname = usePathname() ?? "";
   const listRef = useRef<HTMLDivElement | null>(null);
   const isActive = (item: TabItem) => {
+    if (item.exact) return pathname === item.href.split("?")[0];
     if (item.href.includes("?")) return pathname === item.href.split("?")[0];
     return item.href === "/admin" || item.href === "/owner"
       ? pathname === item.href

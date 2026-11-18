@@ -24,7 +24,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const reason = (body.reason ?? "").trim();
     if (decision === "reject" && !reason) return fail("A reason is required to reject a withdrawal");
 
-    const w = await prisma.withdrawal.findUnique({ where: { id } });
+    // Phase 5 (admin 500s): select only the columns this route reads —
+    // an unfiltered select also pulls newer columns
+    // (accountType/accountName/accountDetail) that prod may not have
+    // yet, and the whole query throws. Same for the update below: its
+    // returned row is the only shape the response maps.
+    const w = await prisma.withdrawal.findUnique({
+      where: { id },
+      select: { id: true, userId: true, adminId: true, amount: true, fiatCurrency: true, status: true, reason: true },
+    });
     if (!w) return fail("Withdrawal not found", 404);
     if (w.adminId !== admin.id) return fail("This withdrawal is not in your queue", 404);
     if (w.status !== "pending" && w.status !== "held") return fail(`This withdrawal is already ${w.status}`, 400);
@@ -43,6 +51,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           reason: decision === "reject" ? reason : w.reason,
           decidedAt: nextStatus === "approved" || nextStatus === "rejected" ? new Date() : undefined,
         },
+        // Phase 5 (admin 500s): the returned row is the only shape the
+        // response maps — see the findUnique select above.
+        select: { id: true, status: true, decidedAt: true },
       });
       await tx.auditLog.create({
         data: {

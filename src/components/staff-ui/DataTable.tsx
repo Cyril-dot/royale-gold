@@ -69,6 +69,10 @@ export function DataTable<T extends { id: string }>({
   expandable = false,
   expandRender,
   rowHref,
+  expandedId: expandedIdProp,
+  onExpandedChange,
+  selectedId,
+  onSelect,
 }: {
   viewId: string;
   columns: DataColumn<T>[];
@@ -101,9 +105,23 @@ export function DataTable<T extends { id: string }>({
   expandable?: boolean;
   expandRender?: (row: T) => ReactNode;
   rowHref?: (row: T) => string;
+  /** Controlled expand (e.g. a queue's next-in-queue flow). When
+   *  omitted the table owns the expanded row itself, as before. */
+  expandedId?: string | null;
+  onExpandedChange?: (id: string | null) => void;
+  /** Single-row selection (e.g. a review queue's two-state view).
+   *  When onSelect is set, clicking a row selects it and the selected
+   *  row is highlighted. Independent of the checkbox bulk selection. */
+  selectedId?: string | null;
+  onSelect?: (row: T) => void;
 }) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedIdInternal, setExpandedIdInternal] = useState<string | null>(null);
+  const expandedId = expandedIdProp !== undefined ? expandedIdProp : expandedIdInternal;
+  const setExpandedId = (id: string | null) => {
+    if (onExpandedChange) onExpandedChange(id);
+    else setExpandedIdInternal(id);
+  };
   // Saved view (localStorage, per-viewer convenience): the last filter +
   // sort for this view id. Lazy initializer — never holds row data.
   const [savedView] = useState<string | null>(() => {
@@ -253,9 +271,14 @@ export function DataTable<T extends { id: string }>({
               </thead>
               <tbody>
                 {rows.map((row) => {
+                  const isSelected = selectedId !== undefined && selectedId !== null && selectedId === row.id;
                   return (
                     <Fragment key={row.id}>
-                      <tr>
+                      <tr
+                        className={isSelected ? "st-row-selected" : undefined}
+                        data-clickable={onSelect ? "true" : undefined}
+                        onClick={onSelect ? () => onSelect(row) : undefined}
+                      >
                         {onSelectionChange ? (
                           <td>
                             <input
@@ -343,10 +366,15 @@ export function DataTable<T extends { id: string }>({
                 .flatMap((c) => c.details?.(row) ?? [])
                 .filter((d): d is [string, ReactNode] => Boolean(d));
               return (
-                <article key={row.id} className="st-cardlist-row">
+                <article
+                  key={row.id}
+                  className={`st-cardlist-row${selectedId !== undefined && selectedId !== null && selectedId === row.id ? " st-row-selected" : ""}`}
+                  data-clickable={onSelect ? "true" : undefined}
+                  onClick={onSelect ? () => onSelect(row) : undefined}
+                >
                   <div className="st-cardlist-top">
                     <div className="st-cardlist-title">
-                      {firstCol.render(row)}
+                      {rowHref ? <a href={rowHref(row)}>{firstCol.render(row)}</a> : firstCol.render(row)}
                       {firstCol.sub ? <div className="st-cardlist-meta">{firstCol.sub(row)}</div> : null}
                     </div>
                     {amountCol ? <span className="st-amount st-cardlist-amount">{amountCol.render(row)}</span> : null}

@@ -1,11 +1,19 @@
-// Admin staff layout — Phase 1 foundation only.
-// Imports tokens.css (scoped under .staff — see tokens.css header) and
-// wraps the section in the .staff scope. Deliberately NO AppShell nav
-// here yet: the 14 existing admin pages still render their own AdminNav,
-// and adding the shell now would double the navigation. AppShell lands
-// per-route in Phase 5 when pages migrate; the demo route shows it live.
+// Admin staff layout — Phase 5: the AppShell lives here (grouped
+// sidebar nav, phone bottom bar, admin guard, ⌘K palette, owner preview
+// banner) via AdminShell, mirroring the owner layout. Tokens stay scoped
+// under .staff. The Suspense boundary covers AdminShell's
+// useSearchParams (?preview=) — without it the build cannot prerender
+// the layout.
+import { Suspense } from "react";
 import "../../components/staff-ui/tokens.css";
+import { AdminShell } from "../../components/admin/AdminShell";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <div className="staff">{children}</div>;
+  return (
+    <div className="staff">
+      <Suspense fallback={null}>
+        <AdminShell>{children}</AdminShell>
+      </Suspense>
+    </div>
+  );
 }

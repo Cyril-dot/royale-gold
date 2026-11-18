@@ -1896,3 +1896,128 @@
     color: #231600;
   }
 }
+
+/* Phase 5 (admin shell & core queues) — staff-only additions. */
+.staff .st-split {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .staff .st-split {
+    grid-template-columns: 1fr 1.15fr;
+  }
+}
+.staff .st-doc-viewer {
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--steel);
+  overflow: hidden;
+}
+.staff .st-doc-viewer iframe {
+  display: block;
+  width: 100%;
+  height: 320px;
+  border: 0;
+  background: #fff;
+}
+@media (min-width: 768px) {
+  .staff .st-doc-viewer iframe {
+    height: 460px;
+  }
+}
+.staff .st-doc-viewer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+.staff .st-doc-viewer-bar b {
+  color: var(--ink);
+}
+.staff .st-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+.staff .st-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.staff .st-meta-item span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+.staff .st-meta-item b {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.staff .st-form-row {
+  display: grid;
+  gap: 12px;
+}
+@media (min-width: 768px) {
+  .staff .st-form-row-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .staff .st-form-row-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .staff .st-form-row-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.staff .st-tk-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+.staff .st-tk-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.staff .st-tk-msg b {
+  font-size: 12.5px;
+}
+.staff .st-tk-msg small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.staff .st-tk-msg-admin {
+  background: rgba(242, 194, 48, 0.1);
+  border: 1px solid rgba(242, 194, 48, 0.35);
+}
+.staff .st-tk-msg-user {
+  background: rgba(255, 246, 216, 0.05);
+  border: 1px solid var(--line);
+}
+.staff .st-kbd-hint {
+  font-size: 12px;
+  color: var(--faint);
+}
+.staff .st-ok-text {
+  color: var(--ok);
+}
+.staff .st-bad-text {
+  color: #ff8a80;
+}
+.staff .st-table tbody tr.st-row-selected td {
+  background: rgba(242, 194, 48, 0.1);
+}
+.staff .st-cardlist-row.st-row-selected {
+  background: rgba(242, 194, 48, 0.1);
+}

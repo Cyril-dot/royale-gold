@@ -1,18 +1,24 @@
-// Admin dashboard — Tickets (P0 Batch 3 A11). The admin's inbox: tickets
-// from their OWN players only (assigned at creation to the player's
-// referring admin). List + open a ticket + reply + close. Tickets +
-// replies only — no live chat.
-
+// Admin dashboard — Tickets (Phase 5 restyle). Inbox on the shared
+// DataTable + a two-state conversation view: the thread, a reply form
+// with three canned-reply inserts, and close behind the shared
+// ConfirmDialog. Close takes NO reason — the endpoint cannot record
+// one, so none is asked. Tickets + replies only — no live chat.
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
 import { useStore } from "../../../lib/store";
-import { useAdminContext } from "../../../lib/admin-client";
+import { useStaffFetch } from "../../../components/staff-ui/useStaffFetch";
+import { PageHeader } from "../../../components/staff-ui/PageHeader";
+import { Card } from "../../../components/staff-ui/Card";
+import { DataTable, type DataColumn } from "../../../components/staff-ui/DataTable";
+import { StatusPill } from "../../../components/staff-ui/Badge";
+import { ConfirmDialog } from "../../../components/staff-ui/Dialog";
+import { Button } from "../../../components/staff-ui/Button";
+import { Skeleton, EmptyState, ErrorState } from "../../../components/staff-ui/Feedback";
+import { AdminContactValue } from "../../../components/admin/AdminReveal";
 import { canAccessSection } from "../../../lib/rbac";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
 
 interface TicketRow {
   id: string;
@@ -21,11 +27,17 @@ interface TicketRow {
   userId: string;
   userName: string;
   userContact: string | null;
-  adminId: string | null;
-  adminName: string | null;
   messages: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface TicketMessage {
+  id: string;
+  senderRole: string;
+  senderName: string | null;
+  body: string;
+  createdAt: string;
 }
 
 interface TicketDetail {
@@ -35,23 +47,33 @@ interface TicketDetail {
   userId: string;
   userName: string;
   userContact: string | null;
-  adminId: string | null;
-  adminName: string | null;
-  messageCount?: number;
   createdAt: string;
   updatedAt: string;
-  messages: { id: string; senderId: string; senderName: string; senderRole: string; body: string; createdAt: string }[];
+  messages: TicketMessage[];
 }
+
+interface TicketsResponse {
+  tickets: TicketRow[];
+}
+
+const CANNED = [
+  { label: "Looking into it", text: "Thanks for reaching out — I'm looking into this now and will update you shortly." },
+  { label: "Need more detail", text: "Could you share a bit more detail — what happened, and when? A screenshot helps if you have one." },
+  { label: "Resolved", text: "This should be sorted now — please let me know if it still isn't working on your side." },
+];
+
+const STATUS_FILTERS = [
+  { id: "", label: "All" },
+  { id: "open", label: "Open" },
+  { id: "answered", label: "Answered" },
+  { id: "closed", label: "Closed" },
+];
 
 export default function AdminTicketsPage() {
   return (
-    <main className="rg48-page-main rg23 admin-fb">
-      <div className="wrap">
-        <Suspense fallback={null}>
-          <AdminTicketsInner />
-        </Suspense>
-      </div>
-    </main>
+    <Suspense fallback={<Skeleton lines={6} title />}>
+      <AdminTicketsInner />
+    </Suspense>
   );
 }
 
@@ -59,60 +81,53 @@ function AdminTicketsInner() {
   const { user, toast } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ctx, err: ctxErr } = useAdminContext(previewId);
-  const [tickets, setTickets] = useState<TicketRow[] | null>(null);
-  const [err, setErr] = useState("");
   const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
   const [openId, setOpenId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<TicketDetail | null>(null);
-  const [reply, setReply] = useState("");
+  const [replyText, setReplyText] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      // In preview the owner reads the same inbox through the owner
-      // endpoints (the owner bypasses the admin's permissions there).
-      const base = previewId ? `/api/owner/tickets?adminId=${previewId}` : "/api/admin/tickets";
-      const qs = status ? `${base.includes("?") ? "&" : "?"}status=${encodeURIComponent(status)}` : "";
-      const res = await api<{ tickets: TicketRow[] }>(`${base}${qs}`);
-      setTickets(res.tickets);
-      setErr("");
-    } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : "Could not load tickets.");
+  const listUrl = useMemo(() => {
+    if (!user) return null;
+    const base = previewId ? `/api/owner/tickets?adminId=${previewId}` : "/api/admin/tickets";
+    return status ? `${base}${base.includes("?") ? "&" : "?"}status=${status}` : base;
+  }, [user, previewId, status]);
+  const { data, err, loading, reload } = useStaffFetch<TicketsResponse>(listUrl);
+  const rows = data?.tickets ?? [];
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const openRow = rows.find((t) => t.id === openId) ?? null;
+
+  const detailUrl = useMemo(() => {
+    if (!user || !openId) return null;
+    return previewId ? `/api/owner/tickets/${openId}` : `/api/admin/tickets/${openId}`;
+  }, [user, previewId, openId]);
+  const detail = useStaffFetch<TicketDetail>(detailUrl);
+  const ticket = detail.data;
+
+  const sendReply = async () => {
+    const text = replyText.trim();
+    if (!openId || text.length < 1) return;
+    if (text.length > 2000) {
+      toast("Reply is too long (max 2000 characters)", "lose");
+      return;
     }
-  }, [previewId, status]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const openTicket = useCallback(async (id: string) => {
-    setOpenId(id);
-    setDetail(null);
-    try {
-      const url = previewId ? `/api/owner/tickets/${id}` : `/api/admin/tickets/${id}`;
-      setDetail(await api<TicketDetail>(url));
-    } catch (ex) {
-      toast(ex instanceof Error ? ex.message : "Could not open ticket", "lose");
-      setOpenId(null);
-    }
-  }, [toast, previewId]);
-
-  const sendReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!openId || !reply.trim()) return;
     setBusy(true);
     try {
       const url = previewId ? `/api/owner/tickets/${openId}/reply` : `/api/admin/tickets/${openId}/reply`;
-      const updated = await api<TicketDetail>(url, {
-        method: "POST",
-        body: JSON.stringify({ body: reply.trim() }),
-      });
-      setDetail(updated);
-      setReply("");
+      await api(url, { method: "POST", body: JSON.stringify({ body: text }) });
+      setReplyText("");
       toast("Reply sent", "win");
-      await load();
+      detail.reload();
+      reload();
     } catch (ex) {
-      toast(ex instanceof Error ? ex.message : "Could not send reply", "lose");
-    } finally { setBusy(false); }
+      toast(ex instanceof Error ? ex.message : "Reply failed", "lose");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const closeTicket = async () => {
@@ -120,87 +135,171 @@ function AdminTicketsInner() {
     setBusy(true);
     try {
       const url = previewId ? `/api/owner/tickets/${openId}/close` : `/api/admin/tickets/${openId}/close`;
-      const updated = await api<TicketDetail>(url, { method: "POST" });
-      setDetail(updated);
+      await api(url, { method: "POST" });
       toast("Ticket closed", "win");
-      await load();
+      setConfirmClose(false);
+      setOpenId(null);
+      reload();
     } catch (ex) {
-      toast(ex instanceof Error ? ex.message : "Could not close ticket", "lose");
-    } finally { setBusy(false); }
+      toast(ex instanceof Error ? ex.message : "Close failed", "lose");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  if (!user) return <AdminLoginPrompt />;
-  if (ctxErr) return <AdminError err={ctxErr} />;
-  if (!ctx) return <p>Loading admin panel…</p>;
-  // P0 Batch 3 (O3): the server 403s this section too.
-  if (!previewId && !canAccessSection(user, "tickets")) return <AdminDenied section="tickets" />;
-  if (err) return <AdminError err={err} />;
+  const columns: DataColumn<TicketRow>[] = [
+    {
+      key: "subject",
+      label: "Subject",
+      render: (t) => t.subject,
+      sub: (t) => t.userName,
+    },
+    {
+      key: "player",
+      label: "Player",
+      render: (t) => t.userName,
+      sub: (t) => <AdminContactValue userId={t.userId} contact={t.userContact} preview={!!previewId} />,
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (t) => (
+        <StatusPill status={t.status === "open" ? "Open" : t.status === "answered" ? "Answered" : "Closed"} />
+      ),
+      details: (t) => [["Status", t.status]],
+    },
+    {
+      key: "messages",
+      label: "Messages",
+      render: (t) => String(t.messages),
+      details: (t) => [["Messages", String(t.messages)]],
+    },
+    {
+      key: "updated",
+      label: "Updated",
+      render: (t) =>
+        new Date(t.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+      details: (t) => [
+        ["Updated", new Date(t.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })],
+      ],
+    },
+  ];
 
-  const statusBadge = (s: string) => (
-    <span className={`tk-status tk-${s}`}>{s}</span>
-  );
+  if (!user) return null;
+  if (!previewId && !canAccessSection(user, "tickets")) {
+    return (
+      <ErrorState
+        title="No access to this section."
+        text="You do not have access to the Tickets section. Ask the owner to grant you access from the Owner panel."
+      />
+    );
+  }
 
   return (
-    <>
-      {previewId ? <AdminPreviewBanner name={ctx.admin.name} /> : null}
-      <div className="rg48-hbar-in">
-        <Link className="gp-back" href={previewId ? `/admin?preview=${previewId}` : "/admin"} aria-label="Back to admin overview"><span className="gp-back-coin">←</span></Link>
-        <h2>Tickets</h2>
-      </div>
-      <p className="rg48-sub">{ctx.admin.name} · {ctx.admin.email} · tickets from your players</p>
-      <AdminNav />
-      {openId && detail ? (
-        <section className="admin-sec">
-          <button className="btn btn-ghost btn-sm" type="button" onClick={() => { setOpenId(null); setDetail(null); }}>← Back to inbox</button>
-          <h3>{detail.subject}</h3>
-          <p className="rg48-sub">{detail.userName} · {detail.userContact || "—"} · {statusBadge(detail.status)}</p>
-          <div className="tk-messages">
-            {detail.messages.map((m) => (
-              <div key={m.id} className={`tk-msg tk-msg-${m.senderRole}`}>
-                <b>{m.senderRole === "admin" ? "You" : m.senderName}</b>
-                <span>{m.body}</span>
-                <small>{new Date(m.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</small>
+    <div>
+      <PageHeader
+        title="Tickets"
+        sub="Support tickets from your players. Tickets + replies only — no live chat."
+        backHref={previewId ? `/admin?preview=${previewId}` : "/admin"}
+        backLabel="Overview"
+      />
+      <Card title="Inbox">
+        <DataTable<TicketRow>
+          viewId="admin-tickets"
+          columns={columns}
+          rows={pageRows}
+          total={rows.length}
+          page={safePage}
+          pageSize={pageSize}
+          onPageChange={(p) => setPage(p)}
+          filters={STATUS_FILTERS}
+          activeFilter={status}
+          onFilterChange={(id) => {
+            setStatus(id);
+            setPage(1);
+          }}
+          loading={loading}
+          error={err}
+          onRetry={reload}
+          emptyTitle="No tickets."
+          emptyText="No rows match the current filter."
+          selectedId={openId}
+          onSelect={(t) => {
+            setOpenId(t.id === openId ? null : t.id);
+            setReplyText("");
+          }}
+          rowHref={(t) => (previewId ? `/admin/players/${t.userId}?preview=${previewId}` : `/admin/players/${t.userId}`)}
+        />
+      </Card>
+      {openRow ? (
+        <Card title={`${openRow.subject} — ${openRow.userName}`}>
+          {detail.loading ? (
+            <Skeleton lines={4} />
+          ) : detail.err || !ticket ? (
+            <ErrorState title="Could not open this ticket." text={detail.err ?? "Try again."} onRetry={detail.reload} />
+          ) : (
+            <div>
+              <div className="st-tk-thread">
+                {ticket.messages.map((m) => (
+                  <div key={m.id} className={`st-tk-msg${m.senderRole === "admin" ? " st-tk-msg-admin" : ""}`}>
+                    <p>
+                      <strong>{m.senderRole === "admin" ? "You" : ticket.userName}</strong> ·{" "}
+                      {new Date(m.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    <p>{m.body}</p>
+                  </div>
+                ))}
+                {ticket.messages.length === 0 ? <EmptyState title="No messages yet." text="The ticket has no messages." /> : null}
               </div>
-            ))}
-          </div>
-          {detail.status !== "closed" ? (
-            <>
-              <form className="tk-reply" onSubmit={sendReply}>
-                <textarea value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Write a reply…" rows={3} maxLength={2000} />
-                <button className="btn btn-gold" type="submit" disabled={busy || !reply.trim()}>{busy ? "Sending…" : "Send reply"}</button>
-              </form>
-              <button className="btn btn-ghost btn-sm" type="button" onClick={closeTicket} disabled={busy}>Close ticket</button>
-            </>
-          ) : (
-            <p className="bh-empty">This ticket is closed.</p>
-          )}
-        </section>
-      ) : (
-        <section className="admin-sec">
-          <h3>Inbox ({tickets === null ? "…" : tickets.length})</h3>
-          <label className="players-search">
-            <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter by status">
-              <option value="">All statuses</option>
-              <option value="open">Open</option>
-              <option value="answered">Answered</option>
-              <option value="closed">Closed</option>
-            </select>
-          </label>
-          {tickets === null ? (
-            <p>Loading tickets…</p>
-          ) : tickets.length === 0 ? (
-            <p>No tickets yet — your players can open one from their account page.</p>
-          ) : (
-            <div className="user-list">
-              {tickets.map((t) => (
-                <button key={t.id} type="button" className="user-row tk-row" onClick={() => void openTicket(t.id)}>
-                  <b>{t.subject}</b><span>{t.userName}</span>{statusBadge(t.status)}<span>{t.messages} {t.messages === 1 ? "message" : "messages"} · {new Date(t.updatedAt).toLocaleDateString("en-GB")}</span>
-                </button>
-              ))}
+              {ticket.status !== "closed" && !previewId ? (
+                <div style={{ marginTop: 12 }}>
+                  <div className="st-btn-row" style={{ marginBottom: 8 }}>
+                    {CANNED.map((c) => (
+                      <Button
+                        key={c.label}
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setReplyText((prev) => (prev ? `${prev}\n${c.text}` : c.text))}
+                      >
+                        {c.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <textarea
+                    className="st-input"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Write a reply…"
+                    aria-label="Reply"
+                    rows={3}
+                    maxLength={2000}
+                  />
+                  <div className="st-btn-row" style={{ marginTop: 8 }}>
+                    <Button onClick={() => void sendReply()} disabled={busy || replyText.trim().length < 1}>
+                      Send reply
+                    </Button>
+                    <Button variant="secondary" onClick={() => setConfirmClose(true)} disabled={busy}>
+                      Close ticket
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              {ticket.status === "closed" ? <p>This ticket is closed.</p> : null}
+              {previewId ? <p>Preview only — replies and closing are done from the admin&apos;s own panel.</p> : null}
             </div>
           )}
-        </section>
-      )}
-    </>
+        </Card>
+      ) : null}
+      <ConfirmDialog
+        open={confirmClose}
+        onClose={() => setConfirmClose(false)}
+        onConfirm={() => void closeTicket()}
+        title="Close ticket"
+        body="The player will see the ticket as closed. This cannot be undone from here."
+        facts={openRow ? [{ label: "Subject", value: openRow.subject }] : []}
+        confirmLabel="Close ticket"
+        busy={busy}
+      />
+    </div>
   );
 }

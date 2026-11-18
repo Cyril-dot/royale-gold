@@ -292,6 +292,27 @@ the deposit modal shows it, or hides the commission sentence when null.
 
 ## Admin (role: admin)
 
+### GET /api/admin/attention?currency=GHS (admin, Phase 5 — brief §7 list)
+Attention-first counts for the admin Overview — one call instead of
+four. Counts are the calling admin's own downline only (or, for the
+owner preview, the previewed admin's downline filtered by THAT
+admin's permissions: sections the admin cannot access are omitted).
+Withdrawals are counted in one fiat (`?currency=`, default the
+admin's currency). Fraud counts come from the same live computation
+as the Fraud page (`computeFraudAlerts`) — never recomputed, never
+stored.
+```json
+{ "withdrawals": { "pending": 2, "held": 1, "awaitingOwner": 0, "actionable": 3 },
+  "kycPending": 1,
+  "tickets": { "open": 2, "answered": 1, "needingAttention": 2 },
+  "fraud": { "high": 1, "medium": 0 } }
+// withdrawals.actionable = pending + held (the rows an admin can
+// decide right now); tickets.needingAttention = open + answered
+// (answered still needs a follow-up or a close)
+```
+401 logged out; 403 as a non-admin (or an admin without the section
+permission for every section — an empty object).
+
 ### GET /api/admin/overview
 ```json
 { "admin": { "id": "...", "name": "Royale Admin", "email": "admin@royale.gold",
@@ -414,7 +435,26 @@ never revealable (the gateway API only ever returns last-4). Phase 5
 reuses this route for the admin side by adding an admin-guarded kind.
 ```json
 // request
-{ "kind": "withdrawal-account" | "user-contact" | "payout-account", "id": "<id>" }
+{ "kind": "withdrawal-account" | "user-contact" | "payout-account" | "admin-withdrawal-account" | "admin-user-contact", "id": "<id>" }
+// admin-withdrawal-account (id = withdrawal id; admin only):
+// the payout account snapshot saved on the withdrawal. Guarded by
+// requireRole("admin") + the "money" permission, and the withdrawal
+// must belong to the admin's own downline (withdrawal.adminId ===
+// admin.id). Same 503 when the withdrawal-account columns do not
+// exist in the database yet.
+// admin-user-contact (id = user id; admin only): that player's email
+// + phone. Guarded by requireRole("admin") + at least one
+// player-facing section permission (players / money / fraud /
+// tickets / kyc), and the player must be in the admin's downline
+// scope. 404 when the player is out of scope.
+// Preview never reveals: the owner previewing an admin's panel
+// reads through the owner kinds only; admin kinds 403 for the owner.
+// Owner kinds are unchanged (owner role only).
+{ "ok": true, "kind": "admin-withdrawal-account", "id": "...",
+  "value": { "accountType": "momo", "accountName": "Kwame Mensah", "accountDetail": "0244123456" } }
+{ "ok": true, "kind": "admin-user-contact", "id": "...",
+  "value": { "name": "Kwame Mensah", "email": "k@example.com", "phone": "0244123456" } }
+```
 // withdrawal-account (id = withdrawal id): the payout account snapshot
 // saved on the withdrawal. 503 (not 500) when the withdrawal-account
 // columns do not exist in the database yet (rg-withdrawal-account.sql

@@ -48,13 +48,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       }
     }
     const [deposits, redemptions, rounds, tickets, notes, tags, limit, kyc] = await Promise.all([
+      // Phase 5 (admin 500s): select only the columns this route maps —
+      // an unfiltered depositEvent select also pulls providerPayload,
+      // which prod may not have yet, and the whole query throws.
       prisma.depositEvent.findMany({
         where: { userId: id },
+        select: { id: true, userId: true, amount: true, method: true, commission: true, pctInForce: true, fiatCurrency: true, createdAt: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.redemption.findMany({ where: { userId: id } }),
       prisma.gameResult.findMany({
         where: { userId: id },
+        select: { id: true, userId: true, game: true, currency: true, stake: true, payout: true, fiatCurrency: true, createdAt: true },
         orderBy: { createdAt: "desc" },
         take: 50,
       }),

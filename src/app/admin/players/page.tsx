@@ -1,23 +1,23 @@
-// Admin dashboard — Players list (Round 31). The audit found there was
-// no Players list page at all — /admin/players 404d, and the only way to
-// reach a player was tapping a referred user on the Referrals page. Now
-// every referred user is listed here, with a search box, each row linking
-// to its detail page (/admin/players/[id]). Same data source as the
-// Referrals page (useAdminOverview → ov.referredUsers); no API change.
-//
-// P1 Batch 1 (A14): segmentation — the list now loads from the segments
-// endpoint (same players, plus segment flags + counts + tags). Filter
-// chips above the list, tags on each row. Search still works the same.
-
+// Admin dashboard — Players list (Phase 5 restyle). Same data source
+// as before (segments endpoint + VIP tiers + responsible-gambling list),
+// staff-ui throughout: shared DataTable + CardList on phone, masked
+// contacts with audited Reveal, segment + VIP filters, search. Rows link
+// to the tabbed player detail.
 "use client";
 
-import { Suspense, useState } from "react";
-import Link from "next/link";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "../../../lib/store";
-import { useAdminContext, useAdminSegments, useAdminVipTiers, useAdminResponsible, type PlayerSegmentKey } from "../../../lib/admin-client";
+import { useStaffFetch } from "../../../components/staff-ui/useStaffFetch";
+import { PageHeader } from "../../../components/staff-ui/PageHeader";
+import { Card } from "../../../components/staff-ui/Card";
+import { DataTable, type DataColumn } from "../../../components/staff-ui/DataTable";
+import { Badge } from "../../../components/staff-ui/Badge";
+import { Chip } from "../../../components/staff-ui/Tabs";
+import { Skeleton, ErrorState } from "../../../components/staff-ui/Feedback";
+import { AdminContactValue } from "../../../components/admin/AdminReveal";
 import { canAccessSection } from "../../../lib/rbac";
-import { AdminNav, AdminPreviewBanner, AdminLoginPrompt, AdminError, AdminDenied } from "../../../components/AdminNav";
+import type { PlayerSegmentKey, PlayerSegmentRow, ResponsibleRow } from "../../../lib/admin-client";
 
 const SEGMENTS: { key: PlayerSegmentKey; label: string }[] = [
   { key: "new", label: "New" },
@@ -27,15 +27,23 @@ const SEGMENTS: { key: PlayerSegmentKey; label: string }[] = [
   { key: "at-risk", label: "At risk" },
 ];
 
+interface SegmentsResponse {
+  players: PlayerSegmentRow[];
+  counts: Record<PlayerSegmentKey, number>;
+  total: number;
+  scope: { childAdmins: { id: string; name: string }[] };
+}
+
+interface VipResponse {
+  tiers: { id: string; name: string; minDeposited: number; perks: string[]; sortOrder: number; createdAt: string }[];
+  players: { id: string; name: string; contact: string | null; totalDeposited: number; tier: { id: string; name: string; minDeposited: number; perks: string[] } | null }[];
+}
+
 export default function AdminPlayersPage() {
   return (
-    <main className="rg48-page-main rg23 admin-fb">
-      <div className="wrap">
-        <Suspense fallback={null}>
-          <AdminPlayersInner />
-        </Suspense>
-      </div>
-    </main>
+    <Suspense fallback={<Skeleton lines={6} title />}>
+      <AdminPlayersInner />
+    </Suspense>
   );
 }
 
@@ -43,130 +51,206 @@ function AdminPlayersInner() {
   const { user } = useStore();
   const sp = useSearchParams();
   const previewId = sp.get("preview");
-  const { ctx, err: ctxErr } = useAdminContext(previewId);
-  // P1 Batch 1 (A14): segments endpoint — same players, plus segment
-  // flags, counts and tags.
-  const { data: seg, err: playersErr } = useAdminSegments(previewId);
-  // P2 Batch 1 (A26): VIP tiers + each player's tier, computed live
-  // from the deposit ledger. (A29): the responsible-gambling list —
-  // players with an active cool-off or self-exclusion.
-  const { data: vip } = useAdminVipTiers(previewId);
-  const { data: rg } = useAdminResponsible(previewId);
   const [q, setQ] = useState("");
   const [segment, setSegment] = useState<PlayerSegmentKey | "">("");
   const [vipFilter, setVipFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
 
-  if (!user) return <AdminLoginPrompt />;
-  if (ctxErr) return <AdminError err={ctxErr} />;
-  if (!ctx) return <p>Loading admin panel…</p>;
-  // P0 Batch 3 (O3): the server 403s this section too.
-  if (!previewId && !canAccessSection(user, "players")) return <AdminDenied section="players" />;
-  if (playersErr) return <AdminError err={playersErr} />;
-  if (!seg) return <p>Loading admin panel…</p>;
+  const segUrl = useMemo(
+    () => (user ? (previewId ? `/api/admin/players/segments?adminId=${previewId}` : "/api/admin/players/segments") : null),
+    [user, previewId],
+  );
+  const vipUrl = useMemo(
+    () => (user ? (previewId ? `/api/admin/vip-tiers?adminId=${previewId}` : "/api/admin/vip-tiers") : null),
+    [user, previewId],
+  );
+  const rgUrl = useMemo(
+    () => (user ? (previewId ? `/api/admin/players/responsible?adminId=${previewId}` : "/api/admin/players/responsible") : null),
+    [user, previewId],
+  );
+  const { data: seg, err: segErr, loading: segLoading, reload } = useStaffFetch<SegmentsResponse>(segUrl);
+  const { data: vip } = useStaffFetch<VipResponse>(vipUrl);
+  const { data: rg } = useStaffFetch<{ players: ResponsibleRow[] }>(rgUrl);
 
-  const ov = { admin: ctx.admin, referredUsers: seg.players };
+  if (!user) return null;
+  if (!previewId && !canAccessSection(user, "players")) {
+    return (
+      <ErrorState
+        title="No access to this section."
+        text="You do not have access to the Players section. Ask the owner to grant you access from the Owner panel."
+      />
+    );
+  }
+  if (segErr) return <ErrorState text={segErr} onRetry={reload} />;
+  if (segLoading || !seg) return <Skeleton lines={6} title />;
 
-  const playerHref = (id: string) => (previewId ? `/admin/players/${id}?preview=${previewId}` : `/admin/players/${id}`);
-  const needle = q.trim().toLowerCase();
-  // P2 Batch 1 (A26): tier per player, merged by id (the VIP endpoint
-  // computes it from the same deposit ledger as the segments).
+  const href = (p: string) => (previewId ? `${p}?preview=${previewId}` : p);
+  const playerHref = (id: string) => href(`/admin/players/${id}`);
   const tierById = new Map((vip?.players ?? []).map((p) => [p.id, p.tier?.name ?? null]));
-  const users = ov.referredUsers.filter((u) => {
+  const needle = q.trim().toLowerCase();
+  const users = seg.players.filter((u) => {
     if (segment && !u.segments.includes(segment)) return false;
     if (vipFilter && tierById.get(u.id) !== vipFilter) return false;
     if (!needle) return true;
     return [u.name, u.email || "", u.phone || "", u.referralCodeUsed || "", u.tags.join(" ")]
-      .join(" ").toLowerCase().includes(needle);
+      .join(" ")
+      .toLowerCase()
+      .includes(needle);
   });
+  const totalPages = Math.max(1, Math.ceil(users.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = users.slice((safePage - 1) * pageSize, safePage * pageSize);
   const rgPlayers = rg?.players ?? [];
 
+  const segmentLabel = (s: PlayerSegmentKey) => SEGMENTS.find((x) => x.key === s)?.label ?? s;
+
+  const columns: DataColumn<PlayerSegmentRow>[] = [
+    {
+      key: "player",
+      label: "Player",
+      render: (u) => u.name,
+      sub: (u) => <AdminContactValue userId={u.id} contact={u.email || u.phone} preview={!!previewId} />,
+    },
+    {
+      key: "segments",
+      label: "Segments",
+      render: (u) =>
+        u.segments.length === 0 ? (
+          <span>—</span>
+        ) : (
+          <span>
+            {u.segments.map((s) => (
+              <Badge key={s} variant={s === "at-risk" ? "warn" : "muted"}>
+                {segmentLabel(s)}
+              </Badge>
+            ))}
+          </span>
+        ),
+      details: (u) => [["Segments", u.segments.map(segmentLabel).join(", ") || "—"]],
+    },
+    {
+      key: "vip",
+      label: "VIP",
+      render: (u) => tierById.get(u.id) ?? "—",
+      details: (u) => [["VIP tier", tierById.get(u.id) ?? "—"]],
+    },
+    {
+      key: "code",
+      label: "Code used",
+      render: (u) => u.referralCodeUsed ?? "—",
+      details: (u) => [["Code used", u.referralCodeUsed ?? "—"]],
+    },
+    {
+      key: "joined",
+      label: "Joined",
+      render: (u) => new Date(u.createdAt).toLocaleDateString("en-GB"),
+      details: (u) => [
+        ["Joined", new Date(u.createdAt).toLocaleDateString("en-GB")],
+        ...(seg.scope.childAdmins.length > 0 && u.referredByAdminName ? [["Via", u.referredByAdminName] as [string, ReactNode]] : []),
+        ...(u.tags.length > 0 ? [["Tags", u.tags.join(", ")] as [string, ReactNode]] : []),
+      ],
+    },
+  ];
+
+  const rgColumns: DataColumn<ResponsibleRow>[] = [
+    {
+      key: "player",
+      label: "Player",
+      render: (p) => p.name,
+      sub: (p) => p.contact ?? "—",
+    },
+    {
+      key: "type",
+      label: "Type",
+      render: (p) => (p.selfExcludedUntil ? <Badge variant="danger">Self-excluded</Badge> : <Badge variant="warn">Cool-off</Badge>),
+    },
+    {
+      key: "until",
+      label: "Until",
+      render: (p) =>
+        [
+          p.selfExcludedUntil ? `self-excluded until ${new Date(p.selfExcludedUntil).toLocaleDateString("en-GB")}` : "",
+          p.coolOffUntil ? `cool-off until ${new Date(p.coolOffUntil).toLocaleDateString("en-GB")}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ") || "—",
+      details: (p) => [
+        ["Until", [p.selfExcludedUntil, p.coolOffUntil].filter(Boolean).join(" · ") || "—"],
+        ...(p.selfExclusionReason ? [["Reason", p.selfExclusionReason] as [string, ReactNode]] : []),
+      ],
+    },
+  ];
+
+  const filters = [
+    { id: "", label: `All (${seg.total})` },
+    ...SEGMENTS.map((s) => ({ id: s.key, label: `${s.label} (${seg.counts[s.key]})` })),
+  ];
+
   return (
-    <>
-      {previewId ? <AdminPreviewBanner name={ov.admin.name} /> : null}
-      <div className="rg48-hbar-in">
-        <Link className="gp-back" href={previewId ? `/admin?preview=${previewId}` : "/admin"} aria-label="Back to admin overview"><span className="gp-back-coin">←</span></Link>
-        <h2>Players</h2>
-      </div>
-      <p className="rg48-sub">{ov.admin.name} · {ov.admin.email} · {ov.admin.commissionPct}% commission{ov.admin.active ? "" : " · DEACTIVATED"}</p>
-      <AdminNav />
-      <section className="admin-sec">
-        <h3>Referred players ({ov.referredUsers.length})</h3>
-        {/* P1 Batch 4 (O24): when this admin has child admins, the
-            list rolls their downlines in — each row says via whom. */}
-        {seg.scope.childAdmins.length > 0 && (
-          <p className="rg48-mini">
+    <div>
+      <PageHeader title="Players" sub="Every referred player in your downline." />
+      <Card title={`Referred players (${seg.players.length})`}>
+        {seg.scope.childAdmins.length > 0 ? (
+          <p>
             Includes your child admins&apos; downlines: {seg.scope.childAdmins.map((c) => c.name).join(", ")}.
           </p>
-        )}
-        <div className="money-chips" role="group" aria-label="Filter by segment">
-          <button type="button" className={!segment ? "on" : ""} onClick={() => setSegment("")}>All ({seg.total})</button>
-          {SEGMENTS.map((s) => (
-            <button key={s.key} type="button" className={segment === s.key ? "on" : ""} onClick={() => setSegment(segment === s.key ? "" : s.key)}>{s.label} ({seg.counts[s.key]})</button>
-          ))}
-        </div>
-        {/* P2 Batch 1 (A26): filter by VIP tier — a label + perks only;
-            it changes no economy, limits or payouts. */}
-        {vip && vip.tiers.length > 0 && (
-          <div className="money-chips" role="group" aria-label="Filter by VIP tier">
-            <button type="button" className={!vipFilter ? "on" : ""} onClick={() => setVipFilter("")}>All tiers</button>
+        ) : null}
+        {vip && vip.tiers.length > 0 ? (
+          <div className="st-chip-row" role="group" aria-label="Filter by VIP tier">
+            <Chip label="All tiers" active={!vipFilter} onClick={() => setVipFilter("")} />
             {vip.tiers.map((t) => (
-              <button key={t.id} type="button" className={vipFilter === t.name ? "on" : ""} onClick={() => setVipFilter(vipFilter === t.name ? "" : t.name)}>
-                {t.name} ({vip.players.filter((p) => p.tier?.name === t.name).length})
-              </button>
+              <Chip
+                key={t.id}
+                label={`${t.name} (${vip.players.filter((p) => p.tier?.name === t.name).length})`}
+                active={vipFilter === t.name}
+                onClick={() => setVipFilter(vipFilter === t.name ? "" : t.name)}
+              />
             ))}
           </div>
-        )}
-        <label className="players-search">
-          <input
-            type="search"
-            placeholder="Search by name, email or phone"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            aria-label="Search players"
-          />
-        </label>
-        {ov.referredUsers.length === 0 ? (
-          <p>No referred players yet.</p>
-        ) : users.length === 0 ? (
-          <p>No players match{segment ? ` this segment` : ""}{vipFilter ? ` the ${vipFilter} tier` : ""}{q.trim() ? ` “${q.trim()}”` : ""}.</p>
-        ) : (
-          <div className="user-list">
-            {users.map((u) => (
-              <Link key={u.id} className="user-row" href={playerHref(u.id)}>
-                <b>{u.name}</b><span>{u.email || u.phone || "—"}</span>{u.referralCodeUsed ? <span className="code-chip sm">{u.referralCodeUsed}</span> : <span aria-hidden="true" />}<span>Joined {new Date(u.createdAt).toLocaleDateString("en-GB")}</span>
-                {seg.scope.childAdmins.length > 0 && u.referredByAdminName ? <span className="rg48-mini">via {u.referredByAdminName}</span> : null}
-                {tierById.get(u.id) ? <span className="vip-pill">{tierById.get(u.id)}</span> : null}
-                {u.tags.length > 0 ? <span className="pd-tags-inline">{u.tags.map((t) => <span key={t} className="tag-pill">{t}</span>)}</span> : null}
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-      {/* P2 Batch 1 (A29): responsible gambling — players with an ACTIVE
-          cool-off or self-exclusion, with their until dates. A player
-          whose dates have passed is not listed. */}
-      <section className="admin-sec">
-        <h3>Responsible gambling ({rgPlayers.length})</h3>
-        <p className="rg48-sub">Players on a break right now — a cool-off (set by you or by the player) or a self-exclusion. While it runs they cannot deposit, play or settle.</p>
+        ) : null}
+        <DataTable<PlayerSegmentRow>
+          viewId="admin-players"
+          columns={columns}
+          rows={pageRows}
+          total={users.length}
+          page={safePage}
+          pageSize={pageSize}
+          onPageChange={(p) => setPage(p)}
+          search={q}
+          onSearchChange={(v) => {
+            setQ(v);
+            setPage(1);
+          }}
+          searchPlaceholder="Search by name, email or phone"
+          filters={filters}
+          activeFilter={segment}
+          onFilterChange={(id) => {
+            setSegment(id as PlayerSegmentKey | "");
+            setPage(1);
+          }}
+          emptyTitle="No players match."
+          emptyText="No players match the current filters."
+          rowHref={(u) => playerHref(u.id)}
+        />
+      </Card>
+
+      <Card title={`Responsible gambling (${rgPlayers.length})`} sub="Players on a break right now — a cool-off or a self-exclusion. While it runs they cannot deposit, play or settle.">
         {rgPlayers.length === 0 ? (
           <p>No players on a break right now.</p>
         ) : (
-          <div className="user-list">
-            {rgPlayers.map((p) => (
-              <Link key={p.id} className="user-row" href={playerHref(p.id)}>
-                <b>{p.name}</b><span>{p.contact || "—"}</span>
-                {p.selfExcludedUntil ? <span className="pd-blocked-badge">SELF-EXCLUDED</span> : <span className="tag-pill">Cool-off</span>}
-                <span>
-                  {p.selfExcludedUntil ? `until ${new Date(p.selfExcludedUntil).toLocaleDateString("en-GB")}` : ""}
-                  {p.selfExcludedUntil && p.coolOffUntil ? " · " : ""}
-                  {p.coolOffUntil ? `cool-off until ${new Date(p.coolOffUntil).toLocaleDateString("en-GB")}` : ""}
-                </span>
-                {p.selfExclusionReason ? <span className="rg48-mini">{p.selfExclusionReason}</span> : null}
-              </Link>
-            ))}
-          </div>
+          <DataTable<ResponsibleRow>
+            viewId="admin-players-rg"
+            columns={rgColumns}
+            rows={rgPlayers}
+            total={rgPlayers.length}
+            page={1}
+            pageSize={10}
+            onPageChange={() => undefined}
+            rowHref={(p) => playerHref(p.id)}
+          />
         )}
-      </section>
-    </>
+      </Card>
+    </div>
   );
 }
