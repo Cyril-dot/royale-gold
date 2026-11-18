@@ -92,12 +92,12 @@ export function MaskedValue({
             type="button"
             className="st-copy-btn"
             disabled
-            title="Reveal needs the audited reveal endpoint"
+            title="Reveal is not available for this field"
             aria-disabled="true"
           >
             Reveal
           </button>
-          <span className="st-masked-note">Reveal needs the audit endpoint (Phase 3)</span>
+          <span className="st-masked-note">Reveal is not available for this field.</span>
         </>
       )}
       {err ? (

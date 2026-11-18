@@ -5,7 +5,6 @@ import "./v48.css";
 import "./hdr-menu.css";
 import "./cards-v5.css";
 import "./bottle-v8.css";
-import "./admin-ref.css";
 import "./admin-v11.css";
 import "./wallet-v11.css";
 import "./wallet-v20.css";

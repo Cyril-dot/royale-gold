@@ -207,6 +207,26 @@ function AdminShellInner({ children }: { children: ReactNode }) {
       </main>
     );
   }
+  // Phase 7: the owner has no admin identity of their own — every admin
+  // API route 403s without ?preview=, so before this the owner landed
+  // on a raw "Forbidden for this role" error state. That was a bug, not
+  // a gate: say so plainly and send them to pick an admin to preview.
+  // (No permission-model change — the endpoints still 403 without a
+  // preview; this is only the friendly face of that fact.)
+  if (user.role === "owner" && !previewId) {
+    return (
+      <main className="st-main">
+        <h2 className="st-pagehead-title">Admin panel</h2>
+        <p>
+          You are signed in as the owner. The admin panel shows one admin at a time — pick an admin to
+          preview and you will see exactly what they see.
+        </p>
+        <Button variant="primary" onClick={() => router.push("/owner/people/admins")}>
+          Choose an admin to preview
+        </Button>
+      </main>
+    );
+  }
 
   const preview =
     previewId && ctx

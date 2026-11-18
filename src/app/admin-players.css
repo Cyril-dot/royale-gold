@@ -1,180 +1,37 @@
-/* --- Admin panel: Players list (Round 31) ---
-   Search box for the new /admin/players list page. 16px font so iOS
-   never zooms the page on focus; full width; brand tokens only. */
-.players-search{display:block;margin:0 0 12px}
-.players-search input{width:100%;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit;font-size:16px}
-.players-search input::placeholder{color:rgba(255,246,216,.45)}
-.players-search input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
-
-/* --- Admin panel: full-bleed, no section boxes (Round 32) ---
-   Chuks: remove the box borders and containers on the admin pages and
-   let the content cover the full width. Every admin <main> carries the
-   .admin-fb class (Overview, Referrals, Commission, Players, player
-   detail). Selectors are main.rg48-page-main.rg23.admin-fb so they beat
-   the rg23 overrides in globals.css regardless of load order.
-   Kept on purpose: the stat tiles (.sum-card, content not container),
-   the tab pills (.admin-nav a, .ac-tab — interactive controls), the
-   form inputs, the preview banner (a transient notice, not a section),
-   and the h3 gold underline. Amounts stay Outfit bold, never Anton. */
-
-/* The page container stops capping the width — content spans the page,
-   aligned to the edge with consistent padding (20px, 14px on phones). */
-main.rg48-page-main.rg23.admin-fb .wrap{width:100%;max-width:none;margin-inline:0;padding-inline:20px}
-@media (max-width:480px){
-  main.rg48-page-main.rg23.admin-fb .wrap{padding-inline:14px}
-}
-
-/* Sections lose the box entirely — no background, border, radius or
-   shadow — and read as full-width content on the page background. A
-   thin divider separates sections; the first one needs none. The gold
-   top line (::before) was part of the box, so it goes too. */
-main.rg48-page-main.rg23.admin-fb .admin-sec{
-  background:none;border:0;border-radius:0;box-shadow:none;
-  padding:24px 0 0;margin:0 0 30px;
-  border-top:1px solid rgba(255,246,216,.1);
-}
-main.rg48-page-main.rg23.admin-fb .admin-sec:first-of-type{border-top:0;padding-top:0}
-main.rg48-page-main.rg23.admin-fb .admin-sec::before{display:none}
-main.rg48-page-main.rg23.admin-fb .admin-sec.referral-sec{background:none;border:0;box-shadow:none}
-
-/* The tab bar loses its own container too — no dark box behind it. The
-   inactive pills get their border back (the rg23 rule made them
-   borderless for the dark container); :not(.an-active) leaves the gold
-   active tab exactly as it was. */
-main.rg48-page-main.rg23.admin-fb .admin-nav{background:none;border:0;border-radius:0;padding:0}
-main.rg48-page-main.rg23.admin-fb .admin-nav a:not(.an-active){border-color:var(--line,rgba(255,246,216,.14));background:var(--steel,#141828)}
-
-/* Stat tiles are content, not containers — they stay, and now stretch
-   across the full width in a roomier row. */
-main.rg48-page-main.rg23.admin-fb .sum-cards{gap:12px}
-
-/* --- Referral code per user: compact, premium pill (Round 32) ---
-   The per-user code (Referrals + Players rows, player detail) was a big
-   gold block. Now a small tight outline pill: mono, 11px, sized to the
-   code, gold text on a whisper of gold, thin gold border, no shadow.
-   The admin's OWN share codes (.code-chip, no .sm) keep the big gold
-   block — those are the hero codes, not the per-user detail. */
-main.rg48-page-main.rg23.admin-fb .code-chip.sm{
-  font-size:11px;line-height:1.3;font-weight:800;letter-spacing:.02em;
-  padding:3px 8px;border-radius:6px;white-space:nowrap;
-  background:rgba(242,194,48,.12);color:var(--gold-2,#FFD964);
-  border:1px solid rgba(242,194,48,.45);box-shadow:none;
-  /* A grid item stretches to fill its track by default — at phone width
-     the user rows are a 2×2 grid (globals.css ≤640px) and the pill sits
-     in the 1fr column, so without this it draws ~170px wide with the
-     code at the left. justify-self:start sizes it to the code. */
-  justify-self:start;
-}
-
-/* --- Player detail: "Code used" as its own labelled field (Round 32) ---
-   It was crammed into the long subtitle line. Now the subtitle is just
-   contact + joined date, and Code used / Referring admin are small
-   labelled fields on their own row. */
-.pd-meta{display:flex;flex-wrap:wrap;gap:6px 24px;margin:0 0 20px}
-.pd-meta-item{display:inline-flex;align-items:center;gap:8px;font-size:13px}
-.pd-meta-label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted,rgba(255,246,216,.7))}
-.pd-meta-item b{font-weight:800}
-
-/* --- P0 Batch 1: Money pages (admin /admin/money, owner Withdrawals +
-   Ledger sections) + player-detail adjust/block ---
-   Brand tokens only, 44px min touch targets, 16px inputs (no iOS zoom),
-   hover gated behind (hover:hover) and (pointer:fine), :active scale.
-   Amounts are <b> in the site font (Outfit bold) — never Anton. */
+/* Phase 7 (staff redesign) — dead staff CSS removed. This file used to
+   carry the whole old admin/owner panel: Players search, the full-bleed
+   overrides (.admin-fb), withdrawal rows (.wd-*), ledger rows, player
+   detail (.pd-*), permissions editor (.ow-*), KYC queue (.kyc-*), fraud
+   (.fraud-*, .sev-*), campaigns (.cmp-*), tournaments (.tn-detail),
+   promo codes, notes/tags, the downline tree (.b4-tree*), the old
+   deposits chart (.b4-chart/.b4-bar*), bet lookup (.lookup-form,
+   .lookup-pre, .verify-box, .lk-*), announcements form/table
+   (.ann-form/.ann-table), the cashier scope (.cashier-sec) and the
+   legacy ticket thread (.tk-messages, .tk-msg, .tk-reply, .tk-row).
+   Every one of those classes had zero references left in the source
+   (verified by grep over all of src, including template literals) —
+   the staff pages use staff-ui now, so the rules are gone.
+   What stays below is LIVE — used by PLAYER pages, which is why this
+   file still exists at all. Do not delete it. Each block says who
+   uses it. */
 
 /* Filter chips (method / status / type) — same visual language as the
-   .admin-nav pills: steel bg, gold when on. */
+   old .admin-nav pills: steel bg, gold when on.
+   LIVE: the PLAYER account page (notifications / tickets filters). */
 .money-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
 .money-chips button{min-height:40px;padding:8px 14px;border-radius:10px;border:1px solid var(--line,rgba(255,246,216,.14));background:var(--steel,#141828);color:var(--ink,#FFF6D8);font:inherit;font-weight:700;font-size:13.5px;touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer}
 .money-chips button.on{background:var(--gold,#F2C230);color:#231a02;border-color:var(--gold,#F2C230)}
 .money-chips button:active{transform:scale(.97)}
 @media (hover:hover) and (pointer:fine){.money-chips button:hover{border-color:var(--gold,#F2C230)}}
 
-/* Money filters: search + chips + date range. */
-.money-filters{margin:0 0 16px}
-.money-dates{display:flex;flex-wrap:wrap;gap:10px 16px;margin:0 0 4px}
-.money-dates label{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
-.money-dates input,.money-dates select{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
-.money-dates input:focus,.money-dates select:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
-
-/* Deposit table: player cell carries a muted contact sub-line. */
-.td-sub{display:block;font-size:12px;color:var(--muted,rgba(255,246,216,.7));font-weight:400}
-
-/* Withdrawal queue rows. */
-.wd-list{display:flex;flex-direction:column;gap:12px}
-.wd-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:14px 0;border-top:1px solid rgba(255,246,216,.1)}
-.wd-row:first-child{border-top:0;padding-top:0}
-.wd-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 220px}
-.wd-main b{font-size:15px}
-.wd-main span{font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
-.wd-main .wd-amt{font-size:15px;font-weight:800;color:var(--ink,#FFF6D8)}
-.wd-status{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:6px;white-space:nowrap}
-.wd-pending{background:rgba(242,194,48,.14);color:var(--gold-2,#FFD964);border:1px solid rgba(242,194,48,.45)}
-.wd-admin_approved{background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.45)}
-.wd-approved{background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.45)}
-.wd-rejected{background:rgba(229,50,45,.12);color:#FF6B65;border:1px solid rgba(229,50,45,.45)}
-/* P2 Batch 2 (O31): a withdrawal held by an automated risk rule —
-   burnt orange, distinct from pending gold and rejected red. */
-.wd-held{background:rgba(255,140,0,.14);color:#FFA94D;border:1px solid rgba(255,140,0,.5)}
-.wd-reason{flex-basis:100%;margin:0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
-.wd-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.wd-note{font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
-.wd-reject{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap}
-.wd-reject input{flex:1 1 200px;min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
-.wd-reject input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
-
-/* Ledger rows. */
-.ledger-list{display:flex;flex-direction:column}
-.ledger-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid rgba(255,246,216,.1);cursor:pointer}
-.ledger-row:first-child{border-top:0;padding-top:0}
-.ledger-row:focus-visible{outline:2px solid var(--gold,#F2C230);outline-offset:2px}
-.ledger-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
-.ledger-txt b{font-size:14.5px}
-.ledger-txt span{font-size:12.5px;color:var(--muted,rgba(255,246,216,.7))}
-.ledger-type{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:rgba(255,246,216,.08);color:var(--gold-2,#FFD964);border:1px solid rgba(242,194,48,.35)}
-.ledger-in{color:#3ED97E;white-space:nowrap}
-.ledger-out{color:#FF6B65;white-space:nowrap}
-
-/* Player detail: blocked badge + note, adjustment form. */
-.pd-blocked-badge{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:6px;background:rgba(229,50,45,.14);color:#FF6B65;border:1px solid rgba(229,50,45,.5);white-space:nowrap}
-.pd-blocked-note{margin:0 0 16px;padding:11px 14px;border-radius:10px;background:rgba(229,50,45,.1);border:1px solid rgba(229,50,45,.4);font-size:13.5px}
-.pd-adjust{display:flex;flex-direction:column;gap:12px}
-.pd-adjust-row{display:flex;gap:10px;flex-wrap:wrap}
-.pd-adjust-row label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;flex:1 1 120px}
-.pd-adjust-row select,.pd-adjust-row input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
-.pd-adjust-row select:focus,.pd-adjust-row input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
-.pd-adjust-reason{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700}
-.pd-adjust-reason input{min-height:44px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px}
-.pd-adjust-reason input:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
-
-/* ---- P0 Batch 3: management / audit / security ---- */
-
-/* Commission day model caption (admin commission page). */
-.ac-model-cap{margin:10px 0 0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
-
-/* Owner: per-admin permissions editor + kill sessions (All admins). */
-.ow-perms{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,246,216,.1)}
-.ow-perms-label{display:block;font-size:12.5px;font-weight:700;color:var(--muted,rgba(255,246,216,.7));margin-bottom:8px}
-.ow-perms-checks{display:flex;flex-wrap:wrap;gap:6px 14px}
-.ow-perm-check{display:flex;align-items:center;gap:6px;font-size:13.5px;cursor:pointer;min-height:32px}
-.ow-perm-check input{width:18px;height:18px;accent-color:#F2C230}
-.ow-perms-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
-.ow-2fa-on{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:5px;background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.4)}
-
-/* Tickets: status pills, message thread, reply form, inbox rows. */
+/* Tickets: status pills, reply form, my-tickets rows.
+   LIVE: the PLAYER account page ("My tickets"). The staff ticket thread
+   uses .st-tk-* in tokens.css now — the old .tk-msg/.tk-reply rules are
+   gone with the rest of the dead staff CSS above. */
 .tk-status{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:5px;white-space:nowrap}
 .tk-open{background:rgba(242,194,48,.14);color:#FFD964;border:1px solid rgba(242,194,48,.5)}
 .tk-answered{background:rgba(62,217,126,.12);color:#3ED97E;border:1px solid rgba(62,217,126,.4)}
 .tk-closed{background:rgba(255,246,216,.08);color:var(--muted,rgba(255,246,216,.7));border:1px solid rgba(255,246,216,.2)}
-.tk-messages{display:flex;flex-direction:column;gap:10px;margin:14px 0}
-.tk-msg{display:flex;flex-direction:column;gap:4px;padding:11px 13px;border-radius:10px;font-size:14px}
-.tk-msg b{font-size:12.5px}
-.tk-msg small{font-size:11.5px;color:var(--muted,rgba(255,246,216,.7))}
-.tk-msg-admin{background:rgba(242,194,48,.1);border:1px solid rgba(242,194,48,.35)}
-.tk-msg-user{background:rgba(255,246,216,.05);border:1px solid rgba(255,246,216,.14)}
-.tk-reply{display:flex;flex-direction:column;gap:10px;margin-top:4px}
-.tk-reply textarea{min-height:80px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px;resize:vertical}
-.tk-reply textarea:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
-.tk-row{width:100%;text-align:left;cursor:pointer}
 .tk-form{display:flex;flex-direction:column;gap:12px}
 .tk-form textarea{min-height:80px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:10px 12px;font:inherit;font-size:16px;resize:vertical}
 .tk-form textarea:focus{outline:2px solid var(--gold,#F2C230);outline-offset:1px;border-color:var(--gold,#F2C230)}
@@ -182,172 +39,42 @@ main.rg48-page-main.rg23.admin-fb .code-chip.sm{
 .tk-mine-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid rgba(255,246,216,.1)}
 .tk-mine-row b{font-size:14px}
 
-/* 2FA QR code (Settings). */
+/* 2FA QR code — LIVE: the PLAYER settings page. */
 .tfa-qr{display:block;background:#FFF6D8;padding:10px;border-radius:12px;margin:12px 0}
 
-/* ============ P0 Batch 4 — dashboard chart, downline tree, player search ============ */
-/* 7-day deposits chart (A1): plain divs, no library. Values are bare
-   numbers — the heading carries the GH₵ unit (7 columns at 390px are
-   too narrow for the full "GH₵ 100.00" label). */
-.b4-chart{display:flex;gap:6px;align-items:stretch}
-.b4-bar-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px}
-.b4-bar-val{font-size:10.5px;font-weight:800;color:var(--gold,#F2C230);text-align:center;overflow-wrap:anywhere;line-height:1.2;min-height:13px}
-.b4-bar-track{width:100%;height:96px;display:flex;align-items:flex-end;background:rgba(255,246,216,.05);border-radius:6px 6px 0 0;overflow:hidden}
-.b4-bar{width:100%;background:var(--gold,#F2C230);border-radius:6px 6px 0 0}
-.b4-bar-day{font-size:10.5px;color:var(--muted,rgba(255,246,216,.7));text-align:center;white-space:nowrap}
-/* Downline tree (A9): nested lists with a gold left rule; node cards
-   wrap so long names and figures never force horizontal scroll. */
-.b4-tree{list-style:none;margin:0;padding:0 0 0 14px;border-left:1px solid rgba(242,194,48,.35)}
-.b4-tree-node{margin:10px 0}
-.b4-tree-card{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;background:rgba(4,6,13,.35);border:1px solid rgba(255,246,216,.12);border-radius:10px;padding:9px 12px}
-.b4-tree-card b{font-size:14px;overflow-wrap:anywhere}
-.b4-tree-card b a{color:inherit;text-decoration:underline;text-underline-offset:2px}
-.b4-tree-card span{font-size:12.5px;color:var(--muted,rgba(255,246,216,.7));overflow-wrap:anywhere}
-.b4-tree-root-card{margin:0 0 4px}
-.b4-tree-more{font-size:12px;color:var(--muted,rgba(255,246,216,.7));margin:6px 0 0 14px}
-/* Player-360 ticket list (A3): plain rows, no pointer (they are not
-   links — the inbox opens tickets inline). */
-.b4-tk-list{display:flex;flex-direction:column}
-.b4-tk-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;border-top:1px solid rgba(255,246,216,.08);padding:11px 4px}
-.b4-tk-row b{font-size:14px;overflow-wrap:anywhere}
-/* Global player search (O6): 16px input so iOS never zooms on focus. */
-.b4-search{display:flex;gap:10px;align-items:center;margin:0 0 14px}
-.b4-search input{flex:1;min-width:0;font-size:16px}
-
-/* ---- P1 Batch 1 (admin player tools) ---- */
-/* A14: tags on a Players list row — a full-width row of the 2x2 phone
-   grid (globals.css <=640px), so the pills never stretch the row. */
-.pd-tags-inline{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px}
-/* A15: withdrawal risk flags — small red outline pills on the queue row. */
-.wd-flags{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px}
-.risk-flag{display:inline-block;font-size:11px;font-weight:700;color:#FF8A80;border:1px solid rgba(229,50,45,.55);background:rgba(229,50,45,.12);border-radius:999px;padding:2px 8px;white-space:nowrap}
-/* A16: bet lookup — forms wrap on phone; the result JSON scrolls
-   inside its own box, never the page. */
-.lookup-form{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px}
-.lookup-form input,.lookup-form select{flex:1;min-width:180px;font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
-.lookup-form label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
-.lookup-form label input{flex:0 1 auto;min-width:0;color-scheme:dark}
-.lookup-pre{background:#070812;border:1px solid rgba(255,246,216,.12);border-radius:10px;padding:12px;font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:auto}
-.verify-box{background:#070812;border:1px solid rgba(242,194,48,.3);border-radius:12px;padding:12px}
-.verify-box p{overflow-wrap:anywhere}
-.verify-box code{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere}
-.lk-win{color:#3ED97E;font-weight:700}
-.lk-lose{color:#FF8A80;font-weight:700}
-/* A19: notes + tags on the player detail. Notes are plain stacked
-   cards; tags are small gold pills with a remove button. */
-.pd-notes{display:flex;flex-direction:column;gap:10px;margin:0 0 14px}
-.pd-note{background:#070812;border:1px solid rgba(255,246,216,.12);border-radius:10px;padding:10px 12px}
-.pd-note p{margin:0 0 6px;overflow-wrap:anywhere}
-.pd-note span{font-size:12px;color:var(--muted,rgba(255,246,216,.7))}
-.pd-note-form{display:flex;flex-direction:column;gap:10px}
-.pd-note-form textarea{background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit;font-size:16px;resize:vertical}
-.pd-tags{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
-.tag-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1);border-radius:999px;padding:3px 8px;white-space:nowrap}
-.tag-x{background:none;border:0;color:#FF8A80;font-size:14px;line-height:1;cursor:pointer;padding:0 2px}
-.pd-tag-form{display:flex;gap:10px;flex-wrap:wrap}
-.pd-tag-form input{flex:1;min-width:180px;font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
-/* A18: promo codes — one stacked row per code, redeemers on their own line. */
-.promo-list{display:flex;flex-direction:column;gap:10px;margin:0 0 14px}
-.promo-row{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border-top:1px solid rgba(255,246,216,.08);padding:11px 4px 0}
-.promo-row span{font-size:13.5px;overflow-wrap:anywhere}
-.promo-redeemers{flex-basis:100%;font-size:12.5px;color:var(--muted,rgba(255,246,216,.7))}
-
-/* ---- P1 Batch 2 (admin ops) ---- */
-/* A21: KYC queue — one stacked card per submission; the status pill
-   reads at a glance, the document link wraps, the reject reason sits
-   inline with its buttons so nothing is hidden under the dock. */
-.kyc-list{display:flex;flex-direction:column;gap:12px}
-.kyc-row{background:rgba(4,6,13,.35);border:1px solid rgba(255,246,216,.12);border-radius:12px;padding:12px}
-.kyc-head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
-.kyc-head b{font-size:15px;overflow-wrap:anywhere}
-.kyc-head b a{color:inherit;text-decoration:underline;text-underline-offset:2px}
-.kyc-pill{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;white-space:nowrap}
-.kyc-pending{color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1)}
-.kyc-approved{color:#3ED97E;border:1px solid rgba(62,217,126,.5);background:rgba(62,217,126,.1)}
-.kyc-rejected{color:#FF8A80;border:1px solid rgba(229,50,45,.55);background:rgba(229,50,45,.12)}
-.kyc-doc{overflow-wrap:anywhere}
-.kyc-doc a{color:var(--gold-2,#FFD964);text-decoration:underline;text-underline-offset:2px}
-.kyc-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
-.kyc-reject{display:flex;flex-wrap:wrap;gap:10px;align-items:center;flex:1;min-width:0}
-.kyc-reject input{flex:1;min-width:180px;font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
-/* A21 (account page): the KYC form reuses .code-form, which styles
-   inputs only — the document-type select needs the same treatment. */
+/* The KYC form reuses .code-form, which styles inputs only — the
+   document-type select needs the same treatment.
+   LIVE: the PLAYER account page. */
 .code-form select{flex:1;min-width:180px;font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
-/* A23: the notify/broadcast forms reuse .pd-note-form, which styles
-   textareas only — the title input needs the same treatment. */
-.pd-note-form input{font-size:16px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
-/* A23 (account page): the player's notification list — unread rows
-   carry a gold left edge so they read at a glance. */
+
+/* The player's notification list — unread rows carry a gold left edge
+   so they read at a glance. LIVE: the PLAYER account page. */
 .ntf-list{display:flex;flex-direction:column;gap:10px}
 .ntf-row{background:rgba(4,6,13,.35);border:1px solid rgba(255,246,216,.12);border-radius:10px;padding:10px 12px}
 .ntf-row p{margin:0 0 4px;overflow-wrap:anywhere}
 .ntf-row.ntf-unread{border-left:3px solid var(--gold,#F2C230)}
-/* A24: fraud alerts — one stacked card per alert; the severity pill
-   carries the urgency, the player link opens their detail. */
-.fraud-list{display:flex;flex-direction:column;gap:12px}
-.fraud-row{background:rgba(4,6,13,.35);border:1px solid rgba(255,246,216,.12);border-radius:12px;padding:12px}
-.fraud-row p{margin:0 0 6px;overflow-wrap:anywhere}
-.fraud-head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:8px}
-.fraud-head b{font-size:14px;overflow-wrap:anywhere}
-.sev-pill{font-size:11px;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:999px;white-space:nowrap}
-.sev-high{color:#FF8A80;border:1px solid rgba(229,50,45,.55);background:rgba(229,50,45,.12)}
-.sev-medium{color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1)}
 
-/* P1 Batch 4 (O20): the homepage announcements banner — one slim gold
-   strip per announcement, title + body, dismissible for the session. */
+/* Player detail: blocked note. LIVE: the PLAYER account page
+   (self-exclusion / cool-off notice). */
+.pd-blocked-note{margin:0 0 16px;padding:11px 14px;border-radius:10px;background:rgba(229,50,45,.1);border:1px solid rgba(229,50,45,.4);font-size:13.5px}
+
+/* The homepage announcements banner — one slim gold strip per
+   announcement, title + body, dismissible for the session.
+   LIVE: the PLAYER homepage. */
 .rg-announce-wrap{display:flex;flex-direction:column;gap:8px;padding:12px 16px 0}
 .rg-announce{display:flex;align-items:flex-start;gap:10px;border:1px solid rgba(242,194,48,.55);background:rgba(242,194,48,.08);border-radius:10px;padding:10px 12px}
 .rg-announce-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .rg-announce-text strong{font-family:var(--font);font-size:14px;color:#FFD964}
 .rg-announce-text span{font-size:13px;color:#FFF6D8;line-height:1.45}
 .rg-announce-x{flex:0 0 auto;width:28px;height:28px;min-height:28px;border:1px solid rgba(242,194,48,.4);background:transparent;color:#FFD964;border-radius:8px;font-size:16px;line-height:1;cursor:pointer}
-/* P1 Batch 4 (O21): the maintenance message on the homepage. */
+/* The maintenance message on the homepage. LIVE: the PLAYER homepage. */
 .rg-maint{text-align:center;padding:48px 16px}
 .rg-maint h2{font-size:22px;color:#FFD964;margin:0 0 8px}
 .rg-maint p{color:#FFF6D8;opacity:.85;margin:0}
-/* P1 Batch 4 (O22): the auto-approved tag on the KYC queue + the
-   KYC-required warning pill on the withdrawal queue. The KYC flag
-   reuses the risk-flag shape in gold (a warning, not a risk). */
-.kyc-auto{color:#FFD964;border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.1)}
-.risk-flag.kyc-flag{color:#FFD964;border-color:rgba(242,194,48,.55);background:rgba(242,194,48,.12)}
 
-/* P1 Batch 4 (O20) phone fixes — found in verification: the From/To
-   date inputs were squeezed to ~70px (showing only "11/") and the
-   Dates column pushed the Activate/Deactivate button off the right
-   edge at 390px. At phone width each date row takes the full width
-   and the Dates column hides (dates stay visible at >=768px). */
-@media (max-width: 640px) {
-  .ann-form label { flex: 1 1 100%; }
-  .ann-form label input { flex: 1; min-width: 0; }
-  .ann-table td:nth-child(3), .ann-table th:nth-child(3) { display: none; }
-}
-
-/* P1 Batch 4 (O25): keep the reconciliation figures on one line —
-   "GH₵" was wrapping away from its number in the narrow tiles. */
-.cashier-sec .sum-card b { white-space: nowrap; }
-
-/* P2 Batch 1 (A25): CRM campaigns — the hand-picked player picker
-   (checkbox rows with search) and the draft/sent lists. */
-.cmp-picker{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.cmp-picker input[type="search"]{width:100%}
-.cmp-pick{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(255,246,216,.14);border-radius:8px;font-size:14px;cursor:pointer}
-.cmp-pick input{width:18px;height:18px;flex:0 0 auto;accent-color:#F2C230}
-.cmp-pick span{color:#FFF6D8;opacity:.75;font-size:12px}
-.cmp-list{display:flex;flex-direction:column;gap:10px}
-.cmp-row{border-top:1px solid rgba(255,246,216,.12);padding-top:12px}
-.cmp-row:first-child{border-top:0;padding-top:0}
-.cmp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.cmp-head b{font-size:15px;color:#FFF6D8}
-
-/* P2 Batch 1 (A27): the tournament leaderboard detail under a row. */
-.tn-detail{margin-top:12px;display:flex;flex-direction:column;gap:10px}
-
-/* P2 Batch 1 (A26): the VIP tier pill on a Players list row — small
-   and tight, the same language as the referral-code pill. */
-.vip-pill{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1;padding:4px 8px;border-radius:4px;border:1px solid rgba(242,194,48,.55);color:#FFD964;background:rgba(242,194,48,.08);justify-self:start;white-space:nowrap}
-
-/* P2 Batch 1 (A29): the reality check modal in a game room. A fixed
-   overlay over the room, gold-bordered card, Outfit-bold figures. */
+/* The reality check modal in a game room. A fixed overlay over the
+   room, gold-bordered card, Outfit-bold figures.
+   LIVE: game rooms (src/components/games/RealityCheck.tsx). */
 .rc-overlay{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(4,5,10,.82);padding:16px}
 .rc-modal{width:100%;max-width:520px;background:#0C2B22;border:1px solid rgba(242,194,48,.55);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px}
 .rc-modal h3{margin:0;font-size:19px;color:#FFD964}

@@ -107,17 +107,25 @@ export async function GET(req: Request) {
     const overThreshold = overThresholdRows.filter((w) => Number(w.amount) >= threshold).length;
 
     // Payouts due today: admins whose earned commission exceeds what
-    // has been paid (same recompute the Payouts tab uses).
-    const owedToday = await totalCommissionOwed(today, today, fiatCurrency);
-    const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
-    let payoutsDueAdmins = 0;
-    for (const a of admins) {
-      const [summary, paid] = await Promise.all([
-        commissionSummary(a.id, fiatCurrency),
-        commissionPaid(a.id, undefined, undefined, fiatCurrency),
-      ]);
-      if (summary.today > 0 && summary.today > paid) payoutsDueAdmins += 1;
-    }
+    // has been paid (same recompute the Payouts tab uses). The per-admin
+    // summaries used to run one after another (Phase 7: N admins × 2
+    // sequential round-trips); they are independent, so they run in one
+    // Promise.all now. Same figures, same order — only the waiting
+    // changes. No shape change, no money-logic change.
+    const [owedToday, admins] = await Promise.all([
+      totalCommissionOwed(today, today, fiatCurrency),
+      prisma.user.findMany({ where: { role: "admin" }, select: { id: true } }),
+    ]);
+    const perAdmin = await Promise.all(
+      admins.map(async (a) => {
+        const [summary, paid] = await Promise.all([
+          commissionSummary(a.id, fiatCurrency),
+          commissionPaid(a.id, undefined, undefined, fiatCurrency),
+        ]);
+        return summary.today > 0 && summary.today > paid;
+      }),
+    );
+    const payoutsDueAdmins = perAdmin.filter(Boolean).length;
 
     const alerts: CommandCenterAlert[] = [];
     if (gateway.ghMomoGateway === "payteller" && !gateway.paytellerConfigured) {

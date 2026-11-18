@@ -8,11 +8,18 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Button } from "./Button";
 import { FormField, Input } from "./Form";
 
-function useFocusTrap(open: boolean, ref: React.RefObject<HTMLDivElement | null>) {
+// Focus trap + focus return (Phase 7). On open, remember the element
+// that had focus and move focus to the first focusable element inside;
+// on close, return focus to it when it is still in the document.
+// Exported so the drawer, sheet and command palette share the one
+// behaviour instead of each re-implementing it (and diverging).
+export function useFocusTrap(open: boolean, ref: React.RefObject<HTMLDivElement | null>) {
+  const prevRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!open) return;
     const el = ref.current;
     if (!el) return;
+    prevRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusables = () =>
       Array.from(el.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])")).filter(
         (n) => !n.hasAttribute("disabled") && n.offsetParent !== null,
@@ -34,7 +41,11 @@ function useFocusTrap(open: boolean, ref: React.RefObject<HTMLDivElement | null>
       }
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      const prev = prevRef.current;
+      if (prev && document.contains(prev)) prev.focus();
+    };
   }, [open, ref]);
 }
 

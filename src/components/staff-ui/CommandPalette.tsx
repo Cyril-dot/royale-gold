@@ -2,8 +2,9 @@
 // player or admin, run safe quick actions. No money-moving actions here.
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFocusTrap } from "./Dialog";
 
 export interface PaletteAction {
   id: string;
@@ -30,7 +31,11 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const listId = useId();
   const router = useRouter();
+  // Focus trap + return focus to the Search button on close (Phase 7).
+  useFocusTrap(open, boxRef);
 
   // Reset on open (render-phase derived state — the React-endorsed
   // pattern for "adjust state when a prop changes"; no effect cascade).
@@ -86,6 +91,7 @@ export function CommandPalette({
     <div className="st-cmdk-backdrop" onClick={onClose}>
       <div
         className="st-cmdk"
+        ref={boxRef}
         role="dialog"
         aria-modal="true"
         aria-label="Search and quick actions"
@@ -95,6 +101,10 @@ export function CommandPalette({
           ref={inputRef}
           className="st-cmdk-input"
           type="search"
+          role="combobox"
+          aria-expanded={filtered.length > 0}
+          aria-controls={listId}
+          aria-activedescendant={filtered.length > 0 ? `${listId}-opt-${active}` : undefined}
           placeholder="Search pages, players, admins…"
           value={query}
           onChange={(e) => onQueryChangeInner(e.target.value)}
@@ -113,7 +123,7 @@ export function CommandPalette({
           aria-label="Search pages, players and admins"
           enterKeyHint="search"
         />
-        <ul className="st-cmdk-list" role="listbox" aria-label="Results">
+        <ul className="st-cmdk-list" id={listId} role="listbox" aria-label="Results">
           {filtered.length === 0 ? (
             <li className="st-cmdk-empty">No matches for “{query}”.</li>
           ) : (
@@ -125,6 +135,7 @@ export function CommandPalette({
                   return (
                     <button
                       key={a.id}
+                      id={`${listId}-opt-${idx}`}
                       type="button"
                       className="st-cmdk-item"
                       role="option"

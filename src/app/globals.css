@@ -52,6 +52,12 @@ body {
 @keyframes rgToastOut{to{opacity:0;transform:translateY(-4px)}}
 
 /* panels (admin / owner / account) */
+/* Phase 7 (staff redesign): dead staff classes removed from this file —
+   .code-row/.code-chip/.code-state/.code-link/.user-list/.user-row/.dep-table/
+   .date-pick/.day-totals/.day-admin/.admin-row/.admin-meta/.admin-edit/.owner-add/
+   .admin-nav/.admin-preview/.an-active/.admin-sec.referral-sec/.user-detail
+   (0 tsx references each — only the deleted old admin/owner pages used them).
+   .admin-sec itself is LIVE (player settings page) and stays. */
 .rg48-page-main{padding:22px 0 60px;min-height:70vh}
 .rg48-hbar-in{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .rg48-hbar-in h2{font-family:var(--font-display,Anton,sans-serif);font-size:clamp(28px,4vw,40px);text-transform:uppercase;margin:0}
@@ -59,40 +65,16 @@ body {
 .admin-sec{background:var(--steel,#141828);border:1px solid rgba(242,194,48,.25);border-radius:18px;padding:18px;margin:16px 0}
 .admin-sec h3{margin:0 0 12px;font-size:18px}
 .admin-sec h4{margin:14px 0 8px}
-.code-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid rgba(255,246,216,.08)}
-.code-chip{font-family:ui-monospace,monospace;font-weight:800;background:linear-gradient(180deg,#FFD964,#D9A41C);color:#231600;border-radius:8px;padding:6px 10px}
-.code-chip.sm{font-size:12px;padding:3px 8px}
-.code-state{font-size:12px;color:var(--muted,rgba(255,246,216,.7))}
-.code-link{font-size:12px;color:var(--muted,rgba(255,246,216,.7));word-break:break-all}
 .code-form{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-.code-form input,.owner-add input{flex:1;min-width:200px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
-.user-list{display:flex;flex-direction:column}
-.user-row{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;background:none;border:0;border-top:1px solid rgba(255,246,216,.08);color:inherit;font:inherit;padding:11px 4px;cursor:pointer;text-align:left}
-.user-row:hover{background:rgba(242,194,48,.07)}
+.code-form input{flex:1;min-width:200px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:11px 12px;font:inherit}
+
 .sum-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
 .sum-card{background:#070812;border:1px solid rgba(242,194,48,.3);border-radius:12px;padding:12px}
 .sum-card span{display:block;font-size:11px;letter-spacing:.1em;color:var(--muted,rgba(255,246,216,.7))}
 .sum-card b{font-size:19px;color:var(--gold-2,#FFD964)}
-.dep-table{width:100%;border-collapse:collapse;font-size:13.5px}
-.dep-table th,.dep-table td{text-align:left;padding:8px 6px;border-top:1px solid rgba(255,246,216,.08)}
-.dep-table th{font-size:11px;letter-spacing:.08em;color:var(--muted,rgba(255,246,216,.7))}
-.dep-table tr.clickable{cursor:pointer}
-.dep-table tr.clickable:hover td{background:rgba(242,194,48,.07)}
-.date-pick{display:flex;align-items:center;gap:10px;margin:8px 0 12px;font-weight:700}
-.date-pick input{background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:10px;color:#FFF6D8;padding:9px 10px;font:inherit;color-scheme:dark}
-.day-totals{font-weight:700}
-.day-admin{margin-top:16px}
-.admin-row{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 0;border-top:1px solid rgba(255,246,216,.08)}
-.admin-meta{font-size:13px;color:var(--muted,rgba(255,246,216,.7));margin-top:4px}
-.admin-edit{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.admin-edit input[type=number]{width:76px;background:#070812;border:1px solid rgba(242,194,48,.4);border-radius:8px;color:#FFF6D8;padding:8px;font:inherit}
-.owner-add{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.owner-add label{display:flex;gap:6px;align-items:center;font-weight:700}
-.owner-add label input{min-width:70px;flex:0}
 .linklike{background:none;border:0;color:var(--gold-2,#FFD964);font:inherit;cursor:pointer;text-decoration:underline;padding:0}
 .ok{color:#3ED97E}.bad{color:#FF8A80}
 .btn-sm{padding:8px 12px!important;min-height:36px!important;font-size:13px!important}
-.user-detail{position:relative}
 
 /* room shell extras */
 .xg-room{padding-bottom:40px}
@@ -255,9 +237,7 @@ body {
 .dep-methods button.on{background:linear-gradient(180deg,#FFD964,#D9A41C);color:#231600}
 
 @media (max-width:640px){
-  .user-row{grid-template-columns:1fr auto;gap:6px}
   .keno-grid{grid-template-columns:repeat(8,1fr)}
-  .dep-table{font-size:12px}
 }
 
 
@@ -646,10 +626,6 @@ main.rg48-page-main.rg23 .admin-sec::before{
   content:"";position:absolute;top:0;left:22px;right:22px;height:2px;border-radius:2px;pointer-events:none;
   background:linear-gradient(90deg,transparent,rgba(242,194,48,.75),transparent);
 }
-main.rg48-page-main.rg23 .admin-sec.referral-sec{
-  background:linear-gradient(180deg,rgba(242,194,48,.13),rgba(12,43,34,.4) 70%),#141828;
-  border-color:rgba(242,194,48,.55);
-}
 main.rg48-page-main.rg23 .admin-sec h3{font-size:20px;letter-spacing:.01em}
 main.rg48-page-main.rg23 .admin-sec h3::after{
   content:"";display:block;width:36px;height:3px;border-radius:2px;margin-top:9px;
@@ -671,33 +647,17 @@ main.rg48-page-main.rg23 .sum-card span{color:#9A9E8A}
 main.rg48-page-main.rg23 .sum-card b{font-size:21px;color:var(--gold-2);text-shadow:0 0 18px rgba(242,194,48,.35)}
 main.rg48-page-main.rg23 .rg48-f input,
 main.rg48-page-main.rg23 .rg48-f select,
-main.rg48-page-main.rg23 .code-form input,
-main.rg48-page-main.rg23 .date-pick input{
+main.rg48-page-main.rg23 .code-form input{
   background:#05070F;border-color:rgba(255,246,216,.2);padding:13px 14px;font-size:15px;
   transition:border-color .18s ease,box-shadow .18s ease;
 }
 main.rg48-page-main.rg23 .rg48-f input:focus,
 main.rg48-page-main.rg23 .rg48-f select:focus,
-main.rg48-page-main.rg23 .code-form input:focus,
-main.rg48-page-main.rg23 .date-pick input:focus{
+main.rg48-page-main.rg23 .code-form input:focus{
   outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(242,194,48,.2);
 }
 main.rg48-page-main.rg23 .rg48-f label{color:#D8D2B8}
 main.rg48-page-main.rg23 .btn-gold{box-shadow:0 12px 26px rgba(242,194,48,.35),inset 0 1px 0 rgba(255,255,255,.65)}
-main.rg48-page-main.rg23 .dep-table th{color:var(--gold-2);letter-spacing:.1em;border-bottom:1px solid rgba(242,194,48,.35);padding:10px 8px}
-main.rg48-page-main.rg23 .dep-table td{padding:11px 8px}
-main.rg48-page-main.rg23 .dep-table tr.clickable:focus-visible{outline:2px solid rgba(242,194,48,.75);outline-offset:-2px}
-main.rg48-page-main.rg23 .day-totals{border-left:3px solid var(--gold);padding-left:12px}
-main.rg48-page-main.rg23 .code-chip{box-shadow:0 6px 16px rgba(242,194,48,.3),inset 0 1px 0 rgba(255,255,255,.5)}
-main.rg48-page-main.rg23 .code-row{padding:12px 0}
-main.rg48-page-main.rg23 .user-row{border-radius:10px;padding:12px 10px;transition:background .18s ease,box-shadow .18s ease}
-main.rg48-page-main.rg23 .admin-nav{background:rgba(20,24,40,.85);border:1px solid rgba(255,246,216,.12);border-radius:14px;padding:6px;gap:6px}
-main.rg48-page-main.rg23 .admin-nav a{border-color:transparent;background:transparent}
-main.rg48-page-main.rg23 .admin-nav a.an-active{
-  background:linear-gradient(180deg,var(--gold-2),var(--gold));color:#231600;border-color:var(--gold);
-  box-shadow:0 8px 18px rgba(242,194,48,.3);
-}
-main.rg48-page-main.rg23 .admin-preview{background:rgba(242,194,48,.13);box-shadow:0 10px 24px rgba(0,0,0,.35),0 0 20px rgba(242,194,48,.1)}
 main.rg48-page-main.rg23 .linklike{color:var(--gold-2);text-underline-offset:3px}
 
 /* --- D. Hover — capability-gated only (touch never gets a stuck hover) --- */
@@ -710,18 +670,15 @@ main.rg48-page-main.rg23 .linklike{color:var(--gold-2);text-underline-offset:3px
   main#top .p-row:hover{background:rgba(242,194,48,.06)}
   main#top .live-feed .feed-row:hover{background:rgba(242,194,48,.05)}
   main.rg48-page-main.rg23 .sum-card:hover{transform:translateY(-2px);border-color:rgba(242,194,48,.6);box-shadow:0 16px 32px rgba(0,0,0,.5),0 0 22px rgba(242,194,48,.14)}
-  main.rg48-page-main.rg23 .user-row:hover{background:rgba(242,194,48,.09);box-shadow:inset 3px 0 0 var(--gold)}
   main.rg48-page-main.rg23 .btn-gold:hover{transform:translateY(-2px);box-shadow:0 16px 32px rgba(242,194,48,.45),inset 0 1px 0 rgba(255,255,255,.65)}
   main.rg48-page-main.rg23 .linklike:hover{color:#FFE89A}
-  main.rg48-page-main.rg23 .admin-nav a:not(.an-active):hover{border-color:rgba(242,194,48,.45);color:var(--gold-2)}
 }
 
 /* --- E. Coarse pointers: 16px inputs so iOS never zooms into a field --- */
 @media (pointer:coarse){
   main.rg48-page-main.rg23 .rg48-f input,
   main.rg48-page-main.rg23 .rg48-f select,
-  main.rg48-page-main.rg23 .code-form input,
-  main.rg48-page-main.rg23 .date-pick input{font-size:16px}
+  main.rg48-page-main.rg23 .code-form input{font-size:16px}
 }
 
 /* --- F. Reduced motion: the two sheen sweeps stop, everything else stays --- */

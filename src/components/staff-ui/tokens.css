@@ -187,8 +187,8 @@
   color: #fff;
 }
 .staff .st-btn-sm {
-  min-height: 40px;
-  padding: 8px 14px;
+  min-height: 44px;
+  padding: 10px 14px;
   font-size: 13px;
 }
 .staff .st-btn-block {
@@ -464,8 +464,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 6px 12px;
+  min-height: 44px;
+  padding: 10px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: transparent;
@@ -589,7 +589,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
@@ -605,6 +606,10 @@
 .staff .st-chip:active {
   transform: scale(0.97);
 }
+.staff .st-chip:has(.st-chip-x) {
+  /* The remove button fills the chip's right edge — no extra padding. */
+  padding-right: 0;
+}
 .staff .st-chip-on {
   background: var(--gold);
   border-color: var(--gold);
@@ -615,12 +620,16 @@
   opacity: 0.8;
 }
 .staff .st-chip-x {
+  /* Full-height hit area: the chip is 44px tall and the remove button
+     stretches to fill it (44px wide), so the × meets the 44px target
+     rule without changing the chip's look. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+  align-self: stretch;
+  min-width: 44px;
+  height: auto;
+  border-radius: 0 999px 999px 0;
   border: 0;
   background: rgba(0, 0, 0, 0.2);
   color: inherit;
@@ -700,8 +709,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 6px 12px;
+  min-height: 44px;
+  padding: 10px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: transparent;
@@ -800,8 +809,8 @@
 .staff .st-segmented .st-tab {
   border-bottom: 0;
   border-radius: 999px;
-  min-height: 36px;
-  padding: 8px 14px;
+  min-height: 44px;
+  padding: 10px 14px;
 }
 .staff .st-segmented .st-tab[aria-selected="true"] {
   background: var(--gold);
@@ -1246,8 +1255,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 32px;
-  padding: 2px 4px;
+  min-height: 44px;
+  padding: 10px 6px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -1411,7 +1420,7 @@
 }
 .staff .st-pagination .st-select {
   width: auto;
-  min-height: 40px;
+  min-height: 44px;
 }
 
 /* ==========================================================================
@@ -1437,12 +1446,6 @@
   font-size: 11px;
   fill: var(--muted);
 }
-.staff .st-chart-value {
-  font-size: 12px;
-  font-weight: 800;
-  fill: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
 .staff .st-chart-tip {
   margin: 8px 0 0;
   font-size: 13px;
@@ -1467,9 +1470,6 @@
   border-radius: 3px;
   margin-right: 6px;
   vertical-align: -1px;
-}
-.staff .st-chart-table-toggle {
-  margin-top: 8px;
 }
 .staff .st-chart-table {
   width: 100%;
@@ -1623,8 +1623,8 @@
 }
 .staff .st-toast-undo {
   flex: none;
-  min-height: 36px;
-  padding: 6px 12px;
+  min-height: 44px;
+  padding: 10px 12px;
   border-radius: 999px;
   border: 1px solid var(--gold);
   background: transparent;
@@ -1635,8 +1635,8 @@
 }
 .staff .st-toast-close {
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -1759,19 +1759,6 @@
   color: var(--faint);
   margin: 8px 0;
 }
-.staff .st-demo-tag {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border: 1px solid var(--line-gold);
-  color: var(--gold-2);
-  border-radius: 4px;
-  padding: 2px 6px;
-  vertical-align: middle;
-  margin-left: 8px;
-}
 .staff .st-demo-section-nav {
   display: flex;
   flex-wrap: wrap;
@@ -1857,6 +1844,13 @@
 }
 .staff .st-paydays::-webkit-scrollbar {
   display: none;
+}
+/* The "Pick a day" date field sits inside the scrollable day strip:
+   without a fixed flex basis the flex item shrinks to ~26px wide and
+   the date is unreadable (Phase 7 find). A date input needs ~170px. */
+.staff .st-paydays .st-field {
+  flex: none;
+  width: 170px;
 }
 .staff .st-payday {
   flex: none;

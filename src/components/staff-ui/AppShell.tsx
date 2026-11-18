@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useFocusTrap } from "./Dialog";
 
 export interface NavItem {
   href: string;
@@ -60,15 +61,17 @@ export function AppShell({
       ? pathname === href
       : pathname === href || pathname.startsWith(`${href}/`);
 
-  // Close the drawer on Escape; focus it on open. Route changes close it
-  // via the nav links' onClick — no effect needed for that.
+  // Close the drawer on Escape; trap focus inside it while open and
+  // return focus to the menu button on close (Phase 7 — the shared
+  // hook focuses the first item on open, so no manual focus here).
+  // Route changes close it via the nav links' onClick.
+  useFocusTrap(drawerOpen, drawerRef);
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setDrawerOpen(false);
     };
     document.addEventListener("keydown", onKey);
-    drawerRef.current?.querySelector<HTMLElement>("a, button")?.focus();
     return () => document.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
 
