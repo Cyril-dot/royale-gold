@@ -88,7 +88,11 @@ export function BaccaratRoom({ game }: { game: GameDef }) {
     if (pt < 8 && bt < 8) {
       if (pt <= 5) { pThird = deck[next++]; }
       const pv = pThird ? baccVal(pThird) : -1;
-      const drawB = bt <= 2 || (bt === 3 && pv !== 8) || (bt === 4 && pv >= 2 && pv <= 7) || (bt === 5 && pv >= 4 && pv <= 7) || (bt === 6 && pv >= 6 && pv <= 7);
+      // Standard tableau: when the Player stands (pv = -1) the Banker
+      // draws on 0–5 and stands on 6–7. The old code stood on 4–5
+      // there, which flipped the usual edge (Player won more often
+      // than Banker). MC: P 44.64% / B 46.00% / T 9.36% after the fix.
+      const drawB = pv === -1 ? bt <= 5 : bt <= 2 || (bt === 3 && pv !== 8) || (bt === 4 && pv >= 2 && pv <= 7) || (bt === 5 && pv >= 4 && pv <= 7) || (bt === 6 && pv >= 6 && pv <= 7);
       if (drawB) bThird = deck[next++];
     }
     const finalP = pThird ? [...p, pThird] : p;
@@ -140,8 +144,11 @@ export function BaccaratRoom({ game }: { game: GameDef }) {
 
 // ---------- Three Card Poker ----------
 // Ante vs the dealer (dealer qualifies with Queen-high or better) +
-// Pair Plus on your own hand: Pair ×2, Flush ×3, Straight ×4,
-// Trips or Straight Flush ×5. Payout is the better of the two.
+// Pair Plus on your own hand: Pair ×1, Flush ×2, Straight ×3,
+// Trips or Straight Flush ×4. Payout is the better of the two.
+// (Nov 2026: the old Pair Plus table — Pair ×2 up to Trips ×5 —
+// made max(ante, Pair Plus) return ~1.057 per stake, i.e. the game
+// was +EV for the player. The cut table returns ~0.889 by MC.)
 function eval3CP(cards: Card[]): { rank: number; name: string; tb: number[] } {
   const vals = cards.map((c) => c.rank);
   const flush = cards.every((c) => c.suit === cards[0].suit);
@@ -175,7 +182,7 @@ export function ThreeCardPokerRoom({ game }: { game: GameDef }) {
   const [phase, setPhase] = useState<"idle" | "dealt" | "done">("idle");
   const [ph, setPh] = useState<Card[]>([]);
   const [dh, setDh] = useState<Card[]>([]);
-  const [msg, setMsg] = useState("You get 3 cards, the dealer gets 3. Beat the dealer for ×2 — a Pair or better also pays Pair Plus, up to ×5.");
+  const [msg, setMsg] = useState("You get 3 cards, the dealer gets 3. Beat the dealer for ×2 — a Pair or better also pays Pair Plus, up to ×4.");
 
   const deal = async () => {
     if (room.balance < stake) { setMsg("Balance too low for that stake."); return; }
@@ -189,7 +196,7 @@ export function ThreeCardPokerRoom({ game }: { game: GameDef }) {
     const pe = eval3CP(p);
     const de = eval3CP(d);
     const qualifies = de.rank > 0 || (de.rank === 0 && de.tb[0] >= 12);
-    const pairPlus = pe.rank === 5 || pe.rank === 4 ? 5 : pe.rank === 3 ? 4 : pe.rank === 2 ? 3 : pe.rank === 1 ? 2 : 0;
+    const pairPlus = pe.rank === 5 || pe.rank === 4 ? 4 : pe.rank === 3 ? 3 : pe.rank === 2 ? 2 : pe.rank === 1 ? 1 : 0;
     let ante = 0;
     if (!qualifies) ante = 1;
     else { const c = cmp3CP(pe, de); ante = c > 0 ? 2 : c === 0 ? 1 : 0; }
@@ -209,7 +216,7 @@ export function ThreeCardPokerRoom({ game }: { game: GameDef }) {
   const reset = () => { setPhase("idle"); setPh([]); setDh([]); };
 
   return (
-    <RoomShell game={game} subtitle="Three Card Poker — beat the dealer for ×2, or let Pair Plus pay up to ×5." stats={room.stats} history={room.history}>
+    <RoomShell game={game} subtitle="Three Card Poker — beat the dealer for ×2, or let Pair Plus pay up to ×4." stats={room.stats} history={room.history}>
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="cash" disabled={phase === "dealt"} />
         <div className="v18-handlab">Your hand <span>{ph.length ? eval3CP(ph).name : "—"}</span></div>

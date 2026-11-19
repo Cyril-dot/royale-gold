@@ -132,7 +132,16 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
     const dl = [d.pop()!, d.pop()!];
     setDeck(d); setYou(y); setDealer(dl); setPlaying(true); setHideHole(true); setDealId((n) => n + 1);
     playSfx("deal", room.muted);
-    if (bjValue(y) === 21) {
+    const yv = bjValue(y), dv = bjValue(dl);
+    if (yv === 21 && dv === 21) {
+      // Both blackjack — a push, stake back. The old code paid 3:2
+      // without ever looking at the dealer's hole card.
+      setHideHole(false);
+      setPlaying(false);
+      const res = await room.settle(stake, stake, { blackjack: true, dealerBlackjack: true, push: true });
+      const eff = res?.payout ?? stake;
+      setMsg(`Both blackjack — push, stake back ${fmtMoney(eff, room.user?.currency ?? "GHS")}.`);
+    } else if (yv === 21) {
       setHideHole(false);
       setPlaying(false);
       const payout = Math.round(stake * 2.5 * 100) / 100;
@@ -141,9 +150,16 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
       const res = await room.settle(stake, payout, { blackjack: true });
       const eff = res?.payout ?? payout;
       setMsg(`Blackjack! 3:2 pays ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back"}`);
-    } else setMsg(`You have ${bjValue(y)}. Hit or stand?`);
+    } else if (dv === 21) {
+      // Dealer blackjack and the player hasn't got one — the hand is
+      // over at the deal, not after the player hits and stands.
+      setHideHole(false);
+      setPlaying(false);
+      await room.settle(stake, 0, { dealerBlackjack: true, you: yv });
+      setMsg(`Dealer has blackjack — the stake is gone.`);
+    } else setMsg(`You have ${yv}. Hit or stand?`);
   };
-  const hit = () => {
+  const hit = async () => {
     const d = [...deck];
     const c = d.pop()!;
     const y = [...you, c];
@@ -153,7 +169,7 @@ export function BlackjackRoom({ game }: { game: GameDef }) {
     if (v > 21) {
       setPlaying(false); setHideHole(false);
       setMsg(`Bust — ${v}.`);
-      void room.settle(stake, 0, { you: v, bust: true });
+      await room.settle(stake, 0, { you: v, bust: true });
     } else setMsg(`You have ${v}. Hit or stand?`);
   };
   const stand = async () => {

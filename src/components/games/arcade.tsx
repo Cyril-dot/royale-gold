@@ -259,6 +259,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
   const room = useGameRoom(game);
   const [stake, setStake] = useState(10);
   const [playing, setPlaying] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const [msg, setMsg] = useState("Steer with the arrow keys or drag. The multiplier climbs as you drive — cash out before you crash.");
   const [odds, setOdds] = useState(1);
   const [coins, setCoins] = useState(0);
@@ -330,18 +331,26 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     return null;
   }, [fetchReveal]);
 
-  const cashOut = useCallback(async () => {
+  const cashOut = useCallback(async (fixedOdds?: number) => {
     const st = stateRef.current;
     if (!st || !playing || st.crashed) return;
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
-    const payout = Math.round(stake * odds * 100) / 100;
+    st.settled = true; // a later reveal must not settle a loss on top of this cash-out
+    // fixedOdds is the ×50 auto-cash-out: the loop's own odds value,
+    // not the lagging state one.
+    const o = fixedOdds ?? odds;
+    const payout = Math.round(stake * o * 100) / 100;
     playSfx("blip", mutedRef.current);
     // Capped-win display: the cash-out line states the credited amount
-    // from the settle response, never the local multiplier value.
-    const res = await room.settle(stake, payout, { odds, coins, dist: Math.round(st.dist) }, roundIdRef.current || undefined);
-    const eff = res?.payout ?? payout;
-    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"}`);
+    // from the settle response, never the local multiplier value. An
+    // effective payout of 0 means the server round had already crashed
+    // before this cash-out landed (bonus-boosted cash-out racing the
+    // crash point) — that reads as a crash, not a cash-out.
+    const res = await room.settle(stake, payout, { odds: o, coins, dist: Math.round(st.dist) }, roundIdRef.current || undefined);
+    if (!res) { setMsg("Cash-out didn't go through — nothing was taken, your stake is untouched."); return; }
+    const eff = res.payout;
+    setMsg(eff === 0 ? `The round crashed just before your cash-out at ×${o.toFixed(2)} landed — the stake is gone.` : `Cashed out at ×${o.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"}`);
     void revealAfterEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, odds, stake, coins, room, revealAfterEnd]);
@@ -390,7 +399,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
     spawnObstacle(st, -215);
     spawnObstacle(st, -395);
     for (let i = 0; i < 7; i++) { spawnScenery(st); st.scenery[st.scenery.length - 1].y = Math.random() * CC_H; }
-    setOdds(1); setCoins(0); setPlaying(true);
+    setOdds(1); setCoins(0); setPlaying(true); setCountdown(6);
     setMsg("Drive! Steer with ← → or drag.");
   };
 
@@ -492,12 +501,18 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
       st.cparts = st.cparts.filter((p) => p.life > 0);
       st.ftexts = st.ftexts.filter((t) => t.life > 0);
       // live odds: shared crash curve since the server's startsAt,
-      // plus coin / near-miss bonuses, cap ×50.
-      const elapsedMs = Date.now() - st.t0;
+      // plus coin / near-miss bonuses, cap ×50. The server round
+      // starts 6s in the future: clamp the elapsed time at 0 so the
+      // odds never read below ×1.00 during the countdown (the old
+      // code showed ×0.70 and a cash-out then paid under the stake).
+      const elapsedMs = Math.max(0, Date.now() - st.t0);
       const o = Math.min(50, Math.exp(0.00006 * elapsedMs) + st.bonus);
       setOdds(Math.round(o * 100) / 100);
-      // collisions (port thresholds, unchanged)
+      setCountdown(Math.max(0, Math.ceil((st.t0 - Date.now()) / 1000)));
+      // collisions (port thresholds, unchanged) — not while the round
+      // is still counting down: nothing can hit the car before launch.
       const carY = H - 90;
+      if (Date.now() >= st.t0) {
       for (const ob of st.obstacles) {
         if (Math.abs(ob.y - carY) < 55 && Math.abs(ob.x - st.x) < 42) { beginCrashFx(); rafRef.current = requestAnimationFrame(loop); return; }
         if (Math.abs(ob.y - carY) < 90 && Math.abs(ob.x - st.x) < 70 && Math.abs(ob.x - st.x) >= 42) {
@@ -509,6 +524,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
             st.ftexts.push({ x: st.x, y: carY - 34 - 16, txt: "+0.05×", col: "#8FC3FF", life: 0.9 });
           }
         }
+      }
       }
       for (const c of [...st.coins]) {
         if (Math.abs(c.y - carY) < 40 && Math.abs(c.x - st.x) < 40) {
@@ -523,7 +539,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
           showFlash("COIN +0.10×");
         }
       }
-      if (o >= 50) { beginCrashFx(); rafRef.current = requestAnimationFrame(loop); return; }
+      if (o >= 50) { void cashOut(50); return; }
       // Drive HUD, once a second. (A plain frame counter cannot live
       // here: this effect re-runs on every render because `crash` changes
       // identity each render, which would reset any closure counter.)
@@ -641,7 +657,7 @@ export function CarCrashRoom({ game }: { game: GameDef }) {
           </div>
         </div>
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={() => void start()}>Start driving · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
-        {playing && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()}>CASH OUT · {fmtMoney(Math.round(stake * odds * 100) / 100, room.user?.currency ?? "GHS")}</button>}
+        {playing && <button className="btn btn-gold xg-action cr-cash" type="button" onClick={() => void cashOut()} disabled={countdown > 0}>{countdown > 0 ? `Launching in ${countdown}s…` : `CASH OUT · ${fmtMoney(Math.round(stake * odds * 100) / 100, room.user?.currency ?? "GHS")}`}</button>}
         <p className="bottle-msg xg-msg">{msg}</p>
         {reveal && (
           <div className="cr-reveal" aria-label="Provably fair reveal">
@@ -1151,7 +1167,7 @@ export function RocketShooterRoom({ game }: { game: GameDef }) {
           <div className="rs-goal-lab"><span>DESTROY {goal.kills} ASTEROIDS</span><b>{kills} / {goal.kills}</b></div>
           <div className="rs-goal-bar"><i style={{ width: `${Math.min(100, (kills / goal.kills) * 100)}%` }} /></div>
         </div>
-        <div className="rs-hud"><span>KILLS <b>{kills}/{goal.kills}</b></span><span>SPEED <b>×{Math.min(3, Math.pow(1.02, kills)).toFixed(1)}</b></span><span>LIVES <b>{"♥".repeat(Math.max(0, lives))}</b></span><span>COINS <b>{coins}</b></span><span>PAYS <b>×{goal.mult.toFixed(2)}</b></span><span className="rs-pow">{power}</span></div>
+        <div className="rs-hud"><span>KILLS <b>{kills}/{goal.kills}</b></span><span>SPEED <b>×{Math.min(3, Math.pow(1.02, kills)).toFixed(1)}</b></span><span>LIVES <b>{"♥".repeat(Math.max(0, lives))}</b></span><span>PICKUPS <b>{coins}</b></span><span>PAYS <b>×{goal.mult.toFixed(2)}</b></span><span className="rs-pow">{power}</span></div>
         <canvas ref={canvasRef} width={400} height={420} className={playing ? "rs-canvas live" : "rs-canvas"} onPointerDown={onShipDown} onPointerMove={onShipMove} onPointerUp={onShipUp} onPointerCancel={onShipUp} aria-label="Rocket Shooter — drag to steer and fire" />
         <button className="rs-fire" type="button" onPointerDown={onFireDown} onPointerUp={onFireUp} onPointerLeave={onFireUp} onPointerCancel={onFireUp} disabled={!playing} aria-label="Hold to fire">HOLD TO FIRE</button>
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Launch · {fmtMoney(stake, room.user?.currency ?? "GHS")}</button>}
@@ -1302,14 +1318,16 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
   const [playing, setPlaying] = useState(false);
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
-  const [coins, setCoins] = useState(0);
   const [timeLeft, setTimeLeft] = useState(45);
-  const [msg, setMsg] = useState("Swipe or drag across the fruit to slice. Fruit is 10 pts, combos pay ×2/×3, coins are +25 pts — slice a bomb and the round ends on the spot.");
+  const [msg, setMsg] = useState("Swipe or drag across the fruit to slice. Every fruit is 10 pts — 150+ pays ×2, 250+ ×3, 400+ ×4. A bomb costs one of your 3 lives.");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stRef = useRef<FnState | null>(null);
   const rafRef = useRef(0);
   const scoreRef = useRef(0);
   const livesRef = useRef(3);
+  // end() has two callers (the 45s timer and a bomb killing the last
+  // life) — without this guard a round could settle twice.
+  const endedRef = useRef(false);
 
   // Fruit are drawn canvas art (drawFnFruit) at r:34 with a hit test of
   // r+18 against the whole swipe segment — a thumb lands it easily on a
@@ -1367,16 +1385,21 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
     scoreRef.current += 10;
     setScore(scoreRef.current);
     st.speed *= 1.02;
-    if (Math.random() < 0.15) setCoins((n) => n + 1);
   };
 
   const end = useCallback(async (finalScore: number) => {
+    if (endedRef.current) return;
+    endedRef.current = true;
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
     const tier = [...FN_GOALS].reverse().find((g) => finalScore >= g.score);
     const payout = tier ? Math.round(stake * tier.mult) : 0;
-    setMsg(tier ? `Score ${finalScore} — ×${tier.mult}! ${payout} coins` : `Score ${finalScore} — under 150, no payout.`);
-    await room.settle(stake, payout, { score: finalScore, mult: tier?.mult ?? 0 });
+    // Capped-win display: the win line states the credited amount
+    // from the settle response, never the local tier value.
+    const res = await room.settle(stake, payout, { score: finalScore, mult: tier?.mult ?? 0 });
+    if (!res) { setMsg("The round ended, but the payout didn't go through — nothing was taken."); return; }
+    const eff = res.payout;
+    setMsg(tier ? `Score ${finalScore} — ×${tier.mult}! ${eff} coins` : `Score ${finalScore} — under 150, no payout.`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stake, room]);
 
@@ -1391,7 +1414,7 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
     stRef.current = st;
     for (let i = 0; i < 3; i++) spawnFruit(st);
     scoreRef.current = 0; livesRef.current = 3;
-    setScore(0); setLives(3); setCoins(0); setTimeLeft(45); setPlaying(true);
+    setScore(0); setLives(3); setTimeLeft(45); setPlaying(true); endedRef.current = false;
   };
 
   useEffect(() => {
@@ -1552,10 +1575,10 @@ export function FruitNinjaRoom({ game }: { game: GameDef }) {
     <RoomShell game={game} subtitle="Slice the fruit, dodge the bombs. Score 150 → ×2, 250 → ×3, 400 → ×4 in 45 seconds." stats={room.stats} history={room.history}>
       <div className="xg-controls">
         <StakeChips stake={stake} setStake={setStake} currency="coins" disabled={playing} />
-        <div className="rs-hud"><span>SCORE <b>{score}</b></span><span>LIVES <b>{"♥".repeat(Math.max(0, lives))}</b></span><span>COINS <b>{coins}</b></span><span>TIME <b>{timeLeft}s</b></span></div>
+        <div className="rs-hud"><span>SCORE <b>{score}</b></span><span>LIVES <b>{"♥".repeat(Math.max(0, lives))}</b></span><span>TIME <b>{timeLeft}s</b></span></div>
         <div style={{ position: "relative" }}>
           <canvas ref={canvasRef} width={400} height={420} className={playing ? "rs-canvas live" : "rs-canvas"} onPointerDown={beginSwipe} onPointerMove={moveSwipe} onPointerUp={endSwipe} onPointerCancel={endSwipe} onPointerLeave={endSwipe} aria-label="Fruit Ninja — drag across fruit to slice" />
-          {!playing && <div className="fn-idle"><b>Swipe to slice</b><span>Fruit = 10 pts · combos ×2/×3 · coins +25 pts · powerups hide in the volleys · a bomb ends the round on the spot</span></div>}
+          {!playing && <div className="fn-idle"><b>Swipe to slice</b><span>Fruit = 10 pts · 150+ pays ×2 · 250+ ×3 · 400+ ×4 · a bomb costs 1 of 3 lives</span></div>}
         </div>
         {!playing && <button className="btn btn-gold xg-action" type="button" onClick={start}>Start slicing · {stake} coins</button>}
         <p className="bottle-msg xg-msg">{msg}</p>

@@ -196,6 +196,10 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
   const rafRef = useRef(0);
   const roundIdRef = useRef<string | null>(null);
   roundIdRef.current = roundId;
+  // crash() is reached from the reveal long-poll, which can fire
+  // twice across effect re-runs — without this guard a round could
+  // settle the stake loss twice.
+  const settledRef = useRef(false);
 
   const fetchReveal = useCallback(async (waitMs = 0): Promise<CarReveal | null> => {
     const id = roundIdRef.current;
@@ -219,25 +223,34 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
     return null;
   }, [fetchReveal]);
 
-  const cashOut = useCallback(async () => {
+  const cashOut = useCallback(async (fixedOdds?: number) => {
     const st = stateRef.current;
     if (!st || !playing) return;
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
-    const payout = Math.round(stake * odds * 100) / 100;
+    settledRef.current = true; // a later reveal must not settle a loss on top of this cash-out
+    // fixedOdds is the ×50 auto-cash-out: the loop's own odds value,
+    // not the lagging state one.
+    const o = fixedOdds ?? odds;
+    const payout = Math.round(stake * o * 100) / 100;
     playSfx("blip", room.muted);
     // Capped-win display: the cash-out line states the credited amount
-    // from the settle response, never the local multiplier value.
-    const res = await room.settle(stake, payout, { odds }, roundIdRef.current || undefined);
-    const eff = res?.payout ?? payout;
-    setMsg(`Cashed out at ×${odds.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"} The balloon floats away.`);
+    // from the settle response, never the local multiplier value. An
+    // effective payout of 0 means the server round had already popped
+    // before this cash-out landed (pump-boosted cash-out racing the
+    // crash point) — that reads as a pop, not a cash-out.
+    const res = await room.settle(stake, payout, { odds: o }, roundIdRef.current || undefined);
+    if (!res) { setMsg("Cash-out didn't go through — nothing was taken, your stake is untouched."); return; }
+    const eff = res.payout;
+    setMsg(eff === 0 ? `The balloon popped just before your cash-out at ×${o.toFixed(2)} landed — the stake is gone.` : `Cashed out at ×${o.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "!" : " back"} The balloon floats away.`);
     void revealAfterEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, odds, stake, room, revealAfterEnd]);
 
   const crash = useCallback(async (rv?: CarReveal) => {
     const st = stateRef.current;
-    if (!st) return;
+    if (!st || settledRef.current) return;
+    settledRef.current = true;
     playSfx("boom", room.muted);
     cancelAnimationFrame(rafRef.current);
     setPlaying(false);
@@ -268,6 +281,7 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
     setReveal(null);
     setPopped(false);
     setCountdown(6);
+    settledRef.current = false;
     stateRef.current = { t0: startsAt, bonus: 0, crashed: false, pumpAt: 0 };
     setOdds(1); setPumps(0); setPlaying(true);
     setMsg("The balloon is inflating — launching in a few seconds. Tap it to pump it, then cash out before it pops.");
@@ -303,7 +317,9 @@ export function BalloonBurstRoom({ game }: { game: GameDef }) {
       setCountdown(Math.max(0, Math.ceil((st.t0 - Date.now()) / 1000)));
       const o = Math.min(50, Math.exp(0.00006 * elapsedMs) + st.bonus);
       setOdds(Math.round(o * 100) / 100);
-      if (o >= 50) { void crash(); return; }
+      // ×50 is the payout cap, not a pop: a round whose server point
+      // is higher auto-cashes out at ×50 instead of losing the stake.
+      if (o >= 50) { void cashOut(50); return; }
       // Balloon: climbs as the multiplier climbs, inflates with it.
       const t = Math.min(1, (o - 1) / 9);
       const by = H - 70 - t * (H - 170);

@@ -378,7 +378,11 @@ export function HiLoRoom({ game }: { game: GameDef }) {
   useEffect(() => { setCard(drawCardObj()); }, []);
   const [chain, setChain] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const mult = Math.pow(1.9, chain);
+  // The chain compounds ×1.9 a card (×89 at 7) — clamp it at the
+  // catalogue ceiling (×50), or the server rejects the cash-out
+  // outright and a 7-chain pays nothing.
+  const chainMult = (c: number) => Math.min(Math.pow(1.9, c), game.maxMultiplier);
+  const mult = chainMult(chain);
   const start = () => { const c = drawCardObj(); setCard(c); setChain(0); setPlaying(true); setMsg(`You're looking at the ${cardLabel(c)}. Higher or lower for the next card? First right guess pays ×1.90.`); };
   const guess = async (dir: "hi" | "lo") => {
     if (!playing) return;
@@ -397,7 +401,7 @@ export function HiLoRoom({ game }: { game: GameDef }) {
     if (ok) {
       const c = chain + 1;
       setChain(c);
-      setMsg(`Right — ${cardLabel(prev)} to ${cardLabel(next)}! Chain ×${Math.pow(1.9, c).toFixed(2)} (${fmtMoney(Math.round(stake * Math.pow(1.9, c) * 100) / 100, room.user?.currency ?? "GHS")}). Go again or cash out.`);
+      setMsg(`Right — ${cardLabel(prev)} to ${cardLabel(next)}! Chain ×${chainMult(c).toFixed(2)} (${fmtMoney(Math.round(stake * chainMult(c) * 100) / 100, room.user?.currency ?? "GHS")}). Go again or cash out.`);
     } else {
       setPlaying(false);
       setMsg(`${diff === 1 ? "So close — one rank away! " : ""}${cardLabel(next)} beats your call. The chain dies and the ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
@@ -410,7 +414,8 @@ export function HiLoRoom({ game }: { game: GameDef }) {
     setPlaying(false);
     // Capped-win display: the cash-out line states the credited amount.
     const res = await room.settle(stake, payout, { chain });
-    const eff = res?.payout ?? payout;
+    if (!res) { setPlaying(true); setMsg("Cash-out didn't go through — nothing was taken. Tap Cash out again."); return; }
+    const eff = res.payout;
     setMsg(`Cashed out — ${chain} ${chain === 1 ? "card" : "cards"} chained at ×${mult.toFixed(2)}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " to your balance." : " back."}`);
   };
   return (
@@ -756,7 +761,11 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [round, setRound] = useState(0);
-  const mult = Math.pow(1.8, step);
+  // The chain compounds ×1.8 a find — clamp it at the catalogue
+  // ceiling (×18.9, 5 finds), or the server rejects the cash-out
+  // outright and a 2-find round pays nothing.
+  const boxMult = (s: number) => Math.min(Math.pow(1.8, s), game.maxMultiplier);
+  const mult = boxMult(step);
   const start = () => {
     setPlaying(true); setStep(0); setGold(Math.floor(Math.random() * 3));
     setPicked(null); setPhase("idle"); setBusy(false);
@@ -771,7 +780,7 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
       const s = step + 1;
       setStep(s);
       setPhase("gold");
-      setMsg(`Gold in chest ${i + 1}! That's ×${Math.pow(1.8, s).toFixed(2)} banked (${fmtMoney(Math.round(stake * Math.pow(1.8, s) * 100) / 100, room.user?.currency ?? "GHS")}). The gold moves — open another or cash out.`);
+      setMsg(`Gold in chest ${i + 1}! That's ×${boxMult(s).toFixed(2)} banked (${fmtMoney(Math.round(stake * boxMult(s) * 100) / 100, room.user?.currency ?? "GHS")}). The gold moves — open another or cash out.`);
       setTimeout(() => {
         setGold(Math.floor(Math.random() * 3));
         setPicked(null); setPhase("idle"); setBusy(false); setRound((r) => r + 1);
@@ -792,7 +801,8 @@ export function PickBoxRoom({ game }: { game: GameDef }) {
     setPlaying(false);
     // Capped-win display: the cash-out line states the credited amount.
     const res = await room.settle(stake, pay, { step });
-    const eff = res?.payout ?? pay;
+    if (!res) { setPlaying(true); setMsg("Cash-out didn't go through — nothing was taken. Tap Cash out again."); return; }
+    const eff = res.payout;
     setMsg(`Cashed out — ${step} ${step === 1 ? "find" : "finds"} at ×${mult.toFixed(2)}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " to your balance." : " back."}`);
   };
   const chestLabel = (i: number): { text: string; color?: string } => {

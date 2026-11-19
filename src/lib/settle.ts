@@ -126,9 +126,16 @@ export async function settleGame(
     const round = getCrashRound(opts.roundId);
     if (!round) throw new Error("Unknown crash round");
     // Cash-out multiplier must never exceed the server's crash point.
-    // (Losses settle payout 0 and always pass.)
+    // (Losses settle payout 0 and always pass.) If the request is
+    // above the point, the round had already crashed before that
+    // multiplier was reached — the cash-out raced the crash and lost,
+    // so it settles as a loss instead of failing: the stake was
+    // already in flight, and a 400 here would leave the player with
+    // a "settle failed" toast and no result at all. (Bonus-boosted
+    // cash-outs in Car Crash / Balloon Burst are the usual trigger:
+    // curve + bonus can sit just above the point.)
     if (effPayout > 0 && effPayout / stake > round.crashPoint + 1e-9) {
-      throw new Error(`Cash-out above the round's crash point ×${round.crashPoint}`);
+      effPayout = 0;
     }
   }
   if (currency === "coins" && (!Number.isInteger(stake) || !Number.isInteger(effPayout))) {

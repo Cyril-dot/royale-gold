@@ -92,11 +92,16 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     setBulge(null);
   }, []);
 
-  const finish = useCallback(async (won: boolean, payout: number, label: string, goalsNow?: number) => {
+  const finish = useCallback(async (won: boolean, payout: number, label: string, goalsNow?: number, shotsTaken?: number) => {
     const g = goalsNow ?? goals;
+    // shots is the TRUE number of kicks taken: a cash-out after g
+    // goals took g shots, a save took g + 1 (the saved kick counts),
+    // five-from-five took 5. The old formula (g + 1 on a win, g on a
+    // loss) was wrong on every path — callers pass it explicitly.
+    const shots = shotsTaken ?? g;
     // Capped-win display: callers build their win line from the
     // returned effective payout, never from the local ladder value.
-    const res = await room.settle(stake, payout, { shots: g + (won ? 1 : 0), goals: g, label });
+    const res = await room.settle(stake, payout, { shots, goals: g, label });
     setPlaying(false);
     setBusy(false);
     stateRef.current.playing = false;
@@ -108,7 +113,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
     if (!playing || goals < 1) return;
     const m = LADDER[goals - 1];
     const pay = Math.round(stake * m * 100) / 100;
-    const res = await finish(true, pay, `×${m}`);
+    const res = await finish(true, pay, `×${m}`, undefined, goals);
     const eff = res?.payout ?? pay;
     setMsg(`${auto ? "Five from five! " : "Cashed out — "}${goals}${goals === 1 ? " goal" : " goals"} at ×${m}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back."}`);
   }, [playing, goals, stake, finish]);
@@ -170,7 +175,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
         // Capped-win display: no amount is shown until settle returns
         // the credited one — the interim line carries no figure at all.
         setMsg(`Five from five!`);
-        setTimeout(async () => { resetActors(); const res = await finish(true, pay5, `×${m5}`, g); const eff = res?.payout ?? pay5; setMsg(`Five from five! ${g} goals at ×${m5}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back."}`); }, 460);
+        setTimeout(async () => { resetActors(); const res = await finish(true, pay5, `×${m5}`, g, g); const eff = res?.payout ?? pay5; setMsg(`Five from five! ${g} goals at ×${m5}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back."}`); }, 460);
         return;
       }
       setMsg(`GOAL — ${aim.label}! That's ${g} on the ladder: ×${LADDER[g - 1]} = ${fmtMoney(Math.round(stake * LADDER[g - 1] * 100) / 100, room.user?.currency ?? "GHS")}. Cash out now or shoot for ×${LADDER[g]}.`);
@@ -193,7 +198,7 @@ export default function PenaltyRoom({ game }: { game: GameDef }) {
       setMsg(`NO GOAL — the keeper got a glove to the ${aim.label} shot and parried it. The ${fmtMoney(stake, room.user?.currency ?? "GHS")} stake is gone.`);
       setTimeout(() => {
         resetActors();
-        void finish(false, 0, "SAVED");
+        void finish(false, 0, "SAVED", stateRef.current.goals, stateRef.current.goals + 1);
       }, 900);
     }
   }, [stake, finish, resetActors, burst]);

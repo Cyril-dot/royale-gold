@@ -326,7 +326,7 @@ export function StackTowerRoom({ game }: { game: GameDef }) {
     const cur = swingRef.current;
     const left = Math.max(prev.x, cur.x);
     const right = Math.min(prev.x + prev.w, cur.x + cur.w);
-    const placed = blocksRef.current.length; // blocks already placed incl. base
+    const placed = blocksRef.current.length - 1; // blocks placed above the base — the base itself is not a placed block (the success path and HUD count the same way)
     if (right - left <= 0) {
       setPhase("done");
       const mult = Math.round(placed * 0.5 * 100) / 100;
@@ -769,9 +769,12 @@ export function ConnectFourRoom({ game }: { game: GameDef }) {
       if (!settledRef.current) { settledRef.current = true; await room.settle(stake, stake, { winner: "draw" }); }
       return;
     }
-    // AI: win > block > centre preference.
+    // AI: win > block > centre preference. (The old code pre-set
+    // aiCol to the first open column, so the block branch below — which
+    // only ran when aiCol was still -1 — was dead code and the AI
+    // never blocked the player's imminent four.)
     const order = [3, 2, 4, 1, 5, 0, 6];
-    let aiCol = order.find((c) => dropIn(b, c, 2) !== null) ?? -1;
+    let aiCol = -1;
     for (const c of order) {
       const t = dropIn(b, c, 2);
       if (t && checkWin(t.board) === 2) { aiCol = c; break; }

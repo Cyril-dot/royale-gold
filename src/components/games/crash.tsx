@@ -560,9 +560,17 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
     // stake-back, not a win. While the settle is in flight the line
     // shows no amount at all, so the local value never flashes.
     const res = await room.settle(bet.stake, payout, { cashout: m }, roundId || undefined);
-    const eff = res?.payout ?? payout;
+    if (!res) {
+      // Failed cash-out: un-mark the bet so it can be cashed out
+      // again (or loses with the round) — never show the local amount
+      // as credited when nothing was.
+      setBets((bs) => bs.map((b) => (b.id === bet.id ? { ...b, cashed: false, payout: 0, pending: false } : b)));
+      setMsg("Cash-out didn't go through — nothing was taken. Tap Cash out again.");
+      return;
+    }
+    const eff = res.payout;
     setBets((bs) => bs.map((b) => (b.id === bet.id ? { ...b, payout: eff, pending: false } : b)));
-    setMsg(`Cashed out at ×${m.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > bet.stake ? "" : " back"}`);
+    setMsg(eff === 0 ? `The round crashed just before your cash-out at ×${m.toFixed(2)} landed — the stake is gone.` : `Cashed out at ×${m.toFixed(2)} — ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > bet.stake ? "" : " back"}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, roundId]);
 

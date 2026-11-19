@@ -31,7 +31,7 @@ const T: Record<string, TileMeta> = {
   "aviator-gold": { cover: "/covers/game-crash.webp", rtp: "97.0%", min: "GH₵ 1", players: 6745, size: "wide", badge: "hot", mult: "Crash · playable", tag: "crash" },
   "jet-fly": { cover: "/covers/cover-jet-fly.jpg", rtp: "97.0%", min: "GH₵ 1", players: 5120, size: "wide", badge: "hot", mult: "Crash · playable", tag: "crash" },
   "car-crash": { cover: "/covers/cover-car-crash.jpg", rtp: "97.0%", min: "GH₵ 1", players: 4380, size: "wide", badge: "hot", mult: "Crash · playable", tag: "crash" },
-  "rocket-shooter": { cover: "/covers/cover-rocket.jpg", rtp: "97.0%", min: "GH₵ 1", players: 5108, size: "hero", badge: "hot", mult: "Crash · playable", tag: "crash" },
+  "rocket-shooter": { cover: "/covers/cover-rocket.jpg", rtp: "97.0%", min: "GH₵ 1", players: 5108, size: "hero", badge: "hot", mult: "Skill · up to ×4", tag: "arcade" },
   "penalty-shoot-out": { cover: "/covers/cover-penalty.jpg", rtp: "97.2%", min: "GH₵ 1", players: 3210, size: "wide", badge: "new", mult: "Top rung ×12.5", tag: "arcade" },
   mines: { cover: "/covers/mines-art.png", fullArt: true, rtp: "97.5%", min: "GH₵ 1", players: 2210, size: "cell", badge: "new", mult: "Top prize ×5,000", tag: "arcade" },
   plinko: { cover: "/covers/cover-plinko.jpg", rtp: "99.0%", min: "GH₵ 1", players: 1950, size: "cell", badge: "new", mult: "Edges ×29 · playable", tag: "arcade" },

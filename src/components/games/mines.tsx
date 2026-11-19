@@ -78,7 +78,12 @@ export default function MinesRoom({ game }: { game: GameDef }) {
   const [revealed, setRevealed] = useState(0);
   const [msg, setMsg] = useState("Pick your mines and stake, start the round, then tap tiles. Every gem raises the multiplier — cash out before a mine finds you.");
 
-  const mult = multFor(revealed, mineCount);
+  // The combinatoric multiplier is uncapped by itself (5 mines at
+  // 19 gems is ×8,589) — clamp every displayed and settled value at
+  // the catalogue ceiling (×5,000), or the server rejects the
+  // cash-out outright and a cleared board pays nothing.
+  const multAt = (k: number, mines: number = mineCount) => Math.min(multFor(k, mines), game.maxMultiplier);
+  const mult = multAt(revealed);
   const pays = Math.round(stake * mult * 100) / 100;
 
   const start = () => {
@@ -89,7 +94,7 @@ export default function MinesRoom({ game }: { game: GameDef }) {
     setTiles(Array(25).fill("hidden"));
     setRevealed(0);
     setPlaying(true);
-    setMsg(`${mineCount} mines hidden. Tap a tile — the first gem already pays ×${multFor(1, mineCount).toFixed(2)}.`);
+    setMsg(`${mineCount} mines hidden. Tap a tile — the first gem already pays ×${multAt(1).toFixed(2)}.`);
   };
 
   // Reveal the whole board: safe tiles dimmed as gems, mines shown,
@@ -127,17 +132,18 @@ export default function MinesRoom({ game }: { game: GameDef }) {
     playSfx("pop", room.muted);
     if (r >= 25 - mineCount) {
       // Every safe tile found — auto-cash at the full multiplier.
-      const m = multFor(r, mineCount);
+      const m = multAt(r);
       const pay = Math.round(stake * m * 100) / 100;
       revealAll(null, t);
       setPlaying(false);
       // Capped-win display: the win line states the credited amount.
       const res = await room.settle(stake, pay, { mines: mineCount, revealed: r });
-      const eff = res?.payout ?? pay;
+      if (!res) { setMsg("The board is cleared, but the auto cash-out didn't go through — your stake is untouched. Start a new round to play again."); return; }
+      const eff = res.payout;
       setMsg(`Every safe tile found! ${r} gems at ×${m.toFixed(2)}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? " to your balance." : " back."}`);
       return;
     }
-    setMsg(`Gem ${r} — ×${multFor(r, mineCount).toFixed(2)} (${fmtMoney(Math.round(stake * multFor(r, mineCount) * 100) / 100, room.user?.currency ?? "GHS")}). Next gem pays ×${multFor(r + 1, mineCount).toFixed(2)} — cash out or keep digging?`);
+    setMsg(`Gem ${r} — ×${multAt(r).toFixed(2)} (${fmtMoney(Math.round(stake * multAt(r) * 100) / 100, room.user?.currency ?? "GHS")}). Next gem pays ×${multAt(r + 1).toFixed(2)} — cash out or keep digging?`);
   };
 
   const cashOut = async () => {
@@ -146,7 +152,8 @@ export default function MinesRoom({ game }: { game: GameDef }) {
     setPlaying(false);
     // Capped-win display: the cash-out line states the credited amount.
     const res = await room.settle(stake, pays, { mines: mineCount, revealed });
-    const eff = res?.payout ?? pays;
+    if (!res) { setPlaying(true); setMsg("Cash-out didn't go through — nothing was taken. Tap Cash out again."); return; }
+    const eff = res.payout;
     setMsg(`Cashed out — ${revealed} gems at ×${mult.toFixed(2)}: ${fmtMoney(eff, room.user?.currency ?? "GHS")}${eff > stake ? "." : " back."}`);
   };
 
@@ -174,7 +181,7 @@ export default function MinesRoom({ game }: { game: GameDef }) {
       <div className="xg-controls">
         <div className="xg-pickrow" role="group" aria-label="Mine count">
           {[3, 5, 10].map((m) => (
-            <button key={m} type="button" className="xg-pick" aria-pressed={mineCount === m} onClick={() => { setMineCount(m); setMsg(`${m} mines — first gem pays ×${multFor(1, m).toFixed(2)}, and it climbs fast. Start when you're ready.`); }} disabled={playing}>
+            <button key={m} type="button" className="xg-pick" aria-pressed={mineCount === m} onClick={() => { setMineCount(m); setMsg(`${m} mines — first gem pays ×${multAt(1, m).toFixed(2)}, and it climbs fast. Start when you're ready.`); }} disabled={playing}>
               <span className="xg-pick-txt">{m} mines</span>
             </button>
           ))}
