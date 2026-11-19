@@ -204,14 +204,15 @@ export async function buildLedger(opts: {
     });
     for (const w of withdrawals) {
       const amount = dec(w.amount);
-      // Nov 2026 (withdrawal-debit fix): only an APPROVED withdrawal
-      // is money out — the debit happens on final approval, never at
-      // request time. Other statuses stay visible with their status,
-      // but count 0 so the totals never count money that has not moved
-      // (before this, every pending and rejected request inflated
-      // cashOut). The amount filter sees the signed amount, like every
-      // other source.
-      const isOut = w.status === "approved";
+      // Nov 2026 (withdrawal-debit fix + reject-debit rule): an
+      // APPROVED or REJECTED withdrawal is money out — the debit
+      // happens on the decision, approve or reject, never at request
+      // time. Pending / admin_approved / held stay visible with their
+      // status, but count 0 so the totals never count money that has
+      // not moved. Consequence: cashOut totals now include rejected
+      // amounts too. The amount filter sees the signed amount, like
+      // every other source.
+      const isOut = w.status === "approved" || w.status === "rejected";
       const signed = isOut ? -amount : 0;
       if (!matchesAmount(signed)) continue;
       if (!matchesText(w.user.name, w.user.email ?? w.user.phone ?? null)) continue;
@@ -219,7 +220,7 @@ export async function buildLedger(opts: {
         id: `wd-${w.id}`, type: "withdrawal", userId: w.userId, userName: w.user.name,
         userContact: w.user.email ?? w.user.phone ?? null, adminId: w.adminId,
         adminName: w.adminId ? adminById.get(w.adminId) ?? null : null,
-        amount: signed, wallet: "cash", fiatCurrency: w.fiatCurrency ?? "GHS", detail: isOut ? `Withdrawal approved via ${w.method}` : `Withdrawal request via ${w.method}`,
+        amount: signed, wallet: "cash", fiatCurrency: w.fiatCurrency ?? "GHS", detail: w.status === "approved" ? `Withdrawal approved via ${w.method}` : w.status === "rejected" ? `Withdrawal rejected via ${w.method}` : `Withdrawal request via ${w.method}`,
         method: w.method, status: w.status, reason: w.reason ?? undefined,
         createdAt: w.createdAt.toISOString(),
       });

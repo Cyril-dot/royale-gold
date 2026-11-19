@@ -5,8 +5,9 @@
 // Approving a small amount finishes it ("approved") AND debits the
 // player's cash (Winnings first — see debitWithdrawal in
 // src/lib/win-logic.ts), atomically with the status flip. Rejecting
-// needs a reason and moves no money. The request itself debits
-// nothing — only final approval does.
+// debits the player's cash EXACTLY the same way (his rule, Nov 2026:
+// money leaves on approve AND reject). Rejecting needs a reason.
+// The request itself debits nothing — only the decision does.
 import { requireRole } from "@/lib/auth";
 import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
@@ -70,9 +71,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         // Nov 2026 (withdrawal-debit fix): final approval debits the
         // player's cash, Winnings first — atomically with the flip.
         // admin_approved debits NOTHING yet; the owner's second
-        // approval is what debits.
+        // approval is what debits. Rejecting debits exactly the same
+        // way (his rule, Nov 2026: money leaves on approve AND reject).
         let d: { newCash: number; drawnFromWinnings: number } | null = null;
-        if (finalApproval) d = await debitWithdrawal(tx, w.userId, amount);
+        if (finalApproval || decision === "reject") d = await debitWithdrawal(tx, w.userId, amount);
         await tx.auditLog.create({
           data: {
             actorId: admin.id,
@@ -96,7 +98,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return fail("This withdrawal was already decided", 400);
       }
       if (err instanceof Error && err.message.startsWith("INSUFFICIENT_BALANCE")) {
-        return fail(`Cannot approve — the player's cash balance is below the ${amount} ${fiatCurrency} withdrawal. Reject it instead.`, 400);
+        // Nov 2026: rejecting debits exactly like approving, so a
+        // short balance blocks BOTH decisions — the balance must reach
+        // the amount first (deposit or manual credit) before this
+        // withdrawal can be decided at all.
+        return fail(`Cannot ${decision} — the player's cash balance is below the ${amount} ${fiatCurrency} withdrawal. The balance must reach ${amount} ${fiatCurrency} first (deposit or manual credit) before this can be decided.`, 400);
       }
       throw err;
     }
