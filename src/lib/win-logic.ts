@@ -404,3 +404,56 @@ export async function clampWinnings(tx: Tx, userId: string, cashBalance: number)
     throw err;
   }
 }
+
+/**
+ * Debit a final-approved withdrawal from the player's cash, Winnings
+ * first (Nov 2026 withdrawal-debit fix). Call inside the approval
+ * transaction, AFTER the guarded status flip.
+ * - Atomic balance guard: the cash update only matches when the cash
+ *   is there, so two concurrent approvals for the same user can never
+ *   overdraw the total. count 0 = insufficient balance — throws
+ *   Error("INSUFFICIENT_BALANCE: ...") and the transaction rolls back,
+ *   so the status never flips; the route maps it to a 400.
+ * - Winnings-first: new winnings = max(0, winnings - amount); cash
+ *   -= amount. Invariant 0 <= winnings <= cash holds (cash >= amount
+ *   was just enforced, so cash-after >= 0 and winnings-after <=
+ *   cash-after). This is the OPPOSITE of clampWinnings (Stake first)
+ *   — do not use clampWinnings here.
+ * - Missing WinWallet row = winnings 0; missing WinWallet table
+ *   (P2021/P2022, prod before rg-win-logic.sql) = winnings 0 too —
+ *   the cash debit still happens, it just has no sub-ledger to draw
+ *   from. Never crashes the approval.
+ * Returns { newCash, drawnFromWinnings } for the audit detail.
+ */
+export async function debitWithdrawal(
+  tx: Tx,
+  userId: string,
+  amount: number,
+): Promise<{ newCash: number; drawnFromWinnings: number }> {
+  const amt = round2(amount);
+  if (!(amt > 0)) throw new Error("Withdrawal amount must be above 0");
+  // Plain numbers (not Prisma.Decimal): SQLite stores cashBalance as
+  // Float, Postgres as Decimal — a number is accepted for both.
+  const debited = await tx.user.updateMany({
+    where: { id: userId, cashBalance: { gte: amt } },
+    data: { cashBalance: { decrement: amt } },
+  });
+  if (debited.count === 0) {
+    throw new Error(`INSUFFICIENT_BALANCE: cash balance is below ${amt}`);
+  }
+  let drawn = 0;
+  try {
+    const row = await tx.winWallet.findUnique({ where: { userId }, select: { winnings: true } });
+    const w = round2(Math.max(0, dec(row?.winnings)));
+    drawn = Math.min(w, amt);
+    if (row && drawn > 0) {
+      await tx.winWallet.update({ where: { userId }, data: { winnings: round2(w - drawn) } });
+    }
+  } catch (err) {
+    if (!isMissingTable(err)) throw err;
+    // Table missing (prod before rg-win-logic.sql): no sub-ledger to
+    // draw from — the cash debit above already happened, winnings stay 0.
+  }
+  const user = await tx.user.findUnique({ where: { id: userId }, select: { cashBalance: true } });
+  return { newCash: round2(dec(user?.cashBalance)), drawnFromWinnings: round2(drawn) };
+}

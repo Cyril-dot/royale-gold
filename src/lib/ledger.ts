@@ -3,7 +3,9 @@
 // ONLY from rows the tables actually hold — no numbers are invented:
 //   deposit    — DepositEvent (cash in, method, commission)
 //   bet        — GameResult (one row per round: stake out, payout in, net)
-//   withdrawal — Withdrawal (cash out request, with its status)
+//   withdrawal — Withdrawal (approved = cash out; pending /
+//   admin_approved / held / rejected count 0 — the debit happens on
+//   final approval, never at request time)
 //   adjustment — BalanceAdjustment (admin credit/debit, with reason)
 //   conversion — ConversionEvent (cash out -> coins in)
 // Scope: adminId set = that admin's downline only; null = platform-wide
@@ -202,13 +204,22 @@ export async function buildLedger(opts: {
     });
     for (const w of withdrawals) {
       const amount = dec(w.amount);
-      if (!matchesAmount(amount)) continue;
+      // Nov 2026 (withdrawal-debit fix): only an APPROVED withdrawal
+      // is money out — the debit happens on final approval, never at
+      // request time. Other statuses stay visible with their status,
+      // but count 0 so the totals never count money that has not moved
+      // (before this, every pending and rejected request inflated
+      // cashOut). The amount filter sees the signed amount, like every
+      // other source.
+      const isOut = w.status === "approved";
+      const signed = isOut ? -amount : 0;
+      if (!matchesAmount(signed)) continue;
       if (!matchesText(w.user.name, w.user.email ?? w.user.phone ?? null)) continue;
       rows.push({
         id: `wd-${w.id}`, type: "withdrawal", userId: w.userId, userName: w.user.name,
         userContact: w.user.email ?? w.user.phone ?? null, adminId: w.adminId,
         adminName: w.adminId ? adminById.get(w.adminId) ?? null : null,
-        amount: -amount, wallet: "cash", fiatCurrency: w.fiatCurrency ?? "GHS", detail: `Withdrawal request via ${w.method}`,
+        amount: signed, wallet: "cash", fiatCurrency: w.fiatCurrency ?? "GHS", detail: isOut ? `Withdrawal approved via ${w.method}` : `Withdrawal request via ${w.method}`,
         method: w.method, status: w.status, reason: w.reason ?? undefined,
         createdAt: w.createdAt.toISOString(),
       });

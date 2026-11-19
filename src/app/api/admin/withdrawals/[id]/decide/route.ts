@@ -2,8 +2,11 @@
 // Maker-checker: approving a LARGE amount (over the per-fiat threshold
 // — GH₵ 500 / ₦ 50,000 seed) does NOT finish it — it moves to
 // "admin_approved" and waits for the owner's second approval.
-// Approving a small amount finishes it ("approved"). Rejecting needs a
-// reason. No money moves on any decision — requests only.
+// Approving a small amount finishes it ("approved") AND debits the
+// player's cash (Winnings first — see debitWithdrawal in
+// src/lib/win-logic.ts), atomically with the status flip. Rejecting
+// needs a reason and moves no money. The request itself debits
+// nothing — only final approval does.
 import { requireRole } from "@/lib/auth";
 import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +14,7 @@ import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec } from "@/lib/money";
 import { symbolFor } from "@/lib/country";
 import { needsOwnerApproval, withdrawalOwnerThresholdFor } from "@/lib/withdrawals";
+import { debitWithdrawal } from "@/lib/win-logic";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -41,30 +45,61 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const fiatCurrency = w.fiatCurrency ?? "GHS";
     const threshold = await withdrawalOwnerThresholdFor(fiatCurrency);
     const nextStatus = decision === "reject" ? "rejected" : (await needsOwnerApproval(amount, fiatCurrency)) ? "admin_approved" : "approved";
-    const updated = await prisma.$transaction(async (tx) => {
-      const u = await tx.withdrawal.update({
-        where: { id },
-        data: {
-          status: nextStatus,
-          ...(decision === "approve" && nextStatus === "admin_approved" ? { adminApprovedAt: new Date() } : {}),
-          decidedBy: admin.id,
-          reason: decision === "reject" ? reason : w.reason,
-          decidedAt: nextStatus === "approved" || nextStatus === "rejected" ? new Date() : undefined,
-        },
-        // Phase 5 (admin 500s): the returned row is the only shape the
-        // response maps — see the findUnique select above.
-        select: { id: true, status: true, decidedAt: true },
+    const finalApproval = nextStatus === "approved";
+
+    // Marker errors thrown inside the transaction roll it back and are
+    // mapped to 400s below — the status never flips on a failed debit.
+    let updated: { id: string; status: string; decidedAt: Date | null };
+    try {
+      const out = await prisma.$transaction(async (tx) => {
+        // Authoritative guard, INSIDE the transaction: the flip only
+        // matches a still-pending/held row, so two concurrent approves
+        // cannot both land — the second matches 0 rows. (The pre-read
+        // above is only the early error for the common case.)
+        const flipped = await tx.withdrawal.updateMany({
+          where: { id, status: { in: ["pending", "held"] } },
+          data: {
+            status: nextStatus,
+            ...(decision === "approve" && nextStatus === "admin_approved" ? { adminApprovedAt: new Date() } : {}),
+            decidedBy: admin.id,
+            reason: decision === "reject" ? reason : w.reason,
+            decidedAt: nextStatus === "approved" || nextStatus === "rejected" ? new Date() : undefined,
+          },
+        });
+        if (flipped.count === 0) throw new Error("ALREADY_DECIDED: this withdrawal was already decided");
+        // Nov 2026 (withdrawal-debit fix): final approval debits the
+        // player's cash, Winnings first — atomically with the flip.
+        // admin_approved debits NOTHING yet; the owner's second
+        // approval is what debits.
+        let d: { newCash: number; drawnFromWinnings: number } | null = null;
+        if (finalApproval) d = await debitWithdrawal(tx, w.userId, amount);
+        await tx.auditLog.create({
+          data: {
+            actorId: admin.id,
+            action: decision === "approve" ? "withdrawal.approve" : "withdrawal.reject",
+            targetId: w.id,
+            detail: `${decision === "approve" ? "Approved" : "Rejected"} withdrawal of ${amount} ${fiatCurrency} for user ${w.userId}${nextStatus === "admin_approved" ? ` — over ${symbolFor(fiatCurrency)} ${threshold}, awaiting owner` : ""}${decision === "reject" ? ` — ${reason}` : ""}${d ? ` — debited ${amount} ${fiatCurrency}${d.drawnFromWinnings > 0 ? ` (${d.drawnFromWinnings} from Winnings)` : ""}, new cash balance ${d.newCash} ${fiatCurrency}` : ""}`,
+          },
+        });
+        // Phase 5 (admin 500s): explicit select — the returned row is
+        // the only shape the response maps.
+        const row = await tx.withdrawal.findUnique({
+          where: { id },
+          select: { id: true, status: true, decidedAt: true },
+        });
+        if (!row) throw new Error("Withdrawal not found");
+        return row;
       });
-      await tx.auditLog.create({
-        data: {
-          actorId: admin.id,
-          action: decision === "approve" ? "withdrawal.approve" : "withdrawal.reject",
-          targetId: w.id,
-          detail: `${decision === "approve" ? "Approved" : "Rejected"} withdrawal of ${amount} ${fiatCurrency} for user ${w.userId}${nextStatus === "admin_approved" ? ` — over ${symbolFor(fiatCurrency)} ${threshold}, awaiting owner` : ""}${decision === "reject" ? ` — ${reason}` : ""}`,
-        },
-      });
-      return u;
-    });
+      updated = out;
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("ALREADY_DECIDED")) {
+        return fail("This withdrawal was already decided", 400);
+      }
+      if (err instanceof Error && err.message.startsWith("INSUFFICIENT_BALANCE")) {
+        return fail(`Cannot approve — the player's cash balance is below the ${amount} ${fiatCurrency} withdrawal. Reject it instead.`, 400);
+      }
+      throw err;
+    }
 
     return ok({
       withdrawal: { id: updated.id, status: updated.status, decidedAt: updated.decidedAt?.toISOString() ?? null },
