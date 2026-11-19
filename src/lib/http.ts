@@ -5,8 +5,8 @@ export function ok(data: unknown, status = 200): NextResponse {
   return NextResponse.json(data, { status });
 }
 
-export function fail(message: string, status = 400): NextResponse {
-  return NextResponse.json({ error: message }, { status });
+export function fail(message: string, status = 400, extra?: Record<string, unknown>): NextResponse {
+  return NextResponse.json({ error: message, ...(extra ?? {}) }, { status });
 }
 
 /** Turn thrown AuthError / unexpected errors into JSON responses. */

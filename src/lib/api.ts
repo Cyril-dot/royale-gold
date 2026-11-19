@@ -47,6 +47,23 @@ export interface Wallet {
   winnings?: number;
 }
 
+/** An API failure that carries machine-readable fields alongside
+ *  the message — e.g. code "payment_blocked" + blockedUntil, so the
+ *  DepositModal can show the blocked card instead of a red line.
+ *  Still an Error with .message, so every existing `catch (ex) {
+ *  setErr(ex.message) }` call site is unaffected. */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  blockedUntil?: string;
+  constructor(message: string, status: number, code?: string, blockedUntil?: string) {
+    super(message);
+    this.status = status;
+    if (code) this.code = code;
+    if (blockedUntil) this.blockedUntil = blockedUntil;
+  }
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -54,7 +71,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `Request failed (${res.status})`);
+    const body = data as { error?: string; code?: string; blockedUntil?: string };
+    throw new ApiError(body.error || `Request failed (${res.status})`, res.status, body.code, body.blockedUntil);
   }
   return data as T;
 }

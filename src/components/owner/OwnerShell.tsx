@@ -30,6 +30,7 @@ export const OWNER_NAV_GROUPS: NavGroup[] = [
       { href: "/owner/finance/pnl", label: "Profit & loss" },
       { href: "/owner/finance/gateway", label: "Gateway" },
       { href: "/owner/finance/cashier", label: "Cashier" },
+      { href: "/owner/finance/payment-blocks", label: "Payment blocks" },
     ],
   },
   { label: "Payouts", items: [{ href: "/owner/payouts", label: "Payouts" }] },

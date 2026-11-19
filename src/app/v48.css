@@ -2009,6 +2009,25 @@ table.rg48-t tr:last-child td{border-bottom:0}
 .rg48-code{display:inline-flex;align-items:center;gap:8px;background:#070A18;border:1px solid rgba(242,194,48,.4);border-radius:10px;padding:7px 8px 7px 12px;font-family:var(--mono,monospace);font-weight:700;color:var(--gold-2);font-size:14px}
 .rg48-code button{background:var(--gold);color:#231a02;border:0;border-radius:7px;font:inherit;font-size:12px;font-weight:900;padding:6px 10px;cursor:pointer}
 .rg48-mini{font-size:12.5px;color:var(--muted)}
+/* Payment safeguards (Nov 2026): the pre-pay confirm + blocked cards
+   in the deposit modal — same dark card, gold accent, 44px+ targets.
+   Both cards replace the form (and the plain red error line), never
+   sit under it. */
+.rg48-rows{display:grid;gap:8px;margin:0 0 14px;font-size:14px}
+.rg48-rows>div{display:flex;justify-content:space-between;gap:12px}
+.rg48-rows span{color:var(--muted)}
+.rg48-rows strong{font-weight:800;text-align:right;overflow-wrap:anywhere}
+.rg48-rows .rg48-total{border-top:1px solid var(--line);padding-top:8px}
+.rg48-warn{background:rgba(242,194,48,.09);border:1px solid rgba(242,194,48,.35);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--ink);margin:0 0 16px}
+.rg48-warn b{color:var(--gold-2)}
+.rg48-bigtime{text-align:center;margin:0 0 16px}
+.rg48-bigtime span{display:block;color:var(--muted);font-size:13px;margin-bottom:2px}
+.rg48-bigtime b{display:block;font-size:24px;font-weight:800;color:var(--gold-2);overflow-wrap:anywhere}
+.rg48-bignum{text-align:center;margin:0 0 16px}
+.rg48-bignum b{display:block;font-size:30px;font-weight:800;color:var(--ink);overflow-wrap:anywhere}
+.rg48-bignum span{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.rg48-btnrow{display:flex;gap:10px}
+.rg48-btnrow>*{flex:1;min-width:0}
 .rg48-pill{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:.08em;padding:3px 9px;border-radius:999px;border:1px solid var(--line)}
 .rg48-pill.on{color:#3ED97E;border-color:rgba(62,217,126,.5)}
 .rg48-pill.off{color:#FF8580;border-color:rgba(229,50,45,.5)}

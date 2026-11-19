@@ -588,6 +588,38 @@ model WinWallet {
   updatedAt    DateTime @updatedAt
 }
 
+// Payment blocks (Nov 2026, port of BetWins): two failed PayTeller
+// deposits in 24h blocks the account AND the MoMo number on file from
+// deposits for 24h. The block is a ROW (not derived from the failure
+// log) so the owner can list it and lift it early. Reads are
+// P2021/P2022-safe in src/lib/payment-blocks.ts — a prod DB without
+// these tables behaves as unblocked and never 500s.
+model PaymentBlock {
+  id           String   @id @default(cuid())
+  userId       String
+  phoneNumber  String?
+  blockedUntil DateTime
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, blockedUntil])
+  @@index([phoneNumber, blockedUntil])
+}
+
+// One genuine PayTeller deposit failure (deduped by depositRef — the
+// PaytellerPayment.reference, so a webhook + poll twin can never count
+// twice). A completed deposit does not reset anything: old failures
+// age out of the 24h window on their own.
+model DepositFailure {
+  id          String   @id @default(cuid())
+  userId      String
+  phoneNumber String?
+  depositRef  String   @unique
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
 // Phase 1 country-based (Nov 2026): gateway credentials + the Ghana
 // MoMo gateway toggle. Created NOW so Phase 2 (PayTeller) has
 // somewhere to write — the PayTeller fields stay EMPTY this phase.

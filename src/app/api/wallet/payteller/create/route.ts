@@ -26,6 +26,15 @@ import {
   toAmountString,
   type PaytellerPaymentResponse,
 } from "@/lib/payteller";
+// Payment blocks (Nov 2026): two failed PayTeller deposits in 24h
+// blocks the account AND the number from deposits for 24h. The guard
+// runs before any provider call; a start the provider rejects records
+// a failure (the 409 resume does NOT — the prompt is still live).
+import {
+  assertPaymentsNotBlocked,
+  PaymentBlockedError,
+  recordDepositFailure,
+} from "@/lib/payment-blocks";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo"] as const;
 
@@ -53,6 +62,17 @@ export async function POST(req: Request) {
 
     const me = await prisma.user.findUnique({ where: { id: user.id } });
     if (me?.blockedAt) return fail("This account is blocked and cannot deposit", 403);
+    // Payment blocks (Nov 2026): the guard runs before any provider
+    // call, so a blocked user never burns a PayTeller start. The 403
+    // carries code + blockedUntil so the modal shows the card.
+    try {
+      await assertPaymentsNotBlocked({ userId: user.id, phoneNumber: me?.phone ?? null });
+    } catch (err) {
+      if (err instanceof PaymentBlockedError) {
+        return fail(err.message, 403, { code: err.code, blockedUntil: err.blockedUntil });
+      }
+      throw err;
+    }
     // PayTeller is GHS only — an NGN account never gets a PayTeller button.
     if ((me?.currency ?? "GHS") !== "GHS") {
       return fail("PayTeller is available for Ghana cedi accounts only");
@@ -140,6 +160,14 @@ export async function POST(req: Request) {
       await prisma.paytellerPayment.update({
         where: { id: payment.id },
         data: { status: "failed" },
+      });
+      // Payment blocks (Nov 2026): the provider rejected this start —
+      // a genuine failure. (The 409 branch above returns early and
+      // never reaches here: a resume is not a failure.)
+      await recordDepositFailure({
+        userId: user.id,
+        phoneNumber: me?.phone ?? null,
+        depositRef: reference,
       });
       return paytellerFail(err);
     }

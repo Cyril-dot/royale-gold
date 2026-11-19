@@ -12,6 +12,10 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, toErrorResponse } from "@/lib/http";
 import { getPaymentByReference, isSuccessfulStatus, normalizeStatus } from "@/lib/payteller";
 import { creditPaytellerPayment } from "@/lib/payteller-deposit";
+// Payment blocks (Nov 2026): a payment the poll finds "failed" is a
+// genuine failure. An "expired" checkout is NOT — the customer never
+// paid. Never throws into the poll flow.
+import { recordDepositFailure } from "@/lib/payment-blocks";
 
 export async function GET(req: Request) {
   try {
@@ -50,6 +54,19 @@ export async function GET(req: Request) {
         where: { id: payment.id },
         data: { status },
       });
+      // Payment blocks (Nov 2026): "failed" counts, "expired" does
+      // not — an expired checkout means the customer never paid.
+      if (status === "failed") {
+        const owner = await prisma.user.findUnique({
+          where: { id: payment.userId },
+          select: { phone: true },
+        });
+        await recordDepositFailure({
+          userId: payment.userId,
+          phoneNumber: owner?.phone ?? null,
+          depositRef: payment.reference,
+        });
+      }
       return ok({ status, credited: false, amount: Number(payment.amount.toString()) });
     }
     // Still in flight — persist the provider's view of it (pending /

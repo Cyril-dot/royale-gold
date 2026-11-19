@@ -26,6 +26,10 @@ import {
   PaytellerError,
 } from "@/lib/payteller";
 import { creditPaytellerPayment } from "@/lib/payteller-deposit";
+// Payment blocks (Nov 2026): a payment the provider reports as
+// failed is a genuine failure — recorded here so two in 24h trip
+// the block. Never throws into the webhook flow.
+import { recordDepositFailure } from "@/lib/payment-blocks";
 
 export async function POST(req: Request) {
   try {
@@ -94,6 +98,18 @@ export async function POST(req: Request) {
         await prisma.paytellerPayment.update({
           where: { id: payment.id },
           data: { status: "failed" },
+        });
+        // Payment blocks (Nov 2026): the provider says this payment
+        // failed — a genuine failure. The number is the account phone:
+        // PayTeller never shares the number typed on its checkout.
+        const owner = await prisma.user.findUnique({
+          where: { id: payment.userId },
+          select: { phone: true },
+        });
+        await recordDepositFailure({
+          userId: payment.userId,
+          phoneNumber: owner?.phone ?? null,
+          depositRef: payment.reference,
         });
       }
     }

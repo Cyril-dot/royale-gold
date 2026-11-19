@@ -22,6 +22,12 @@ import { enforceFixedDeposit } from "@/lib/fixed-deposit";
 // deposit x the owner-set rate in force now (no-op when the rate is
 // OFF or the tables do not exist yet).
 import { getWinnings, splitCash, topUpAllowance } from "@/lib/win-logic";
+// Payment blocks (Nov 2026): two failed PayTeller deposits in 24h
+// blocks the account AND the number from deposits for 24h. The demo
+// path cannot record a failure (no provider), but a block earned on
+// PayTeller still stops it — a blocked user deposits nothing while
+// the block lasts.
+import { assertPaymentsNotBlocked, PaymentBlockedError } from "@/lib/payment-blocks";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -55,6 +61,17 @@ export async function POST(req: Request) {
     const me = await prisma.user.findUnique({ where: { id: user.id } });
     // P0 Batch 1 (A8): a blocked player cannot deposit.
     if (me?.blockedAt) return fail("This account is blocked and cannot deposit", 403);
+    // Payment blocks (Nov 2026): a 24h deposit block earned on
+    // PayTeller stops the demo path too. The 403 carries
+    // code + blockedUntil so the modal shows the card, not a line.
+    try {
+      await assertPaymentsNotBlocked({ userId: user.id, phoneNumber: me?.phone ?? null });
+    } catch (err) {
+      if (err instanceof PaymentBlockedError) {
+        return fail(err.message, 403, { code: err.code, blockedUntil: err.blockedUntil });
+      }
+      throw err;
+    }
     // Phase 1 country-based (Nov 2026): this deposit is in the
     // player's fiat, full stop — the amount is never converted.
     const fiatCurrency = me?.currency ?? "GHS";
