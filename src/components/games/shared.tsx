@@ -98,6 +98,53 @@ export function ConfettiLayer() {
   );
 }
 
+// ---- Shared result tone: the phone win/lose banner (Nov 2026) ----
+// settle() fires "rg-result-tone" with the result — the same win the
+// toast uses (effective payout vs stake, banked coins included, so the
+// toast, the banner and the stats can never disagree). ResultToneLayer
+// (rendered by RoomShell in every room, like ConfettiLayer) applies
+// .win/.lose to the room's .bottle-msg line, so on phone (≤640px) the
+// line shows — .bottle-msg without either class is display:none there
+// (v48.css:1018). Neutral instruction lines never get a tone, so the
+// idle band stays retired on phone. The banner waits out the 2.3s
+// toast (they share the top of the viewport), shows 2s, then fades
+// (rg-fading → rg-gone — the lifetime v48.css documents: "2s fully
+// visible, then a 0.3s fade"). A new result replaces the old: timers
+// restart. The tone is the SETTLE result — credited profit > 0 is a
+// win, otherwise a lose (a capped win that pays stake-back counts as
+// not-a-win, same as the stats definition). The cap itself stays
+// silent: nothing here names it.
+
+export type ResultTone = "win" | "lose";
+
+export function fireResultTone(tone: ResultTone) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("rg-result-tone", { detail: { tone } }));
+}
+
+export function ResultToneLayer() {
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const later = (fn: () => void, ms: number) => { timers.push(setTimeout(fn, ms)); };
+    const clearTimers = () => { timers.forEach((t) => clearTimeout(t)); timers.length = 0; };
+    const lines = () => Array.from(document.querySelectorAll(".xgame-room .bottle-msg"));
+    const onTone = (e: Event) => {
+      const tone = (e as CustomEvent<{ tone?: string }>).detail?.tone;
+      if (tone !== "win" && tone !== "lose") return;
+      clearTimers();
+      // Clear any stale tone now, then show the new banner once the
+      // toast is gone (2.3s), visible 2s, fade 0.3s, gone.
+      lines().forEach((el) => el.classList.remove("win", "lose", "rg-fading", "rg-gone"));
+      later(() => lines().forEach((el) => el.classList.add(tone)), 2300);
+      later(() => lines().forEach((el) => el.classList.add("rg-fading")), 4300);
+      later(() => lines().forEach((el) => el.classList.add("rg-gone")), 4600);
+    };
+    window.addEventListener("rg-result-tone", onTone);
+    return () => { window.removeEventListener("rg-result-tone", onTone); clearTimers(); };
+  }, []);
+  return null;
+}
+
 export function useGameRoom(game: GameDef) {
   const { user, wallet, mode, muted, toast, setWallet, simSession, setSimSession, openAuth, refresh } = useStore();
   const [stats, setStats] = useState<GameStat | null>(null);
@@ -161,6 +208,8 @@ export function useGameRoom(game: GameDef) {
         const won = payout > stake;
         toast(won ? `You won ${fmtMoney(payout, user?.currency ?? "GHS")} (SIM)` : payout > 0 ? `${fmtMoney(payout, user?.currency ?? "GHS")} back (SIM)` : `You lost ${fmtMoney(stake, user?.currency ?? "GHS")} (SIM)`, won ? "win" : "lose");
         if (won) { playSfx("cheer", muted); fireConfetti(); } else playSfx("groan", muted);
+        // Phone win/lose banner: same win as the toast above.
+        fireResultTone(won ? "win" : "lose");
         // SIM stats: same definition as the server (/api/games/stats) —
         // played+1, win iff payout > stake, best = max profit, streak =
         // the current run of consecutive wins. Persisted per game.
@@ -203,6 +252,8 @@ export function useGameRoom(game: GameDef) {
       const amt = isCoin ? `${fmtCoins(totalWon)} coins` : fmtMoney(totalWon, user?.currency ?? "GHS");
       toast(won ? `You won ${amt}` : totalWon > 0 ? `${amt} back` : isCoin ? `You lost ${fmtCoins(stake)} coins` : `You lost ${fmtMoney(stake, user?.currency ?? "GHS")}`, won ? "win" : "lose");
       if (won) { playSfx("cheer", muted); fireConfetti(); } else if (totalWon === 0) playSfx("groan", muted);
+      // Phone win/lose banner: same win as the toast above.
+      fireResultTone(won ? "win" : "lose");
       await loadStats();
       // The effective payout the server credited (r.payout) — rooms
       // build their win line from this, never from the local payout.
@@ -340,6 +391,7 @@ export function RoomShell({ game, subtitle, children, stats, history, bare }: {
       {/* Shared win confetti — the layer lives in every room; settle()
           fires it on a win. pointer-events:none, so it never blocks a tap. */}
       <ConfettiLayer />
+      <ResultToneLayer />
       {!bare && <GameRoomHeader />}
       <div className="wrap">
         <p className="xg-sub">{subtitle}</p>

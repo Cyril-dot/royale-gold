@@ -3,7 +3,7 @@
 // conversions, the saved withdrawal account (bank or MoMo) and the
 // withdraw request form. Forms, chips, lists and values only — no
 // helper blurbs (Chuks had those removed). Withdrawals are requests
-// only: no money moves until an admin approves (see /api/wallet/withdraw).
+// only: the amount leaves your balance when an admin approves or rejects it (see /api/wallet/withdraw).
 //
 // Win logic (Nov 2026): the Balances section shows the Stake/Winnings
 // split of the cash balance. The withdraw form itself lives in

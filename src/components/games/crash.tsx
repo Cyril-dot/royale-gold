@@ -623,7 +623,7 @@ export default function CrashRoom({ game, skin }: { game: GameDef; skin: "aviato
           </button>
         )}
         {phase === "running" && !activeBet && <button className="btn btn-ghost xg-action" type="button" disabled>Watching — no active bet</button>}
-        <p className="xg-msg">{msg}</p>
+        <p className="bottle-msg xg-msg">{msg}</p>
         {bets.length > 0 && <p className="xg-msg">Active bets: {bets.map((b) => `${fmtMoney(b.stake, room.user?.currency ?? "GHS")}${b.cashed ? (b.pending ? " → cashing out…" : ` → cashed ${fmtMoney(b.payout, room.user?.currency ?? "GHS")}`) : b.auto ? ` (auto ×${b.auto})` : ""}`).join(" · ")}</p>}
       </div>
       {phase === "crashed" && (

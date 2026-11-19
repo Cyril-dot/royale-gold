@@ -2,9 +2,10 @@
 // Owner-only, per fiat, driven by the shared OwnerRangeBar (range +
 // currency). Data from GET /api/owner/analytics. Labels follow
 // docs/FINANCIAL_METRIC_DEFINITIONS.md exactly: "Net position" is
-// deposits in − payouts out (approved withdrawals + game payouts) —
-// NEVER "profit". "Approved payouts" counts Withdrawal.status =
-// "approved" only (approval ≠ payment — no money moves on a decision).
+// deposits in − payouts out (decided withdrawals + game payouts) —
+// NEVER "profit". "Payouts out" counts Withdrawal.status IN
+// ("approved", "rejected") — the amount leaves the balance on the
+// decision, approve or reject (approval ≠ payment off-platform).
 // Charts are the hand-rolled SVG staff-ui charts (D5) with their table
 // alternative; per-game tables are the shared DataTable (+ CardList on
 // phone), cash and coins apart — coins never added to cash figures.
@@ -172,7 +173,7 @@ export default function OwnerAnalyticsPage() {
         <>
           <div className="st-kpis">
             <KpiTile label="Total deposits" value={fmtStaffMoney(data.totals.deposits, fiat)} sub={`${fmtStaffInt(data.totals.depositsCount)} deposits`} />
-            <KpiTile label="Approved payouts" value={fmtStaffMoney(data.totals.paidOut, fiat)} sub={`${fmtStaffInt(data.totals.paidOutCount)} approved`} />
+            <KpiTile label="Payouts out" value={fmtStaffMoney(data.totals.paidOut, fiat)} sub={`${fmtStaffInt(data.totals.paidOutCount)} decided`} />
             <KpiTile label="GGR (cash)" value={fmtStaffMoney(data.totals.ggrCash, fiat)} sub="Stakes − payouts" />
             <KpiTile
               label="Net position"
@@ -183,7 +184,7 @@ export default function OwnerAnalyticsPage() {
 
           <Card
             title="Income vs payouts over time"
-            sub="Deposits in, payouts out (approved withdrawals + game payouts), and the net line. Net position is cash flow, not profit."
+            sub="Deposits in, payouts out (decided withdrawals + game payouts), and the net line. Net position is cash flow, not profit."
           >
             {data.daily.length === 0 ? (
               <EmptyState title="No days in this range." text="No days in this range." />

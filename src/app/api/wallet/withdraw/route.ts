@@ -113,7 +113,7 @@ export async function POST(req: Request) {
       },
       note: created.status === "held"
         ? "This request was held for admin review by an automated risk rule."
-        : "Request only — no money moves until an admin approves it.",
+        : "The amount leaves your balance when an admin approves or rejects it.",
     }, 201);
   } catch (err) {
     return toErrorResponse(err);

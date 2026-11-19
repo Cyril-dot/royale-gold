@@ -45,8 +45,8 @@
 | Metric | Definition | Source | Status |
 |---|---|---|---|
 | Total payout requests (count + amount) | `COUNT` / `SUM(Withdrawal.amount)` per fiat, any status | `Withdrawal` (`prisma/schema.prisma:278`) | Implemented — Withdrawals queue (`GET /api/owner/withdrawals`) |
-| Paid out (amount + count) — **the definition** | `SUM(Withdrawal.amount)` where `status = "approved"`. **There is NO `paid` status in the code.** `approved` is the terminal state and means "request approved" only — no money moves on any decision (`src/app/api/wallet/withdraw/route.ts`, decide-route headers). Day = the request's `createdAt` UTC day, **not** the approval day (same rule as the P&L). | `Withdrawal.status`, `Withdrawal.createdAt` | Implemented — `dashboard-stats` (`paidOutTotal`/`paidOutToday`), P&L (`approved` withdrawals) |
-| Paid out — **the gap** | Because approval ≠ payment, "paid out" overstates reality whenever an approved request has not actually been sent off-platform. The honest fix is a `PAID` status (+ `PROCESSING`/`FAILED`) recorded with a payment reference — a migration + a Chuks decision (TODO decision 2). Until then, label the figure "approved payouts", not "paid", wherever the UI can. | — | **Blocked** (decision 2) |
+| Paid out (amount + count) — **the definition** | `SUM(Withdrawal.amount)` where `status IN ("approved", "rejected")`. **There is NO `paid` status in the code.** `approved`/`rejected` are the terminal states — the amount leaves the balance on the decision, approve or reject (Nov 2026 reject-debit rule; see decide-route headers). Day = the request's `createdAt` UTC day, **not** the decision day (same rule as the P&L). | `Withdrawal.status`, `Withdrawal.createdAt` | Implemented — `dashboard-stats` (`paidOutTotal`/`paidOutToday`), P&L (`approved` withdrawals) |
+| Paid out — **the gap** | Because approval ≠ payment, "paid out" overstates reality whenever an approved request has not actually been sent off-platform. The honest fix is a `PAID` status (+ `PROCESSING`/`FAILED`) recorded with a payment reference — a migration + a Chuks decision (TODO decision 2). Until then, label the figure "payouts out", not "paid", wherever the UI can. | — | **Blocked** (decision 2) |
 | Awaiting review | `status = "pending"` (count + amount) | `Withdrawal` | Implemented (queue filter) |
 | Approved awaiting payment | **Cannot be distinguished today** — `approved` conflates "approved, not yet sent" with "approved and sent". Needs the `PAID` status (decision 2). | — | **Blocked** (decision 2) |
 | Processing / failed payouts | No such statuses exist. | — | **Missing** (needs decision 2) |
@@ -76,7 +76,7 @@
 | Outstanding payout liabilities | Open withdrawal requests (`pending`/`admin_approved`/`held`) at face amount — money the platform has been asked to send and has not approved away. Approved-but-unsent requests are indistinguishable from sent ones until decision 2 lands; disclose that in the label. | `Withdrawal` | **To build** (queue has the rows; no liabilities total) |
 | Outstanding commission liabilities | Commission outstanding (owed − paid) — see §4. | Recompute + `CommissionPayout` | Implemented (settlement balance) |
 | User-held balances (liability) | `SUM(User.cashBalance)` per fiat — cash the platform holds for players. Coins are excluded (play-only, no cash value). SIM balances are excluded (demo money). | `User.cashBalance` | **To build** (cashier uses the sum for reconciliation; no liabilities view) |
-| Net cash movement | **Definition to adopt:** deposits (in) − approved withdrawals (out) − commission paid (out) for the period, per fiat, from the ledger tables. Label the components; do not present it as profit or as available cash. | `DepositEvent`, `Withdrawal`, `CommissionPayout` | **To build** |
+| Net cash movement | **Definition to adopt:** deposits (in) − decided withdrawals (out) − commission paid (out) for the period, per fiat, from the ledger tables. Label the components; do not present it as profit or as available cash. | `DepositEvent`, `Withdrawal`, `CommissionPayout` | **To build** |
 | Provider / bank balances | **Do not infer from DB totals.** No provider balance is retrieved from any integration. The cashier states this plainly ("the platform's own ledger figures, not a gateway provider's balance"). A real provider balance needs an integration + a labelled last-updated time. | — | **Blocked** (no integration) |
 | Fees / provider charges | Per-payment only: `PaytellerPayment.merchantNet / platformCommission / customerTotal / customerFee` (10% merchant charge absorbed by the house; wallet credited the full principal). No aggregate fees view exists. | `PaytellerPayment` | **To build** (aggregate view) |
 | Refunds / reversals | Do not exist as a flow (see §2). | — | **Blocked** |
@@ -85,7 +85,7 @@
 
 | Metric | Definition | Source | Status |
 |---|---|---|---|
-| Expected cash on hand | Total deposits − total approved withdrawals − total commission paid (per fiat). | `DepositEvent`, `Withdrawal`, `CommissionPayout` — `GET /api/owner/cashier` | Implemented |
+| Expected cash on hand | Total deposits − total decided withdrawals − total commission paid (per fiat). | `DepositEvent`, `Withdrawal`, `CommissionPayout` — `GET /api/owner/cashier` | Implemented |
 | Actual wallet balances | `SUM(User.cashBalance)` (per fiat). | `User` | Implemented |
 | Reconciliation difference | Expected − actual. **This is the house's net position, not an error** — game winnings come from the house, so the two differ by design (live prod, 17 Nov 2026: −GH₵11,852.86). Never present it as missing money without investigation. | Cashier route | Implemented (single number; no drill-down, no discrepancy workflow) |
 | Gateway reconciliation | **Not built.** No settlement feed import; per-payment `providerPayload`/fee fields only. Comparing internal records with provider confirmations needs decision 6 (PayTeller keys + settlement format). | `PaytellerPayment.providerPayload` | **Blocked** |
@@ -114,10 +114,10 @@
    Totals are recomputed approximations. Phase 6 work: audit the float sums,
    consider integer minor units or Decimal arithmetic at the settlement
    boundary, and define one canonical rounding point.
-2. **Ledger `cashOut` flaw.** `src/lib/ledger.ts:206,311-319` counts every
-   withdrawal row as `−amount` regardless of status — pending/rejected/held
-   requests inflate `cashOut`. Fix in Phase 6; do not build new totals on the
-   ledger's `cashOut` until fixed.
+2. **Ledger `cashOut` (fixed).** `src/lib/ledger.ts` counts a withdrawal row
+   as `−amount` only when decided (`approved`/`rejected` — the debit lands
+   on the decision); pending/admin_approved/held count 0 (fixed Phase 6 +
+   Nov 2026 reject-debit rule). Analytics payouts-out matches it exactly.
 3. **Commission is recomputed in several places, not stored once.** The
    per-day tab, the rollup, the settlement, and the dashboard each recompute;
    the mid-day-rule caveat (§4) makes them disagree for one day. Any new

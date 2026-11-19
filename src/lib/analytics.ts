@@ -3,9 +3,11 @@
 // (docs/FINANCIAL_METRIC_DEFINITIONS.md):
 //   deposits in  = SUM(DepositEvent.amount) — every DepositEvent row
 //                  is a successful deposit.
-//   payouts out  = approved withdrawals (Withdrawal.status =
-//                  "approved", day = the request's createdAt UTC day)
-//                  + game payouts (GameResult.payout, currency "cash").
+//   payouts out  = decided withdrawals (Withdrawal.status IN
+//                  ("approved", "rejected") — the amount leaves the
+//                  balance on the decision, approve or reject; day =
+//                  the request's createdAt UTC day) + game payouts
+//                  (GameResult.payout, currency "cash").
 //   net position = deposits in − payouts out. Labelled exactly that —
 //                  NEVER "profit" (deposits − payouts is cash flow,
 //                  not profit; net profit lives on the P&L page).
@@ -85,9 +87,9 @@ export async function getAnalytics(from: string, to: string, fiatCurrency: strin
   // figures as the BI page — never recomputed here).
   const breakdown = await revenueBreakdown(from, to, fiat);
 
-  const [approvedWithdrawals, cashRounds, deposits] = await Promise.all([
+  const [decidedWithdrawals, cashRounds, deposits] = await Promise.all([
     prisma.withdrawal.findMany({
-      where: { ...range, status: "approved", fiatCurrency: fiat },
+      where: { ...range, status: { in: ["approved", "rejected"] }, fiatCurrency: fiat },
       select: { amount: true, createdAt: true },
     }),
     prisma.gameResult.findMany({
@@ -100,9 +102,9 @@ export async function getAnalytics(from: string, to: string, fiatCurrency: strin
     }),
   ]);
 
-  // Bucket approved withdrawals + game payouts by UTC day.
+  // Bucket decided withdrawals (approved + rejected) + game payouts by UTC day.
   const wdByDay = new Map<string, number>();
-  for (const w of approvedWithdrawals) {
+  for (const w of decidedWithdrawals) {
     const d = dateStr(new Date(w.createdAt));
     wdByDay.set(d, round2((wdByDay.get(d) ?? 0) + dec(w.amount)));
   }
@@ -162,7 +164,7 @@ export async function getAnalytics(from: string, to: string, fiatCurrency: strin
       _sum: { amount: true },
     }),
     prisma.withdrawal.aggregate({
-      where: { ...prevRange, status: "approved", fiatCurrency: fiat },
+      where: { ...prevRange, status: { in: ["approved", "rejected"] }, fiatCurrency: fiat },
       _sum: { amount: true },
     }),
     prisma.gameResult.aggregate({
@@ -189,7 +191,7 @@ export async function getAnalytics(from: string, to: string, fiatCurrency: strin
       deposits: depositsTotal,
       depositsCount,
       paidOut,
-      paidOutCount: approvedWithdrawals.length,
+      paidOutCount: decidedWithdrawals.length,
       gamePayouts,
       ggrCash: breakdown.totals.ggrCash,
       netPosition,

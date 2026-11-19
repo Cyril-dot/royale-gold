@@ -2,8 +2,8 @@
 // and the withdraw request form, shared by the Convert page and the
 // Wallet page (Chuks: the wallet page had no withdraw option). One
 // implementation, one endpoint (POST /api/wallet/withdraw), same
-// saved-account flow. Withdrawals are requests only: no money moves
-// until an admin approves (see /api/wallet/withdraw).
+// saved-account flow. Withdrawals are requests only: the amount leaves
+// your balance when an admin approves or rejects it (see /api/wallet/withdraw).
 //
 // Win logic (Nov 2026): the form shows the Stake/Winnings split of
 // the entered amount — withdrawals draw from Winnings first, then

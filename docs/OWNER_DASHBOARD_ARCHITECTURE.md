@@ -108,8 +108,8 @@ Current state vs those principles:
   settlement. Safe-ish at this scale; not integer-minor-unit safe.
 - **Ledger is a computed view, not a table** (`src/lib/ledger.ts` merges 6
   sources, capped 200 rows/source). Deleting a source row erases it.
-  **Known flaw:** withdrawal rows count as `−amount` in `cashOut`
-  regardless of status — pending/rejected/held withdrawals inflate it.
+  **Known flaw (fixed):** withdrawal rows count as `−amount` in `cashOut`
+  only when decided (`approved`/`rejected`); pending/admin_approved/held count 0.
 - **Idempotency exists only for PayTeller** (unique `reference` + atomic
   claim + webhook-event PK). Demo deposits, conversions, adjustments,
   settlements, payouts have no dedup key.
@@ -122,7 +122,7 @@ Current state vs those principles:
 |---|---|---|
 | Deposits | `DepositEvent` | `amount`, frozen `pctInForce` + `commission`, `fiatCurrency`, `providerPayload` |
 | Gateway lifecycle | `PaytellerPayment` + `PaytellerWebhookEvent` | Unique `reference`; wallet credited full principal; house absorbs 10% |
-| Withdrawals | `Withdrawal` | Request only — no money moves; statuses pending/approved/admin_approved/rejected (+ untyped `held`) |
+| Withdrawals | `Withdrawal` | Request only — the amount leaves the balance on the decision (approve or reject); statuses pending/approved/admin_approved/rejected (+ untyped `held`) |
 | Payout destination | `WithdrawalAccount` (1 per user) | Snapshotted onto each request |
 | Commission owed | Recomputed (`src/lib/commission.ts`) | Rules engine (RevShare/Turnover) + legacy fallback; never stored |
 | Commission paid | `CommissionPayout` | Sum of rows; balance = owed − paid; no status column |
