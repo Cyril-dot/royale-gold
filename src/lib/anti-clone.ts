@@ -42,6 +42,8 @@
 
 export const ANTI_CLONE_ALLOWED_HOSTS = [
   "royale-omega.vercel.app",
+  "royalegolld.com",
+  "www.royalegolld.com",
   "localhost",
   "127.0.0.1",
 ] as const;

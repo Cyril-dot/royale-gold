@@ -29,12 +29,10 @@ const ENCRYPTION_ENV = "GATEWAY_ENCRYPTION_KEY";
 /** Merchant ID is TTM- + eight digits (docs §01). */
 const MERCHANT_ID_RE = /^TTM-\d{8}$/;
 
-/** Theteller (PaySwitch) hosts, verified against the live docs page
- *  20 Nov 2026: test host https://test.theteller.net everywhere;
- *  live host https://prod.theteller.net (seen on the card-reversal
- *  endpoint; the checkout live host is checkout.theteller.net). */
-export const THETELLER_TEST_BASE_URL = "https://test.theteller.net";
-export const THETELLER_LIVE_BASE_URL = "https://prod.theteller.net";
+// Nov 2026: Theteller direct MoMo push REMOVED (Chuks: PayTeller
+// only). The Theteller credential getters, base-URL helpers and host
+// constants lived here; the columns stay in the DB (dormant) and the
+// ThetellerPayment rows stay readable for wallet History.
 
 function encryptionKey(): Buffer {
   const raw = process.env[ENCRYPTION_ENV];
@@ -87,13 +85,17 @@ async function getRow(): Promise<GatewayRow | null> {
 
 /** The Ghana MoMo gateway in force — "payteller" when nothing is set
  *  (Nov 2026, Chuks: live by default, no more silent demo credit).
- *  Three-way — "demo" | "theteller" (direct MoMo push) |
- *  "payteller" (hosted checkout, the default). The owner can still
+ *  Two-way — "demo" | "payteller" (hosted checkout, the default).
+ *  Theteller direct MoMo push was REMOVED Nov 2026 (Chuks: PayTeller
+ *  only) — a row still stamped "theteller" reads as PayTeller, so a
+ *  stale toggle can never re-enable the prompt. The owner can still
  *  explicitly pick demo; only the default changed. */
 export async function getGhMomoGateway(): Promise<"demo" | "payteller" | "theteller"> {
   const row = await getRow();
   if (row?.ghMomoGateway === "demo") return "demo";
-  if (row?.ghMomoGateway === "theteller") return "theteller";
+  // Nov 2026: Theteller removed — a stale "theteller" row is PayTeller.
+  // The "theteller" member stays in the type so existing callers keep
+  // compiling; it is never returned.
   return "payteller";
 }
 
@@ -139,97 +141,6 @@ export async function getPaytellerWebhookSecret(): Promise<string> {
   );
 }
 
-// ---- Theteller (PaySwitch) direct MoMo push (Nov 2026) ----
-
-function isMissingTable(err: unknown): boolean {
-  const code = (err as { code?: string }).code;
-  return code === "P2021" || code === "P2022";
-}
-
-type ThetellerRow = {
-  thetellerApiUser: string | null;
-  thetellerApiKey: string | null;
-  thetellerMerchantId: string | null;
-  thetellerCallbackSecret: string | null;
-  thetellerBaseUrl: string | null;
-};
-
-/**
- * The Theteller columns, read with an explicit select — a prod DB
- * without rg-theteller.sql run returns null here instead of 500ing
- * the whole GatewaySettings read (the 17 Nov owner-500s lesson).
- * Callers fall back to env vars, so a key set either way works.
- */
-async function getThetellerRow(): Promise<ThetellerRow | null> {
-  try {
-    return await prisma.gatewaySettings.findUnique({
-      where: { id: "global" },
-      select: {
-        thetellerApiUser: true,
-        thetellerApiKey: true,
-        thetellerMerchantId: true,
-        thetellerCallbackSecret: true,
-        thetellerBaseUrl: true,
-      },
-    });
-  } catch (err) {
-    if (isMissingTable(err)) return null;
-    throw err;
-  }
-}
-
-export interface ThetellerCredentials {
-  apiUser: string;
-  apiKey: string;
-  merchantId: string;
-}
-
-/**
- * Decrypted Theteller credentials, DB first, env fallback. Returns
- * null when any of the three is missing (the caller turns that into
- * a 503). Basic auth is apiUser:apiKey; the merchant ID goes in the
- * body (and as a Merchant-Id header on status checks).
- */
-export async function getThetellerCredentials(): Promise<ThetellerCredentials | null> {
-  const row = await getThetellerRow().catch(() => null);
-  const apiUser = (row ? decryptField(row.thetellerApiUser) : "") || process.env.THETELLER_API_USER || "";
-  const apiKey = (row ? decryptField(row.thetellerApiKey) : "") || process.env.THETELLER_API_KEY || "";
-  const merchantId =
-    (row ? decryptField(row.thetellerMerchantId) : "") || process.env.THETELLER_MERCHANT_ID || "";
-  if (!apiUser || !apiKey || !merchantId) return null;
-  return { apiUser, apiKey, merchantId };
-}
-
-/** The callback path token, DB first, env fallback ("" = not configured — the callback route 404s then). */
-export async function getThetellerCallbackSecret(): Promise<string> {
-  const row = await getThetellerRow().catch(() => null);
-  return (
-    (row ? decryptField(row.thetellerCallbackSecret) : "") || process.env.THETELLER_CALLBACK_SECRET || ""
-  );
-}
-
-/**
- * The Theteller base URL: the stored value first (owner picks Test /
- * Live in the panel), then THETELLER_BASE_URL, then the test host.
- * Only https URLs are honoured — anything else falls back to test —
- * EXCEPT plain-http loopback (localhost / 127.0.0.1), which exists
- * so a local fake Theteller can be pointed at in development and
- * verification. Basic-auth credentials over plain http to any other
- * host would leak, so non-loopback http is never honoured.
- */
-export function isAllowedThetellerBaseUrl(url: string): boolean {
-  if (url.startsWith("https://")) return true;
-  return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(url);
-}
-
-export async function getThetellerBaseUrl(): Promise<string> {
-  const row = await getThetellerRow().catch(() => null);
-  const stored = (row?.thetellerBaseUrl ?? "").trim();
-  const candidate = stored || process.env.THETELLER_BASE_URL || "";
-  if (candidate && isAllowedThetellerBaseUrl(candidate)) return candidate.replace(/\/$/, "");
-  return THETELLER_TEST_BASE_URL;
-}
-
 export interface MaskedGatewaySettings {
   ghMomoGateway: "demo" | "payteller" | "theteller";
   paytellerConfigured: boolean;
@@ -237,12 +148,6 @@ export interface MaskedGatewaySettings {
   paytellerMerchantId: string | null;
   paytellerUsername: string | null;
   paytellerWebhookSecret: string | null;
-  thetellerConfigured: boolean;
-  thetellerApiUser: string | null;
-  thetellerApiKey: string | null;
-  thetellerMerchantId: string | null;
-  thetellerCallbackSecret: string | null;
-  thetellerBaseUrl: string | null;
   updatedAt: string | null;
 }
 
@@ -253,26 +158,15 @@ export async function getMaskedGatewaySettings(): Promise<MaskedGatewaySettings>
   const merchantId = row ? decryptField(row.paytellerMerchantId) : "";
   const username = row ? decryptField(row.paytellerUsername) : "";
   const webhookSecret = row ? decryptField(row.paytellerWebhookSecret) : "";
-  const tRow = await getThetellerRow();
-  const tApiUser = tRow ? decryptField(tRow.thetellerApiUser) : "";
-  const tApiKey = tRow ? decryptField(tRow.thetellerApiKey) : "";
-  const tMerchantId = tRow ? decryptField(tRow.thetellerMerchantId) : "";
-  const tCallbackSecret = tRow ? decryptField(tRow.thetellerCallbackSecret) : "";
-  const tBaseUrl = (tRow?.thetellerBaseUrl ?? "").trim() || null;
   return {
+    // Nov 2026: a stale "theteller" row reads as PayTeller.
     ghMomoGateway:
-      row?.ghMomoGateway === "demo" ? "demo" : row?.ghMomoGateway === "theteller" ? "theteller" : "payteller",
+      row?.ghMomoGateway === "demo" ? "demo" : "payteller",
     paytellerConfigured: Boolean(apiKey && merchantId && username && webhookSecret),
     paytellerApiKey: maskSecret(apiKey),
     paytellerMerchantId: maskSecret(merchantId),
     paytellerUsername: maskSecret(username),
     paytellerWebhookSecret: maskSecret(webhookSecret),
-    thetellerConfigured: Boolean(tApiUser && tApiKey && tMerchantId),
-    thetellerApiUser: maskSecret(tApiUser),
-    thetellerApiKey: maskSecret(tApiKey),
-    thetellerMerchantId: maskSecret(tMerchantId),
-    thetellerCallbackSecret: maskSecret(tCallbackSecret),
-    thetellerBaseUrl: tBaseUrl,
     updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
   };
 }
@@ -283,11 +177,6 @@ export interface SaveGatewayInput {
   paytellerMerchantId?: string;
   paytellerUsername?: string;
   paytellerWebhookSecret?: string;
-  thetellerApiUser?: string;
-  thetellerApiKey?: string;
-  thetellerMerchantId?: string;
-  thetellerCallbackSecret?: string;
-  thetellerBaseUrl?: string;
 }
 
 /**
@@ -296,44 +185,27 @@ export interface SaveGatewayInput {
  * field is encrypted before storage — and when GATEWAY_ENCRYPTION_KEY
  * is missing that save fails with a clear 503 instead of storing
  * plaintext. The toggle alone (no secret fields) never needs the key.
- * Theteller base URL is stored as a plain host string (not a secret):
- * "test" / "live" from the panel map to the two known hosts, or a full
- * https:// URL the owner pastes. Saving Theteller fields when the
- * columns do not exist yet (rg-theteller.sql not run) fails with a
- * plain error naming the SQL — the upsert throws P2022.
+ * Nov 2026: Theteller is gone — saving ghMomoGateway "theteller" is
+ * a 400, and Theteller fields are no longer written (the columns stay
+ * dormant in the DB).
  */
 export async function saveGatewaySettings(input: SaveGatewayInput): Promise<MaskedGatewaySettings> {
   const gateway = (input.ghMomoGateway ?? "").trim().toLowerCase();
-  if (gateway !== "" && gateway !== "demo" && gateway !== "payteller" && gateway !== "theteller") {
-    throw new GatewayError("Ghana deposit gateway must be demo, theteller or payteller", 400);
+  if (gateway === "theteller") {
+    throw new GatewayError("Theteller direct MoMo prompt is removed — Ghana MoMo is PayTeller or Demo", 400);
+  }
+  if (gateway !== "" && gateway !== "demo" && gateway !== "payteller") {
+    throw new GatewayError("Ghana deposit gateway must be demo or payteller", 400);
   }
   const merchantId = (input.paytellerMerchantId ?? "").trim();
   if (merchantId && !MERCHANT_ID_RE.test(merchantId)) {
     throw new GatewayError("PayTeller Merchant ID must look like TTM-00984532.", 400);
   }
-  const tMerchantId = (input.thetellerMerchantId ?? "").trim();
-  if (tMerchantId && !MERCHANT_ID_RE.test(tMerchantId)) {
-    throw new GatewayError("Theteller Merchant ID must look like TTM-00984532.", 400);
-  }
-  const baseUrlRaw = (input.thetellerBaseUrl ?? "").trim();
-  const baseUrl =
-    baseUrlRaw === "test"
-      ? THETELLER_TEST_BASE_URL
-      : baseUrlRaw === "live"
-        ? THETELLER_LIVE_BASE_URL
-        : baseUrlRaw;
-  if (baseUrl && !isAllowedThetellerBaseUrl(baseUrl)) {
-    throw new GatewayError("Theteller base URL must start with https:// (http:// is allowed only for localhost).", 400);
-  }
-  const fields: Array<[keyof SaveGatewayInput, "paytellerApiKey" | "paytellerMerchantId" | "paytellerUsername" | "paytellerWebhookSecret" | "thetellerApiUser" | "thetellerApiKey" | "thetellerMerchantId" | "thetellerCallbackSecret"]> = [
+  const fields: Array<[keyof SaveGatewayInput, "paytellerApiKey" | "paytellerMerchantId" | "paytellerUsername" | "paytellerWebhookSecret"]> = [
     ["paytellerApiKey", "paytellerApiKey"],
     ["paytellerMerchantId", "paytellerMerchantId"],
     ["paytellerUsername", "paytellerUsername"],
     ["paytellerWebhookSecret", "paytellerWebhookSecret"],
-    ["thetellerApiUser", "thetellerApiUser"],
-    ["thetellerApiKey", "thetellerApiKey"],
-    ["thetellerMerchantId", "thetellerMerchantId"],
-    ["thetellerCallbackSecret", "thetellerCallbackSecret"],
   ];
   const existing = await getRow();
   const data: Record<string, string | null> = {};
@@ -348,15 +220,10 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
       data[column] = null;
     }
   }
-  // Theteller base URL is not a secret — stored plain. Blank keeps
-  // the current value (same convention as the secret fields).
-  const tExisting = await getThetellerRow();
-  const baseUrlValue = baseUrl || tExisting?.thetellerBaseUrl || null;
   const row = await prisma.gatewaySettings.upsert({
     where: { id: "global" },
     update: {
       ...data,
-      thetellerBaseUrl: baseUrlValue,
       ...(gateway !== "" ? { ghMomoGateway: gateway } : {}),
     },
     create: {
@@ -365,14 +232,34 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
       paytellerMerchantId: data.paytellerMerchantId,
       paytellerUsername: data.paytellerUsername,
       paytellerWebhookSecret: data.paytellerWebhookSecret,
-      thetellerApiUser: data.thetellerApiUser,
-      thetellerApiKey: data.thetellerApiKey,
-      thetellerMerchantId: data.thetellerMerchantId,
-      thetellerCallbackSecret: data.thetellerCallbackSecret,
-      thetellerBaseUrl: baseUrlValue,
-      ghMomoGateway: gateway === "demo" ? "demo" : gateway === "theteller" ? "theteller" : "payteller",
+      ghMomoGateway: gateway === "demo" ? "demo" : "payteller",
     },
   });
   void row;
   return getMaskedGatewaySettings();
+}
+
+// Nov 2026: Theteller REMOVED (Chuks: PayTeller only) — but the push
+// button (push-files) cannot delete files, so the old Theteller lib +
+// routes still sit on GitHub main as dead code. These three stubs exist
+// ONLY so those leftover files still compile; they always report "not
+// configured", so no prompt can ever start from them. Delete the stubs
+// together with the leftover files (src/lib/theteller*.ts and the
+// theteller routes) once a git push removes them for real.
+export interface ThetellerCredentials {
+  apiUser: string;
+  apiKey: string;
+  merchantId: string;
+}
+
+export async function getThetellerCredentials(): Promise<ThetellerCredentials | null> {
+  return null;
+}
+
+export async function getThetellerBaseUrl(): Promise<string> {
+  return "";
+}
+
+export async function getThetellerCallbackSecret(): Promise<string> {
+  return "";
 }

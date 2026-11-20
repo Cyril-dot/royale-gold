@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     // Demo-credit hole (Nov 2026, full live everywhere, no more demo):
     // this endpoint credits real cash with no provider behind it, so
     // it only runs while the owner has explicitly picked demo. When
-    // the Ghana gateway is payteller or theteller, a direct call here
+    // the Ghana gateway is payteller, a direct call here
     // 403s — no credit, no wallet change, no failure recorded toward
     // the payment block (a gateway-closed call is not a deposit
     // failure). The gateway is read live on every call, never cached,

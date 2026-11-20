@@ -109,3 +109,17 @@ export interface GameHistoryRow {
   result: Record<string, unknown>;
   createdAt: string;
 }
+
+// Nov 2026: wallet deposits for the wallet History (GET /api/wallet/history).
+// One row per deposit attempt, newest first: credited deposits come from
+// DepositEvent, pending/failed ones from the PayTeller/Theteller payment
+// rows. The wallet page merges these with the game rounds by date.
+export interface DepositHistoryRow {
+  id: string;
+  kind: "deposit";
+  amount: number;
+  method: string;
+  fiatCurrency: string;
+  status: "successful" | "pending" | "processing" | "failed" | "expired";
+  createdAt: string;
+}

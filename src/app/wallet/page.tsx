@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, fmtMoney, fmtCoins, type GameHistoryRow } from "../../lib/api";
+import { api, fmtMoney, fmtCoins, type GameHistoryRow, type DepositHistoryRow } from "../../lib/api";
 import { symbolFor } from "../../lib/country";
 import { getGame } from "../../lib/games";
 import { useStore } from "../../lib/store";
@@ -17,11 +17,11 @@ import { WithdrawSection } from "../../components/WithdrawSection";
 
 export default function WalletPage() {
   const { user, wallet, mode, simSession, topUpSim, openAuth, setDepositOpen } = useStore();
-  // Round 31: wallet history — game rounds are the only money movement
-  // retrievable without a new API (/api/games/history). Deposits and
-  // conversions have no GET endpoint (and withdrawals are not tracked at
-  // all), so they cannot be listed.
+  // Round 31: wallet history — game rounds (/api/games/history) plus
+  // deposits (/api/wallet/history), merged newest first. Conversions
+  // and withdrawals still have no GET endpoint, so they are not listed.
   const [history, setHistory] = useState<GameHistoryRow[] | null>(null);
+  const [deposits, setDeposits] = useState<DepositHistoryRow[] | null>(null);
   // Wallet tabs (Nov 2026): Deposit first and default, Withdrawal
   // second. Presentation only — the tabs switch which section shows.
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
@@ -31,6 +31,9 @@ export default function WalletPage() {
     api<{ history: GameHistoryRow[] }>("/api/games/history?limit=20")
       .then((r) => { if (live) setHistory(r.history); })
       .catch(() => { if (live) setHistory([]); });
+    api<{ deposits: DepositHistoryRow[] }>("/api/wallet/history?limit=20")
+      .then((r) => { if (live) setDeposits(r.deposits); })
+      .catch(() => { if (live) setDeposits([]); });
     return () => { live = false; };
   }, [user]);
 
@@ -57,6 +60,17 @@ export default function WalletPage() {
   const sym = symbolFor(fiat);
   // Wallet id, not a payment card — the last 4 of the user id, uppercased.
   const last4 = (user.id || "").replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase() || "0000";
+  // Nov 2026: History merges game rounds and deposits, newest first.
+  const mergedHistory: (
+    | { kind: "game"; id: string; createdAt: string; h: GameHistoryRow }
+    | { kind: "deposit"; id: string; createdAt: string; d: DepositHistoryRow }
+  )[] = [
+    ...(history ?? []).map((h) => ({ kind: "game" as const, id: h.id, createdAt: h.createdAt, h })),
+    ...(deposits ?? []).map((d) => ({ kind: "deposit" as const, id: d.id, createdAt: d.createdAt, d })),
+  ]
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+    .slice(0, 20);
+  const historyLoading = history === null || deposits === null;
   // Round 20: the Visa card shows the cash balance for the active mode —
   // REAL = cash, SIM = the SIM balance labelled SIM. The coins live on
   // their own coin card below, not in a pill tab.
@@ -136,15 +150,41 @@ export default function WalletPage() {
             />
           </div>
         ) : null}
-        {/* Round 31: History — recent game rounds (stake out, payout in),
-            the only wallet movement an existing endpoint returns. */}
+        {/* Nov 2026: History — game rounds and deposits, newest first.
+            Deposits carry amount / method / date / status. */}
         <section className="wallet-hist" aria-label="Wallet history">
           <h3>History</h3>
-          {history === null ? (
+          {historyLoading ? (
             <p>Loading history…</p>
-          ) : history.length === 0 ? null : (
+          ) : mergedHistory.length === 0 ? null : (
             <div className="wallet-hist-list">
-              {history.map((h) => {
+              {mergedHistory.map((row) => {
+                if (row.kind === "deposit") {
+                  const d = row.d;
+                  const statusLabel =
+                    d.status === "successful" ? "Successful"
+                    : d.status === "failed" ? "Failed"
+                    : d.status === "expired" ? "Expired"
+                    : d.status === "processing" ? "Processing" : "Pending";
+                  const amtClass =
+                    d.status === "successful" ? "wallet-hist-win"
+                    : d.status === "failed" || d.status === "expired" ? "wallet-hist-lose"
+                    : "wallet-hist-pend";
+                  // The "+" is earned only when the money actually landed.
+                  const amtTxt = d.status === "successful"
+                    ? `+${fmtMoney(d.amount, d.fiatCurrency)}`
+                    : fmtMoney(d.amount, d.fiatCurrency);
+                  return (
+                    <div key={d.id} className="wallet-hist-row">
+                      <span className="wallet-hist-txt">
+                        <b>Deposit</b>
+                        <span>{new Date(d.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {d.method} · {statusLabel}</span>
+                      </span>
+                      <b className={amtClass}>{amtTxt}</b>
+                    </div>
+                  );
+                }
+                const h = row.h;
                 const net = Number(h.payout || 0) - Number(h.stake || 0);
                 const isCoin = h.currency === "coins";
                 // Phase 1 country-based (Nov 2026): each round carries

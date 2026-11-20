@@ -11,6 +11,7 @@
 .wallet-hist-txt span{font-size:12.5px;color:var(--muted,rgba(255,246,216,.7))}
 .wallet-hist-win{color:#3ED97E;white-space:nowrap;font-size:15px}
 .wallet-hist-lose{color:rgba(255,179,172,.9);white-space:nowrap;font-size:15px}
+.wallet-hist-pend{color:var(--gold-2);white-space:nowrap;font-size:15px}
 
 /* Phase 2 PayTeller (Nov 2026): the hosted-checkout return page. */
 .pt-return{max-width:520px;margin:0 auto;text-align:center;padding:28px 0 40px}
@@ -33,3 +34,19 @@
    money must never look like the gold real Deposit button. */
 .wallet-simtop{margin:14px 0 0}
 .wallet-simtop .btn{width:100%;min-height:48px}
+
+/* Nov 2026 flat-button pass, WALLET FLOW ONLY (Chuks paused the
+   site-wide sweep): the return-page Go to wallet button, the wallet
+   Deposit button and the deposit-modal buttons are flat solid gold
+   with the site radius (var(--r-s), 12px, same as inputs). The
+   site-wide .btn stays as it was — these selectors are scoped to
+   the wallet flow on purpose. */
+.pt-return .btn,
+.wallet-tab-panel .btn,
+[aria-label="Deposit"] .btn{border-radius:var(--r-s)}
+.pt-return .btn-gold,
+.wallet-tab-panel .btn-gold,
+[aria-label="Deposit"] .btn-gold{background:var(--gold-2);box-shadow:none}
+.pt-return .btn-gold:hover,
+.wallet-tab-panel .btn-gold:hover,
+[aria-label="Deposit"] .btn-gold:hover{transform:translateY(-2px);filter:brightness(1.07);box-shadow:none}
