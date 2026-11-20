@@ -58,6 +58,7 @@ export const ADMIN_NAV_GROUPS: { label: string; items: { href: string; label: st
       { href: "/admin/lookup", label: "Lookup", section: "lookup" },
       { href: "/admin/reports", label: "Reports", section: "reports" },
       { href: "/admin/campaigns", label: "Campaigns", section: "campaigns" },
+      { href: "/admin/promo", label: "Promo card", section: "promo" },
       { href: "/admin/tournaments", label: "Tournaments", section: "tournaments" },
       { href: "/admin/live", label: "Live", section: "live" },
     ],

@@ -2090,3 +2090,30 @@
 .staff .st-gw-url { display: flex; flex-direction: column; gap: 8px; }
 .staff .st-gw-url-label { font-size: 13px; color: var(--muted); }
 .staff .st-gw-url-value { display: block; font-family: var(--mono); font-size: 12px; line-height: 1.6; word-break: break-all; overflow-wrap: anywhere; background: var(--steel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; color: var(--ink); }
+
+/* ---- Admin promo card (Nov 2026) ----
+   The shareable card. NOTE the literal colours/fonts below: the card
+   is rendered to a PNG by html-to-image, which clones the node outside
+   the .staff ancestor — CSS variables set on .staff would NOT resolve
+   in the image. Literals keep screen and PNG identical. */
+.staff .st-promo-wrap { display: flex; flex-direction: column; gap: 16px; max-width: 560px; }
+.staff .st-promo-card { position: relative; width: min(420px, 100%); margin: 0 auto; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 24px; border: 1px solid rgba(242, 194, 48, 0.45); background: #070A18; color: #FFF6D8; text-align: center; padding: 18px 18px 16px; display: flex; flex-direction: column; align-items: center; }
+.staff .st-promo-glow { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(90% 55% at 50% 0%, rgba(242, 194, 48, 0.28), rgba(242, 194, 48, 0) 70%), radial-gradient(70% 40% at 50% 108%, rgba(23, 80, 60, 0.55), rgba(23, 80, 60, 0) 70%); }
+.staff .st-promo-card > *:not(.st-promo-glow) { position: relative; }
+.staff .st-promo-logo { width: 48px; height: 48px; border-radius: 50%; border: 2px solid #F2C230; box-shadow: 0 0 0 6px rgba(242, 194, 48, 0.12), 0 12px 32px rgba(0, 0, 0, 0.5); }
+.staff .st-promo-brand { margin: 4px 0 0; font-family: "Anton", Impact, sans-serif; font-size: 15px; letter-spacing: 0.3em; text-transform: uppercase; color: #FFD964; }
+.staff .st-promo-head { margin: 6px 0 0; font-family: "Anton", Impact, sans-serif; font-size: 24px; line-height: 1.05; text-transform: uppercase; color: #FFF6D8; }
+.staff .st-promo-head span { display: block; color: #FFD964; }
+.staff .st-promo-rule { width: 64px; height: 3px; margin: 6px 0 0; border-radius: 2px; background: linear-gradient(90deg, rgba(242, 194, 48, 0), #F2C230, rgba(242, 194, 48, 0)); }
+.staff .st-promo-ticket { margin: 6px 0 0; width: 100%; border: 1.5px dashed rgba(255, 217, 100, 0.65); border-radius: 16px; background: rgba(242, 194, 48, 0.08); padding: 9px 10px 8px; }
+.staff .st-promo-ticket-label { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: #B2B69F; }
+.staff .st-promo-code { margin: 3px 0 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 22px; font-weight: 800; letter-spacing: 0.05em; color: #FFD964; }
+.staff .st-promo-bonus { margin: 2px 0 0; font-size: 13px; font-weight: 800; color: #FFF6D8; }
+.staff .st-promo-meta { margin: 4px 0 0; font-size: 11px; color: #B2B69F; }
+.staff .st-promo-site { margin: auto 0 0; padding-top: 8px; font-size: 14px; font-weight: 800; letter-spacing: 0.04em; color: #FFD964; }
+.staff .st-promo-cta { margin: 4px 0 0; display: inline-block; font-family: "Anton", Impact, sans-serif; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #08131F; background: #FFD964; border-radius: 999px; padding: 7px 20px; }
+.staff .st-promo-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.staff .st-promo-actions > * { flex: 1 1 auto; }
+.staff .st-btn-whatsapp { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border-radius: 12px; background: #25D366; color: #fff; font-size: 14px; font-weight: 800; text-decoration: none; }
+.staff .st-promo-sharetext { margin: 14px 0 0; font-size: 13px; line-height: 1.6; color: #FFF6D8; background: #141828; border: 1px solid rgba(255, 246, 216, 0.14); border-radius: 10px; padding: 10px 12px; overflow-wrap: anywhere; }
+.staff .st-promo-hint { margin: 10px 0 0; font-size: 12px; color: #B2B69F; }

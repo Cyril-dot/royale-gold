@@ -32,6 +32,8 @@ export const ADMIN_SECTIONS = [
   "campaigns",
   "tournaments",
   "live",
+  // Nov 2026: shareable promo card for admins.
+  "promo",
 ] as const;
 
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -52,6 +54,7 @@ export const ADMIN_SECTION_LABELS: Record<AdminSection, string> = {
   campaigns: "CRM campaigns",
   tournaments: "Tournaments",
   live: "Live feed",
+  promo: "Promo card",
 };
 
 export function isAdminSection(value: string): value is AdminSection {
