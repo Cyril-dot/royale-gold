@@ -7,7 +7,16 @@
 // The confirm card's "Deposit" opens a Yes/No popup first; Yes
 // initiates, No goes back and sends nothing. Card stays demo, and
 // NGN users never see the PayTeller path.
-// Deposit MoMo number (Nov 2026): set ONCE on the first PayTeller
+// Nov 2026 Theteller (PaySwitch): when the toggle is on Theteller,
+// the same buttons start a DIRECT MoMo push instead (POST
+// /api/wallet/theteller/create → 202, the prompt goes straight to
+// the saved deposit number, and the modal polls the status endpoint
+// until it lands or fails). Telecel needs the voucher code (*110#)
+// before sending. Theteller needs no email — the process call takes
+// no customer_email — and charges no customer fee, so the total is
+// the principal. The confirm card, Yes/No popup and saved-number
+// rules are shared with PayTeller.
+// Deposit MoMo number (Nov 2026): set ONCE on the first gateway
 // deposit, saved to the account, reused after that — the confirm card
 // and the popup show the saved number, and the number is changed only
 // on the Account page. The server enforces the saved number over
@@ -19,7 +28,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError, fmtMoney, Wallet, User } from "../lib/api";
 import { symbolFor } from "../lib/country";
 import { useStore } from "../lib/store";
@@ -47,7 +56,7 @@ function formatBlockedUntil(iso: string): string {
 }
 
 export default function DepositModal() {
-  const { depositOpen, setDepositOpen, setWallet, setUser, toast, user } = useStore();
+  const { depositOpen, setDepositOpen, setWallet, setUser, toast, user, refresh } = useStore();
   // Phase 1 country-based (Nov 2026): the modal shows the player's own
   // fiat symbol, and only that fiat's methods apply (the server
   // enforces it — the method list is the same for both fiats in demo).
@@ -67,7 +76,10 @@ export default function DepositModal() {
   // Yes/No popup — Yes initiates the payment, No goes back to the
   // confirm card and sends nothing. The demo path never enters
   // either — play money, no real MoMo charge to confirm.
-  const [step, setStep] = useState<"form" | "confirm" | "ask">("form");
+  // Nov 2026 Theteller: "prompt" is the prompt-sent screen — the
+  // push is out, the customer approves on their phone, and this
+  // screen polls the status endpoint until it lands or fails.
+  const [step, setStep] = useState<"form" | "confirm" | "ask" | "prompt">("form");
   // Phase 2 PayTeller (Nov 2026): the live Ghana gateway, read from the
   // public config when the modal opens. null = not loaded yet (treated
   // as demo until it arrives, so the button never flickers gateways).
@@ -98,6 +110,30 @@ export default function DepositModal() {
   // nothing is saved yet). Sent with the create call; the server
   // saves it, then ignores any typed number on later deposits.
   const [depPhone, setDepPhone] = useState("");
+  // Nov 2026 Theteller: the Telecel voucher code (*110#), collected
+  // on the form before sending and sent with the create call only —
+  // never stored anywhere (one-time code).
+  const [voucher, setVoucher] = useState("");
+  // Nov 2026 Theteller: the prompt-sent poll. transactionId is the
+  // 12-digit id from the create call; status is the poll state.
+  const [promptTxId, setPromptTxId] = useState<string | null>(null);
+  const [promptStatus, setPromptStatus] = useState<"waiting" | "failed" | "timeout">("waiting");
+  const [promptReason, setPromptReason] = useState("");
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCount = useRef(0);
+  const stopPoll = () => {
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+  };
+  // Closing the modal stops the poll — the prompt stays live on the
+  // phone, and if the customer approves after closing, the wallet
+  // still credits (the status poll / callback settles it).
+  useEffect(() => {
+    if (depositOpen) return;
+    stopPoll();
+  }, [depositOpen]);
   useEffect(() => {
     if (!depositOpen || !user?.referralCodeUsed) { setRefPct(null); return; }
     let live = true;
@@ -152,19 +188,28 @@ export default function DepositModal() {
   // render (the supported pattern — never in an effect, which the
   // linter flags as a cascading render).
   if (!depositOpen) {
-    if (step !== "form" || blockedUntil !== null || err !== "") {
+    if (step !== "form" || blockedUntil !== null || err !== "" || promptTxId !== null || promptReason !== "") {
       setStep("form");
       setBlockedUntil(null);
       setErr("");
+      setPromptTxId(null);
+      setPromptStatus("waiting");
+      setPromptReason("");
+      setVoucher("");
     }
     return null;
   }
   const paytellerActive =
     fiat === "GHS" && gateway === "payteller" && (MOMO_METHODS as readonly string[]).includes(method);
+  // Nov 2026 Theteller: the same buttons on the direct-push gateway
+  // instead — the prompt goes straight to the phone, no checkout.
+  const thetellerActive =
+    fiat === "GHS" && gateway === "theteller" && (MOMO_METHODS as readonly string[]).includes(method);
+  const gatewayActive = paytellerActive || thetellerActive;
   // The Yes/No popup can only be reached from the confirm card; if
   // the gateway or method changed under it, fall back to the form
   // rather than asking about a payment that can no longer start.
-  const askOpen = step === "ask" && paytellerActive;
+  const askOpen = step === "ask" && gatewayActive;
   // What the customer authorizes on PayTeller: principal + the 2%
   // Theteller MoMo fee (docs §05). The wallet is credited the full
   // principal once PayTeller confirms — the fee is on top, not out of it.
@@ -172,6 +217,9 @@ export default function DepositModal() {
   // The 2% Theteller MoMo fee, on top of the principal — shown as its
   // own row on the confirm card so the total is never a surprise.
   const paytellerFee = Math.round((paytellerTotal - amount) * 100) / 100;
+  // Nov 2026 Theteller: no customer fee — the amount charged is the
+  // principal, and the wallet is credited the full principal.
+  const confirmTotal = paytellerActive ? paytellerTotal : amount;
   // Deposit MoMo number (Nov 2026): the saved number when one is set,
   // otherwise the number typed on this first deposit.
   const numberToUse = savedNumber ?? depPhone.trim();
@@ -205,16 +253,22 @@ export default function DepositModal() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (paytellerActive) {
-      if (!user?.email) {
+    if (gatewayActive) {
+      if (paytellerActive && !user?.email) {
         setErr("Add an email below first — PayTeller needs it for your receipt.");
         return;
       }
-      // Deposit MoMo number (Nov 2026): first PayTeller deposit needs
+      // Deposit MoMo number (Nov 2026): first gateway deposit needs
       // the number typed once — the server saves it. Later deposits
       // reuse the saved number and never ask again.
       if (!savedNumber && !normalizeDepPhone(depPhone)) {
         setErr("Enter a valid Ghana MoMo number (e.g. 0244 000 000)");
+        return;
+      }
+      // Nov 2026 Theteller: Telecel needs the voucher code before
+      // anything is sent — the customer generates it on their phone.
+      if (thetellerActive && method === "Telecel" && !voucher.trim()) {
+        setErr("Enter the Telecel voucher code — dial *110# to generate one");
         return;
       }
       // Pre-pay confirm (Nov 2026): show the card with the real
@@ -246,32 +300,109 @@ export default function DepositModal() {
     }
   };
 
-  // PayTeller confirm step: only reached from "Yes" on the ask
-  // popup — Cancel never calls this, and No goes back to the confirm
-  // card, so neither sends anything. A 403 with code
-  // "payment_blocked" swaps the card for the blocked card; any other
-  // failure goes back to the form with the plain error line.
-  const confirmPayteller = async () => {
+  // Confirm step: only reached from "Yes" on the ask popup — Cancel
+  // never calls this, and No goes back to the confirm card, so
+  // neither sends anything. A 403 with code "payment_blocked" swaps
+  // the card for the blocked card; any other failure goes back to the
+  // form with the plain error line.
+  // PayTeller: the create call returns a checkout URL and the browser
+  // leaves for it. Theteller: the create call returns 202 with the
+  // 12-digit transaction id, the prompt is already on its way to the
+  // phone, and this screen polls the status endpoint until it lands
+  // or fails (5 min cap, then the timeout state).
+  const confirmGateway = async () => {
     setBusy(true);
     try {
       // Deposit MoMo number (Nov 2026): the saved number when one is
       // set, otherwise the number typed on this first deposit — the
       // server saves it. A typed number is ignored server-side once
       // one is saved, so a forged body phone can never move the push.
-      const r = await api<{ checkoutUrl: string; reference: string }>("/api/wallet/payteller/create", {
+      if (paytellerActive) {
+        const r = await api<{ checkoutUrl: string; reference: string }>("/api/wallet/payteller/create", {
+          method: "POST",
+          body: JSON.stringify({ amount, method, phone: numberToUse || undefined }),
+        });
+        window.location.href = r.checkoutUrl;
+        return;
+      }
+      const r = await api<{ transactionId: string; status: string }>("/api/wallet/theteller/create", {
         method: "POST",
-        body: JSON.stringify({ amount, method, phone: numberToUse || undefined }),
+        body: JSON.stringify({
+          amount,
+          method,
+          phone: numberToUse || undefined,
+          voucherCode: method === "Telecel" ? voucher.trim() || undefined : undefined,
+        }),
       });
-      window.location.href = r.checkoutUrl;
+      setBusy(false);
+      setPromptTxId(r.transactionId);
+      setPromptStatus("waiting");
+      setPromptReason("");
+      setStep("prompt");
+      pollTheteller(r.transactionId);
     } catch (ex) {
       if (ex instanceof ApiError && ex.code === "payment_blocked" && ex.blockedUntil) {
         setBlockedUntil(ex.blockedUntil);
       } else {
-        setErr(ex instanceof Error ? ex.message : "PayTeller deposit failed");
+        setErr(ex instanceof Error ? ex.message : "Deposit failed");
       }
       setStep("form");
       setBusy(false);
     }
+  };
+
+  // Nov 2026 Theteller: poll the status endpoint every 10 s, up to 5
+  // min (30 polls) — the BetWins build's cadence, chosen so we do not
+  // hammer Theteller. SUCCESS closes the modal with the wallet
+  // refreshed; FAILED shows the provider's reason with a retry; a
+  // poll that cannot confirm past the window shows the timeout state.
+  // Transient poll errors keep polling — only a 401 (session gone)
+  // stops it early.
+  const pollTheteller = (transactionId: string) => {
+    stopPoll();
+    pollCount.current = 0;
+    pollTimer.current = setInterval(() => {
+      void (async () => {
+        pollCount.current += 1;
+        try {
+          const r = await api<{ status: string; credited: boolean; amount: number; reason?: string | null; timedOut?: boolean }>(
+            `/api/wallet/theteller/status?transactionId=${encodeURIComponent(transactionId)}`,
+          );
+          if (r.status === "successful") {
+            stopPoll();
+            toast(`Deposited ${fmtMoney(r.amount, fiat)} via ${method}`, "win");
+            void refresh();
+            setDepositOpen(false);
+            return;
+          }
+          if (r.status === "failed") {
+            stopPoll();
+            setPromptStatus("failed");
+            setPromptReason(r.reason ?? "Payment failed");
+            return;
+          }
+          if (r.timedOut || pollCount.current >= 30) {
+            stopPoll();
+            setPromptStatus("timeout");
+            setPromptReason("Timed out waiting for approval — the prompt expired. Your money was not taken; try again.");
+            return;
+          }
+        } catch (ex) {
+          if (ex instanceof Error && /not signed in/i.test(ex.message)) {
+            stopPoll();
+            setPromptStatus("failed");
+            setPromptReason("Your session ended — sign in and try again.");
+            return;
+          }
+          // Transient poll failure: keep polling to the cap.
+          if (pollCount.current >= 30) {
+            stopPoll();
+            setPromptStatus("timeout");
+            setPromptReason("Timed out waiting for approval — the prompt expired. Your money was not taken; try again.");
+          }
+        }
+      })();
+    }, 10000);
   };
 
   return (
@@ -287,28 +418,60 @@ export default function DepositModal() {
               <p className="sub" style={{ textAlign: "center", marginBottom: 16 }}>If you think this is a mistake, contact support.</p>
               <button className="btn btn-gold" type="button" style={{ width: "100%" }} onClick={() => setDepositOpen(false)}>Got it</button>
             </>
+          ) : step === "prompt" && promptTxId ? (
+            <>
+              <h3>Check your <em>phone</em></h3>
+              <div className="rg48-bignum"><b>{fmtMoney(amount, fiat)}</b><span>{fmtMoney(amount, fiat)} will be added to your wallet once you approve</span></div>
+              <div className="rg48-rows">
+                <div><span>Network</span><strong>{NETWORK_LABEL[method] ?? method}</strong></div>
+                <div><span>Number</span><strong>{numberToUse}</strong></div>
+              </div>
+              {promptStatus === "waiting" ? (
+                <>
+                  <p className="rg48-warn"><span className="rg48-dot" aria-hidden="true" /> Enter your MoMo PIN on your phone to approve <b>{fmtMoney(amount, fiat)}</b>. Keep this open — it closes itself when the payment lands.</p>
+                  <p className="sub" style={{ textAlign: "center" }}>Waiting for approval…</p>
+                </>
+              ) : (
+                <>
+                  <p className="rg48-err" role="alert">{promptReason}</p>
+                  <div className="rg48-btnrow">
+                    <button className="btn btn-ghost" type="button" onClick={() => setDepositOpen(false)}>Close</button>
+                    <button className="btn btn-gold" type="button" onClick={() => { setPromptTxId(null); setPromptStatus("waiting"); setPromptReason(""); setStep("form"); }}>Try again</button>
+                  </div>
+                </>
+              )}
+            </>
           ) : askOpen ? (
             <>
               <h3>Send the <em>prompt?</em></h3>
-              <p className="sub" style={{ textAlign: "center" }}>Send the MoMo prompt to <b>{numberToUse || "your MoMo number"}</b> for <b>{fmtMoney(paytellerTotal, fiat)}</b>?</p>
+              <p className="sub" style={{ textAlign: "center" }}>Send the MoMo prompt to <b>{numberToUse || "your MoMo number"}</b> for <b>{fmtMoney(confirmTotal, fiat)}</b>?</p>
               <div className="rg48-btnrow">
                 <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setStep("confirm")}>No</button>
-                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmPayteller()}>{busy ? "Sending…" : "Yes"}</button>
+                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmGateway()}>{busy ? "Sending…" : "Yes"}</button>
               </div>
             </>
-          ) : step === "confirm" && paytellerActive ? (
+          ) : step === "confirm" && gatewayActive ? (
             <>
               <h3>Confirm your <em>deposit</em></h3>
               <p className="sub">Check this before the prompt is sent.</p>
-              <div className="rg48-bignum"><b>{fmtMoney(paytellerTotal, fiat)}</b><span>{fmtMoney(amount, fiat)} will be added to your wallet</span></div>
+              <div className="rg48-bignum"><b>{fmtMoney(confirmTotal, fiat)}</b><span>{fmtMoney(amount, fiat)} will be added to your wallet</span></div>
               <div className="rg48-rows">
                 <div><span>Deposit</span><strong>{fmtMoney(amount, fiat)}</strong></div>
-                <div><span>MoMo fee (2%)</span><strong>{fmtMoney(paytellerFee, fiat)}</strong></div>
-                <div className="rg48-total"><span>Total from your MoMo</span><strong>{fmtMoney(paytellerTotal, fiat)}</strong></div>
+                {paytellerActive ? (
+                  <>
+                    <div><span>MoMo fee (2%)</span><strong>{fmtMoney(paytellerFee, fiat)}</strong></div>
+                    <div className="rg48-total"><span>Total from your MoMo</span><strong>{fmtMoney(confirmTotal, fiat)}</strong></div>
+                  </>
+                ) : (
+                  <div className="rg48-total"><span>Total from your MoMo</span><strong>{fmtMoney(confirmTotal, fiat)}</strong></div>
+                )}
                 <div><span>Network</span><strong>{NETWORK_LABEL[method] ?? method}</strong></div>
                 <div><span>Number</span><strong>{numberToUse || "You'll enter it on the checkout page"}</strong></div>
+                {thetellerActive && method === "Telecel" ? (
+                  <div><span>Voucher</span><strong>Entered</strong></div>
+                ) : null}
               </div>
-              <p className="rg48-warn">Make sure you have at least <b>{fmtMoney(paytellerTotal, fiat)}</b> in your {NETWORK_LABEL[method] ?? method} wallet. If your balance is lower, the payment will fail.</p>
+              <p className="rg48-warn">Make sure you have at least <b>{fmtMoney(confirmTotal, fiat)}</b> in your {NETWORK_LABEL[method] ?? method} wallet. If your balance is lower, the payment will fail.</p>
               <div className="rg48-btnrow">
                 <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setStep("form")}>Cancel</button>
                 <button className="btn btn-gold" type="button" disabled={busy} onClick={() => setStep("ask")}>Deposit</button>
@@ -332,15 +495,22 @@ export default function DepositModal() {
                 ))}
               </div>
             </div>
-            {paytellerActive && savedNumber === null && (
+            {gatewayActive && savedNumber === null && (
               <div className="rg48-f">
                 <label htmlFor="depPhone">MoMo number (first deposit only)</label>
                 <input id="depPhone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0244 000 000" value={depPhone} onChange={(e) => setDepPhone(e.target.value)} />
                 <p className="sub">The prompt goes to this number. It is saved to your account — later deposits reuse it, and you change it only on your Account page.</p>
               </div>
             )}
-            {paytellerActive && savedNumber !== null && (
+            {gatewayActive && savedNumber !== null && (
               <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Deposit number: <b>{savedNumber}</b> — change it on your Account page.</p>
+            )}
+            {thetellerActive && method === "Telecel" && (
+              <div className="rg48-f">
+                <label htmlFor="depVoucher">Telecel voucher code</label>
+                <input id="depVoucher" type="text" inputMode="numeric" autoComplete="off" placeholder="Enter the voucher code" value={voucher} onChange={(e) => setVoucher(e.target.value)} />
+                <p className="sub">Dial *110# on your phone to generate a voucher code first. It is sent with this payment only and never saved.</p>
+              </div>
             )}
             {paytellerActive && !user?.email && (
               <div className="rg48-f">
@@ -355,7 +525,7 @@ export default function DepositModal() {
             <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>
               {busy
                 ? "Depositing…"
-                : (paytellerActive ? `Continue — ${fmtMoney(paytellerTotal, fiat)}` : `Deposit ${fmtMoney(amount, fiat)}`)}
+                : (gatewayActive ? `Continue — ${fmtMoney(confirmTotal, fiat)}` : `Deposit ${fmtMoney(amount, fiat)}`)}
             </button>
           </form>
             </>

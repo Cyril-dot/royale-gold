@@ -92,6 +92,9 @@ model User {
   // Phase 2 PayTeller (Nov 2026): the hosted-checkout payments for
   // this player. Opposite side of PaytellerPayment.user.
   paytellerPayments PaytellerPayment[]
+  // Nov 2026 Theteller (PaySwitch) direct MoMo push: one row per
+  // push attempt. Opposite side of ThetellerPayment.user.
+  thetellerPayments ThetellerPayment[]
   // Nov 2026: the player's ONE saved withdrawal account (bank or
   // MoMo) — set on the convert page, snapshotted onto each request.
   withdrawalAccount WithdrawalAccount?
@@ -644,7 +647,12 @@ model GatewaySettings {
   paytellerMerchantId    String?
   paytellerUsername      String?
   paytellerWebhookSecret String?
-  ghMomoGateway          String   @default("demo") // "demo" | "payteller"
+  thetellerApiUser       String?
+  thetellerApiKey        String?
+  thetellerMerchantId    String?
+  thetellerCallbackSecret String?
+  thetellerBaseUrl       String?
+  ghMomoGateway          String   @default("demo") // "demo" | "theteller" | "payteller"
   updatedAt              DateTime @updatedAt
 }
 
@@ -687,6 +695,40 @@ model PaytellerWebhookEvent {
   paymentId  String?
   eventType  String
   receivedAt DateTime @default(now())
+}
+
+// Nov 2026 Theteller (PaySwitch) direct MoMo push: one row per push
+// attempt. transactionId is the 12-digit id sent to Theteller — the
+// idempotency and lookup key (unique per attempt; a retry is always a
+// NEW transaction_id, never a reuse). amountPesewas is the exact wire
+// value (integer pesewas); amount is the principal in GHS for the
+// credit math. The wallet is credited the FULL principal — the house
+// absorbs Theteller's merchant-side charge, same money rule as
+// PayTeller. The voucher code (Telecel) is NEVER stored. status:
+// pending | successful | failed. chargeState: "queued" (row created,
+// charge not started yet) | "called" (process answered or the call
+// failed). A "queued" row older than 30s is failed by the status poll
+// as "could not be started" — no charge ever happened, so no money
+// moved and no block failure is recorded for it.
+model ThetellerPayment {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionId    String   @unique // 12 digits
+  amount           Float // principal, GHS
+  amountPesewas    Int // exact wire value, integer pesewas
+  fiatCurrency     String   @default("GHS")
+  network          String // "MTN" | "VDF" | "ATL" | "TGO" (r-switch)
+  subscriberNumber String // local 0-format, e.g. 0244000000
+  status           String   @default("pending") // pending|successful|failed
+  chargeState      String   @default("queued") // queued|called
+  reason           String?
+  providerPayload  Json?
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([status])
 }
 
 // P0 Batch 2 (O11 global kill + O13 wallet config): the platform's

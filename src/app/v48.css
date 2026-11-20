@@ -2023,6 +2023,9 @@ table.rg48-t tr:last-child td{border-bottom:0}
 .rg48-bigtime{text-align:center;margin:0 0 16px}
 .rg48-bigtime span{display:block;color:var(--muted);font-size:13px;margin-bottom:2px}
 .rg48-bigtime b{display:block;font-size:24px;font-weight:800;color:var(--gold-2);overflow-wrap:anywhere}
+/* Nov 2026 Theteller: the pulsing dot on the prompt-sent screen —
+   reuses the existing `pulse` keyframes (v48.css:213). */
+.rg48-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--gold-2);margin-right:6px;vertical-align:1px;animation:pulse 1.2s ease-in-out infinite}
 .rg48-bignum{text-align:center;margin:0 0 16px}
 .rg48-bignum b{display:block;font-size:30px;font-weight:800;color:var(--ink);overflow-wrap:anywhere}
 .rg48-bignum span{display:block;color:var(--muted);font-size:13px;margin-top:2px}

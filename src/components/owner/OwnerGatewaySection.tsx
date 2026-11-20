@@ -1,10 +1,17 @@
 // Phase 2 PayTeller (Nov 2026), Phase 3 restyle: the owner Gateway
 // section — the 4 PayTeller fields (paste → encrypted, last-4 shown),
-// the Ghana MoMo toggle (Demo / PayTeller), a Test connection button,
-// and the webhook URL to register in PayTeller Settings. Blank fields
-// keep the saved value; the toggle alone never needs the encryption
-// key. Flipping the live gateway reroutes real money, so it goes
-// through the shared ConfirmDialog; saving keys and testing do not.
+// the Ghana MoMo toggle (Demo / Theteller / PayTeller), a Test
+// connection button, and the webhook URL to register in PayTeller
+// Settings. Blank fields keep the saved value; the toggle alone never
+// needs the encryption key. Flipping the live gateway reroutes real
+// money, so it goes through the shared ConfirmDialog; saving keys and
+// testing do not.
+// Nov 2026 Theteller (PaySwitch): the same treatment for the
+// Theteller direct-push fields (API user, API key, Merchant ID,
+// callback secret, base URL Test/Live) + its own Test connection
+// button and the callback URL. Theteller is the direct MoMo push
+// path (prompt straight to the phone, no checkout page); PayTeller
+// stays as the hosted-checkout choice.
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { useStore } from "../../lib/store";
@@ -19,17 +26,26 @@ import { useOwnerFetch } from "./useOwnerFetch";
 
 // Phase 2 PayTeller (Nov 2026): the owner Gateway section — the 4
 // PayTeller fields (paste → encrypted, last-4 shown), the Ghana MoMo
-// toggle (Demo / PayTeller), a Test connection button, and the webhook
-// URL to register in PayTeller Settings. Blank fields keep the saved
-// value; the toggle alone never needs the encryption key.
+// toggle (Demo / Theteller / PayTeller), a Test connection button,
+// and the webhook URL to register in PayTeller Settings. Blank fields
+// keep the saved value; the toggle alone never needs the encryption
+// key.
+// Nov 2026 Theteller: the same for the direct-push fields.
 interface GatewaySettingsShape {
-  ghMomoGateway: "demo" | "payteller";
+  ghMomoGateway: "demo" | "payteller" | "theteller";
   paytellerConfigured: boolean;
   paytellerApiKey: string | null;
   paytellerMerchantId: string | null;
   paytellerUsername: string | null;
   paytellerWebhookSecret: string | null;
+  thetellerConfigured: boolean;
+  thetellerApiUser: string | null;
+  thetellerApiKey: string | null;
+  thetellerMerchantId: string | null;
+  thetellerCallbackSecret: string | null;
+  thetellerBaseUrl: string | null;
   webhookUrl: string;
+  thetellerCallbackUrl: string;
   updatedAt: string | null;
 }
 
@@ -39,10 +55,19 @@ export function OwnerGatewaySection() {
   const [merchantId, setMerchantId] = useState("");
   const [username, setUsername] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const [tApiUser, setTApiUser] = useState("");
+  const [tApiKey, setTApiKey] = useState("");
+  const [tMerchantId, setTMerchantId] = useState("");
+  const [tCallbackSecret, setTCallbackSecret] = useState("");
+  // Theteller environment: local until saved with the keys (an
+  // immediate save on tap would wipe typed-but-unsaved key fields).
+  const [tEnv, setTEnv] = useState<"test" | "live" | null>(null);
   const [busy, setBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState("");
-  const [flipTarget, setFlipTarget] = useState<"demo" | "payteller" | null>(null);
+  const [tTestBusy, setTTestBusy] = useState(false);
+  const [tTestResult, setTTestResult] = useState("");
+  const [flipTarget, setFlipTarget] = useState<"demo" | "payteller" | "theteller" | null>(null);
 
   const { data: gw, err, loading, reload } = useOwnerFetch<GatewaySettingsShape>(
     user ? "/api/owner/gateway" : null,
@@ -56,6 +81,11 @@ export function OwnerGatewaySection() {
       setMerchantId("");
       setUsername("");
       setWebhookSecret("");
+      setTApiUser("");
+      setTApiKey("");
+      setTMerchantId("");
+      setTCallbackSecret("");
+      setTEnv(null);
       toast("Gateway settings saved", "win");
       reload();
     } catch (ex) {
@@ -71,10 +101,22 @@ export function OwnerGatewaySection() {
       paytellerUsername: username,
       paytellerWebhookSecret: webhookSecret,
     });
-  const flip = (g: "demo" | "payteller") => {
+  const saveThetellerKeys = () =>
+    void save({
+      thetellerApiUser: tApiUser,
+      thetellerApiKey: tApiKey,
+      thetellerMerchantId: tMerchantId,
+      thetellerCallbackSecret: tCallbackSecret,
+      thetellerBaseUrl: tEnv ?? (gw?.thetellerBaseUrl === "https://prod.theteller.net" ? "live" : "test"),
+    });
+  const flip = (g: "demo" | "payteller" | "theteller") => {
     if (!gw || g === gw.ghMomoGateway) return;
     if (g === "payteller" && !gw.paytellerConfigured) {
       toast("Save the 4 PayTeller keys first (or set them as env vars), then test the connection", "lose");
+      return;
+    }
+    if (g === "theteller" && !gw.thetellerConfigured) {
+      toast("Save the Theteller API user, key and Merchant ID first (or set them as env vars), then test the connection", "lose");
       return;
     }
     setFlipTarget(g);
@@ -91,24 +133,81 @@ export function OwnerGatewaySection() {
       setTestBusy(false);
     }
   };
+  const testTheteller = async () => {
+    setTTestBusy(true);
+    setTTestResult("");
+    try {
+      const r = await api<{ authenticated: boolean; code?: string | null; reason?: string | null }>("/api/owner/gateway/theteller-test", { method: "POST" });
+      setTTestResult(r.authenticated ? "Connected — Theteller answered with these credentials." : "Theteller did not confirm these credentials.");
+    } catch (ex) {
+      setTTestResult(ex instanceof Error ? ex.message : "Connection test failed");
+    } finally {
+      setTTestBusy(false);
+    }
+  };
   if (loading) return <Skeleton lines={5} title />;
   if (err) return <ErrorState text={err} onRetry={reload} />;
   if (!gw) return null;
+  const gatewayLabel = gw.ghMomoGateway === "payteller" ? "PayTeller" : gw.ghMomoGateway === "theteller" ? "Theteller" : "Demo";
+  const flipLabel = flipTarget === "payteller" ? "PayTeller" : flipTarget === "theteller" ? "Theteller" : "Demo";
+  const flipBody =
+    flipTarget === "payteller"
+      ? "New Ghana MoMo deposits will go through PayTeller's hosted checkout instead of the demo flow."
+      : flipTarget === "theteller"
+        ? "New Ghana MoMo deposits will go through Theteller direct MoMo push — the prompt goes straight to the customer's phone, no checkout page."
+        : "New Ghana MoMo deposits will go through the demo flow instead of a live gateway.";
   return (
     <div>
       <p>
         <b>Ghana MoMo gateway</b>{" "}
-        {gw.paytellerConfigured ? <Badge variant="ok">Keys saved</Badge> : <Badge variant="warn">No keys</Badge>}
+        {gw.thetellerConfigured ? <Badge variant="ok">Theteller keys saved</Badge> : null}{" "}
+        {gw.paytellerConfigured ? <Badge variant="ok">PayTeller keys saved</Badge> : <Badge variant="warn">No keys</Badge>}
       </p>
       <Segmented
         label="Ghana MoMo gateway"
         items={[
           { id: "demo", label: "Demo" },
+          { id: "theteller", label: "Theteller" },
           { id: "payteller", label: "PayTeller" },
         ]}
         value={gw.ghMomoGateway}
-        onChange={(id) => flip(id as "demo" | "payteller")}
+        onChange={(id) => flip(id as "demo" | "payteller" | "theteller")}
       />
+      <p>Theteller is the direct MoMo push path. PayTeller stays as the hosted-checkout choice.</p>
+      <h3>Theteller (direct MoMo push)</h3>
+      <Segmented
+        label="Theteller environment"
+        items={[
+          { id: "test", label: "Test" },
+          { id: "live", label: "Live" },
+        ]}
+        value={tEnv ?? (gw.thetellerBaseUrl === "https://prod.theteller.net" ? "live" : "test")}
+        onChange={(id) => setTEnv(id as "test" | "live")}
+      />
+      <Button variant="secondary" size="sm" loading={tTestBusy} onClick={() => void testTheteller()}>
+        Test Theteller connection
+      </Button>
+      {tTestResult ? <p role="status">{tTestResult}</p> : null}
+      <FormField label={`API user ${gw.thetellerApiUser ? `(${gw.thetellerApiUser})` : "(not set)"}`}>
+        <Input type="text" autoComplete="off" value={tApiUser} onChange={(e) => setTApiUser(e.target.value)} placeholder="Theteller API username" aria-label="Theteller API user" />
+      </FormField>
+      <FormField label={`API key ${gw.thetellerApiKey ? `(${gw.thetellerApiKey})` : "(not set)"}`}>
+        <Input type="password" autoComplete="off" value={tApiKey} onChange={(e) => setTApiKey(e.target.value)} placeholder="Paste new key to replace" aria-label="Theteller API key" />
+      </FormField>
+      <FormField label={`Merchant ID ${gw.thetellerMerchantId ? `(${gw.thetellerMerchantId})` : "(not set)"}`}>
+        <Input type="text" autoComplete="off" value={tMerchantId} onChange={(e) => setTMerchantId(e.target.value)} placeholder="TTM-00000000" aria-label="Theteller Merchant ID" />
+      </FormField>
+      <FormField label={`Callback secret ${gw.thetellerCallbackSecret ? `(${gw.thetellerCallbackSecret})` : "(not set)"}`}>
+        <Input type="password" autoComplete="off" value={tCallbackSecret} onChange={(e) => setTCallbackSecret(e.target.value)} placeholder="Paste new secret to replace" aria-label="Theteller callback secret" />
+      </FormField>
+      <Button variant="primary" size="sm" loading={busy} onClick={saveThetellerKeys}>
+        Save Theteller keys
+      </Button>
+      <p>Callback URL — register this with PaySwitch if your account supports a notification URL for direct payments (the docs do not say how it is configured — confirm with PaySwitch). Replace &lt;secret&gt; with the callback secret above:</p>
+      <p>
+        <code>{gw.thetellerCallbackUrl}</code> <CopyButton text={gw.thetellerCallbackUrl} label="Copy Theteller callback URL" />
+      </p>
+      <h3>PayTeller (hosted checkout)</h3>
       <Button variant="secondary" size="sm" loading={testBusy} onClick={() => void test()}>
         Test connection
       </Button>
@@ -141,16 +240,12 @@ export function OwnerGatewaySection() {
           return save({ ghMomoGateway: flipTarget });
         }}
         title="Switch Ghana MoMo gateway"
-        body={
-          flipTarget === "payteller"
-            ? "New Ghana MoMo deposits will go through PayTeller's hosted checkout instead of the demo flow."
-            : "New Ghana MoMo deposits will go through the demo flow instead of PayTeller."
-        }
+        body={flipBody}
         facts={[
-          { label: "Current", value: gw.ghMomoGateway === "payteller" ? "PayTeller" : "Demo" },
-          { label: "New", value: flipTarget === "payteller" ? "PayTeller" : "Demo" },
+          { label: "Current", value: gatewayLabel },
+          { label: "New", value: flipLabel },
         ]}
-        confirmLabel={flipTarget === "payteller" ? "Switch to PayTeller" : "Switch to Demo"}
+        confirmLabel={`Switch to ${flipLabel}`}
         busy={busy}
       />
     </div>
