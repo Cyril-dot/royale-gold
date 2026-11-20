@@ -6,11 +6,14 @@
 // — the wallet only changes when the status call says "successful"
 // (the webhook is the other path that can settle it). The page says so
 // plainly, in every state.
+//
+// Nov 2026: no "Go to wallet" button any more — once the payment
+// reaches a terminal state the wallet opens on its own
+// (router.replace, so back never loops here).
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, fmtMoney } from "../../../../lib/api";
 import { useStore } from "../../../../lib/store";
 
@@ -30,6 +33,7 @@ const MAX_POLLS = 30; // 30 × 10 s = 5 minutes, like BetWins.
 
 export default function ReturnClient() {
   const params = useSearchParams();
+  const router = useRouter();
   const ref = params.get("ref") ?? "";
   const { refresh, openAuth } = useStore();
   const [status, setStatus] = useState<Status>("checking");
@@ -93,6 +97,26 @@ export default function ReturnClient() {
     };
   }, [ref, refresh]);
 
+  // Terminal states — the poll has stopped and the result will not
+  // flip any more. Checking / pending / processing are NOT terminal:
+  // the poll is still running and the payment can still succeed.
+  const isTerminal =
+    status === "successful" ||
+    status === "failed" ||
+    status === "expired" ||
+    status === "timeout";
+
+  // Auto-redirect (Nov 2026): no button — the wallet opens on its own
+  // once the result is known. router.replace() so the back button
+  // never loops back to this page. 2.5 s so the player actually
+  // reads the result first.
+  const REDIRECT_MS = 2500;
+  useEffect(() => {
+    if (!isTerminal) return;
+    const t = setTimeout(() => router.replace("/wallet"), REDIRECT_MS);
+    return () => clearTimeout(t);
+  }, [isTerminal, router]);
+
   const headline =
     status === "successful"
       ? "Payment confirmed"
@@ -116,7 +140,7 @@ export default function ReturnClient() {
         : status === "expired"
           ? "The PayTeller checkout timed out before you paid. Start a new deposit from your wallet."
           : status === "timeout"
-            ? "PayTeller has not confirmed yet. Your wallet updates automatically once it does — check back in a bit."
+            ? "PayTeller has not confirmed yet. Your wallet updates automatically once it does."
             : status === "signin"
               ? "Your session ended before the payment could be checked."
               : status === "error"
@@ -136,11 +160,9 @@ export default function ReturnClient() {
         <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>
           Log in
         </button>
-      ) : (
-        <Link className="btn btn-gold" href="/wallet">
-          Go to wallet
-        </Link>
-      )}
+      ) : isTerminal ? (
+        <p className="pt-note">Taking you to your wallet…</p>
+      ) : null}
       <p>{body}</p>
       <p className="pt-note">
         Coming back here doesn&apos;t mean the payment went through — your wallet only changes once
