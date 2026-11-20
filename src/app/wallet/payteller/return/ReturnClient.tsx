@@ -132,11 +132,6 @@ export default function ReturnClient() {
           <span className="pt-amt">{fmtMoney(amount, "GHS")}</span>
         )}
       </p>
-      <p>{body}</p>
-      <p className="pt-note">
-        Coming back here doesn&apos;t mean the payment went through — your wallet only changes once
-        PayTeller confirms it.
-      </p>
       {status === "signin" ? (
         <button className="btn btn-gold" type="button" onClick={() => openAuth("login")}>
           Log in
@@ -146,6 +141,11 @@ export default function ReturnClient() {
           Go to wallet
         </Link>
       )}
+      <p>{body}</p>
+      <p className="pt-note">
+        Coming back here doesn&apos;t mean the payment went through — your wallet only changes once
+        PayTeller confirms it.
+      </p>
     </div>
   );
 }

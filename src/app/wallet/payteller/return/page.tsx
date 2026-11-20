@@ -6,7 +6,7 @@ import ReturnClient from "./ReturnClient";
 
 export default function PaytellerReturnPage() {
   return (
-    <main className="rg48-page-main">
+    <main className="rg48-page-main pt-return-main">
       <div className="wrap">
         <Suspense fallback={<p>Loading…</p>}>
           <ReturnClient />

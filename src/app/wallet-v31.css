@@ -23,6 +23,15 @@
 .pt-note{margin:18px 0 0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
 .pt-return .btn{display:inline-block;margin-top:18px;min-height:48px}
 
+/* Return page only (Nov 2026): kill the void. .rg48-page-main forces
+   min-height 70vh, but the return content is short, so the page ended
+   in a huge empty stretch with the button stranded mid-screen. The
+   button now sits right under the result; the body + note stay below
+   it. Scoped to .pt-return-main — the shared rule is untouched. */
+main.rg48-page-main.pt-return-main{min-height:0;padding-bottom:24px}
+.pt-return-main .pt-return{padding-top:12px;padding-bottom:0}
+.pt-return-main .pt-return .btn{margin-top:12px}
+
 /* Wallet tabs (Nov 2026): Deposit / Withdrawal — Deposit first, default.
    Same gold segmented look as .rg48-tabs; two short labels, no wrap. */
 .wallet-tabs{display:flex;gap:8px;margin:18px 0 0}
