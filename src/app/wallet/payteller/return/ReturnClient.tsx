@@ -161,7 +161,14 @@ export default function ReturnClient() {
           Log in
         </button>
       ) : isTerminal ? (
-        <p className="pt-note">Taking you to your wallet…</p>
+        <>
+          <p className="pt-note">Taking you to your wallet…</p>
+          {/* Gold spinner while the 2.5 s auto-redirect is pending —
+              terminal states only. Signin never redirects, so it
+              never spins; checking / pending / processing are still
+              polling, so they don't spin either. */}
+          <div className="pt-spinner" role="status" aria-label="Loading your wallet" />
+        </>
       ) : null}
       <p>{body}</p>
       <p className="pt-note">

@@ -21,6 +21,13 @@
 .pt-status.bad{color:#FF8580}
 .pt-status .pt-amt{display:block;font-size:30px;margin-top:8px}
 .pt-note{margin:18px 0 0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
+/* Return page only (Nov 2026): gold loading spinner while the
+   wallet auto-redirect is pending (2.5 s after a terminal state).
+   CSS-only ring, scoped to .pt-return — nothing else spins. */
+.pt-return .pt-spinner{box-sizing:border-box;width:36px;height:36px;margin:16px auto 0;border-radius:50%;border:4px solid rgba(255,217,100,.18);border-top-color:var(--gold-2);animation:pt-spin .8s linear infinite}
+@keyframes pt-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.pt-return .pt-spinner{animation:none}}
+
 .pt-return .btn{display:inline-block;margin-top:18px;min-height:48px}
 
 /* Return page only (Nov 2026): kill the void. .rg48-page-main forces
