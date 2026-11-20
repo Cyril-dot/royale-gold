@@ -35,7 +35,7 @@ interface Store {
   login: (emailOrPhone: string, password: string) => Promise<{ user: User } | { totpRequired: true; userId: string }>;
   /** P0 Batch 3 (A13): the second login step for accounts with 2FA on. */
   loginTotp: (userId: string, code: string) => Promise<User>;
-  register: (name: string, emailOrPhone: string, password: string, refCode?: string, country?: string) => Promise<{ user: User; referredBonusCoins?: number }>;
+  register: (name: string, emailOrPhone: string, password: string, refCode?: string, country?: string, verifyToken?: string) => Promise<{ user: User; referredBonusCoins?: number }>;
   logout: () => Promise<void>;
   authOpen: boolean;
   authMode: "login" | "register";
@@ -200,13 +200,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return r.user;
   }, [loadSplit]);
 
-  const register = useCallback(async (name: string, emailOrPhone: string, password: string, refCode?: string, country?: string) => {
+  const register = useCallback(async (name: string, emailOrPhone: string, password: string, refCode?: string, country?: string, verifyToken?: string) => {
     const r = await api<{ user: User; referredBonusCoins?: number }>("/api/auth/register", {
       method: "POST",
       // Phase 1 country-based (Nov 2026): the country the player picks
       // at register — the account's fiat is derived from it and can
       // never be changed after.
-      body: JSON.stringify({ name, emailOrPhone, password, refCode: refCode || undefined, country: country || undefined }),
+      // Email OTP (Nov 2026): verifyToken is the one-time token from
+      // POST /api/auth/email-otp/verify — register 403s without it.
+      body: JSON.stringify({ name, emailOrPhone, password, refCode: refCode || undefined, country: country || undefined, verifyToken: verifyToken || undefined }),
     });
     try { window.localStorage.setItem("rg-session", "1"); } catch { /* ignore */ }
     setUser(r.user);

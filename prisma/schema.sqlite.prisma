@@ -641,6 +641,12 @@ model DepositNumber {
 // somewhere to write — the PayTeller fields stay EMPTY this phase.
 // Phase 2 stores the values AES-256-GCM encrypted (same pattern as
 // BetWins payment_settings) — never plain text, never logged.
+// Nov 2026 Theteller (PaySwitch) direct MoMo push: the same treatment
+// for the Theteller fields — API user + key, merchant ID, callback
+// secret, base URL (test https://test.theteller.net / live
+// https://prod.theteller.net). The toggle is now three-way:
+// "demo" | "theteller" | "payteller" — Theteller is the direct-push
+// Ghana MoMo path, PayTeller stays as the hosted-checkout choice.
 model GatewaySettings {
   id                     String   @id @default("global")
   paytellerApiKey        String?
@@ -701,21 +707,23 @@ model PaytellerWebhookEvent {
 // attempt. transactionId is the 12-digit id sent to Theteller — the
 // idempotency and lookup key (unique per attempt; a retry is always a
 // NEW transaction_id, never a reuse). amountPesewas is the exact wire
-// value (integer pesewas); amount is the principal in GHS for the
-// credit math. The wallet is credited the FULL principal — the house
-// absorbs Theteller's merchant-side charge, same money rule as
-// PayTeller. The voucher code (Telecel) is NEVER stored. status:
-// pending | successful | failed. chargeState: "queued" (row created,
-// charge not started yet) | "called" (process answered or the call
-// failed). A "queued" row older than 30s is failed by the status poll
-// as "could not be started" — no charge ever happened, so no money
-// moved and no block failure is recorded for it.
+// value (integer pesewas, never a float); amount is the principal in
+// GHS for the credit math. The wallet is credited the FULL principal
+// — the house absorbs Theteller's merchant-side charge, same money
+// rule as PayTeller. The voucher code (Telecel) is NEVER stored —
+// it is a one-time code sent in the process call only. status:
+// pending | successful | failed. chargeState tracks whether the
+// process call ever ran: "queued" (row created, charge not started
+// yet — the after() worker runs it) | "called" (process answered or
+// the call failed). A "queued" row older than 30s is failed by the
+// status poll as "could not be started" — no charge ever happened,
+// so no money moved and no block failure is recorded for it.
 model ThetellerPayment {
   id               String   @id @default(cuid())
   userId           String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactionId    String   @unique // 12 digits
-  amount           Float // principal, GHS
+  amount           Float  // principal, GHS
   amountPesewas    Int // exact wire value, integer pesewas
   fiatCurrency     String   @default("GHS")
   network          String // "MTN" | "VDF" | "ATL" | "TGO" (r-switch)
@@ -1204,4 +1212,26 @@ model Brand {
   createdAt     DateTime @default(now())
 
   @@index([active, createdAt])
+}
+
+// Email OTP verification (Nov 2026): the email must be proven real
+// BEFORE the account is created — a 6-digit code goes to the inbox,
+// the player enters it, and a one-time verify token is issued. The
+// register route consumes that token (single-use, 15 min). The plain
+// code is NEVER stored (SHA-256 hash only); the verify token is
+// stored hashed too. SQL: rg-email-otp.sql — run in Neon BEFORE
+// this goes live; all reads/writes degrade to 503 naming that file.
+model EmailVerification {
+  id                   String   @id @default(cuid())
+  email                String
+  codeHash             String
+  expiresAt            DateTime
+  attempts             Int      @default(0)
+  verifiedAt           DateTime?
+  verifyTokenHash      String?
+  verifyTokenExpiresAt DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([email, createdAt])
 }

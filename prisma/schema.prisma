@@ -1220,3 +1220,25 @@ model Brand {
 
   @@index([active, createdAt])
 }
+
+// Email OTP verification (Nov 2026): the email must be proven real
+// BEFORE the account is created — a 6-digit code goes to the inbox,
+// the player enters it, and a one-time verify token is issued. The
+// register route consumes that token (single-use, 15 min). The plain
+// code is NEVER stored (SHA-256 hash only); the verify token is
+// stored hashed too. SQL: rg-email-otp.sql — run in Neon BEFORE
+// this goes live; all reads/writes degrade to 503 naming that file.
+model EmailVerification {
+  id                   String   @id @default(cuid())
+  email                String
+  codeHash             String
+  expiresAt            DateTime
+  attempts             Int      @default(0)
+  verifiedAt           DateTime?
+  verifyTokenHash      String?
+  verifyTokenExpiresAt DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([email, createdAt])
+}
