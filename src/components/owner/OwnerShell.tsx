@@ -64,6 +64,7 @@ export const OWNER_NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/owner/engage/promotions", label: "Promotions" },
       { href: "/owner/engage/announcements", label: "Announcements" },
+      { href: "/owner/engage/email", label: "Email customers" },
       { href: "/owner/engage/vip", label: "VIP tiers" },
       { href: "/owner/engage/loyalty", label: "Loyalty" },
       { href: "/owner/engage/tournaments", label: "Tournaments" },

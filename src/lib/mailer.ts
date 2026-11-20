@@ -42,3 +42,17 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
     html: `<p>Your Royale Gold code is <b>${code}</b>.</p><p>It expires in 10 minutes. If you didn't ask for this, ignore this email.</p>`,
   });
 }
+
+/** An owner message to one customer — subject + text exactly as the
+ *  owner typed them, plain text with a matching HTML version. */
+export async function sendOwnerEmail(to: string, subject: string, text: string): Promise<void> {
+  const mailer = createMailer();
+  const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  await mailer.sendMail({
+    from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+    to,
+    subject,
+    text: `${text}\n\n— Royale Gold`,
+    html: `<p>${esc.replace(/\n/g, "<br>")}</p><p>— Royale Gold</p>`,
+  });
+}
