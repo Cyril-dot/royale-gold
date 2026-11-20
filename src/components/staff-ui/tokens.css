@@ -147,7 +147,7 @@
   min-height: 44px;
   min-width: 44px;
   padding: 10px 18px;
-  border-radius: 999px;
+  border-radius: var(--r-s);
   border: 1px solid transparent;
   font-size: 14px;
   font-weight: 800;
@@ -169,7 +169,7 @@
   transform: none;
 }
 .staff .st-btn-primary {
-  background: linear-gradient(180deg, var(--gold-2), #d9a41c);
+  background: var(--gold-2);
   color: #231600;
 }
 .staff .st-btn-secondary {
@@ -187,12 +187,19 @@
   color: #fff;
 }
 .staff .st-btn-sm {
-  min-height: 44px;
-  padding: 10px 14px;
+  min-height: 36px;
+  padding: 8px 14px;
   font-size: 13px;
 }
 .staff .st-btn-block {
   width: 100%;
+}
+/* Pay-row Save: breathing room above it, centred in the card — not
+   tight under the MAX input, not pushed to one side. */
+.staff .st-pay-save {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--sp-4);
 }
 .staff .st-btn-spinner {
   width: 16px;

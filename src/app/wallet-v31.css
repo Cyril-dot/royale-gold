@@ -28,3 +28,8 @@
 .wallet-tabs button{flex:1;min-height:48px;padding:11px 8px;border-radius:11px;border:1px solid var(--line);background:var(--steel);color:var(--ink);font:inherit;font-weight:800;white-space:nowrap;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .wallet-tabs button.on{background:var(--gold);color:#231a02;border-color:var(--gold)}
 .wallet-tab-panel{margin-top:14px}
+/* Nov 2026: SIM top-up sits under the cards, next to the SIM balance
+   the Visa card shows in SIM mode. Ghost button on purpose — play
+   money must never look like the gold real Deposit button. */
+.wallet-simtop{margin:14px 0 0}
+.wallet-simtop .btn{width:100%;min-height:48px}

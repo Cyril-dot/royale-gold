@@ -78,27 +78,31 @@ export default function WalletPage() {
           <WalletCard holder={user.name} last4={last4} balance={cardBalance} balanceLabel={cardLabel} />
           <CoinCard holder={user.name} coins={fmtCoins(coins)} />
         </div>
+        {/* Nov 2026: the SIM top-up lives next to the SIM balance — the
+            Visa card above shows the SIM balance in SIM mode — and
+            nowhere else on this page. It is a ghost button on purpose:
+            play money must never look like the gold real Deposit
+            button. SIM mode only; in REAL mode there is no SIM balance
+            on this page, so there is no top-up either. */}
+        {mode === "SIM" && (
+          <div className="wallet-simtop">
+            <button className="btn btn-ghost" type="button" onClick={topUpSim}>Top up SIM +{sym} 1,000</button>
+            <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
+          </div>
+        )}
         {/* Wallet tabs (Nov 2026): Deposit first and default, Withdrawal
-            second. The Deposit tab holds the same deposit action (the
-            modal in REAL, SIM top-up in SIM); the Withdrawal tab holds
-            the same WithdrawSection — neither flow changed, only how
-            you switch between them. */}
+            second. The Deposit tab holds the same deposit action in BOTH
+            modes — the button opens the DepositModal (PayTeller /
+            Theteller / demo by gateway). The SIM top-up is NOT here
+            anymore: it lives next to the SIM balance above, SIM mode
+            only — the Deposit tab never shows play money. */}
         <div className="wallet-tabs" role="tablist" aria-label="Deposit or withdraw">
           <button type="button" role="tab" aria-selected={tab === "deposit"} className={tab === "deposit" ? "on" : ""} onClick={() => setTab("deposit")}>Deposit</button>
           <button type="button" role="tab" aria-selected={tab === "withdraw"} className={tab === "withdraw" ? "on" : ""} onClick={() => setTab("withdraw")}>Withdrawal</button>
         </div>
         {tab === "deposit" ? (
           <div className="wallet-tab-panel">
-            {/* Round 12: SIM mode is demo-only — the action is an instant
-                SIM top-up, never a real-money deposit. */}
-            {mode === "SIM" ? (
-              <button className="btn btn-gold wallet-dep" type="button" onClick={topUpSim}>Top up SIM +{sym} 1,000</button>
-            ) : (
-              <button className="btn btn-gold wallet-dep" type="button" onClick={() => setDepositOpen(true)}>Deposit</button>
-            )}
-            {mode === "SIM" && (
-              <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
-            )}
+            <button className="btn btn-gold wallet-dep" type="button" onClick={() => setDepositOpen(true)}>Deposit</button>
           </div>
         ) : null}
         {/* Win logic (Nov 2026): the Stake/Winnings split of the cash

@@ -47,9 +47,11 @@ export function OwnerPayRow({ m, onSave }: {
       <FormField label={`Max deposit (${symbolFor(m.fiatCurrency ?? "GHS")})`}>
         <AmountInput value={maxDep} onChange={(e) => setMaxDep(e.target.value)} placeholder="No cap" aria-label={`${m.method} maximum deposit`} />
       </FormField>
-      <Button variant="primary" size="sm" loading={busy} onClick={() => void save()}>
-        Save
-      </Button>
+      <div className="st-pay-save">
+        <Button variant="primary" size="sm" loading={busy} onClick={() => void save()}>
+          Save
+        </Button>
+      </div>
     </Card>
   );
 }
