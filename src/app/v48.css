@@ -1980,16 +1980,15 @@ body.toast-on .bottle-msg.win,body.toast-on .bottle-msg.lose{top:calc(10px + env
 .rg48-f label{display:block;font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--muted);margin-bottom:6px;text-transform:uppercase}
 .rg48-f input,.rg48-f select{width:100%;box-sizing:border-box;background:#070A18;border:1px solid var(--line);border-radius:11px;color:var(--ink);font:inherit;font-size:15px;padding:12px 13px}
 .rg48-f input:focus,.rg48-f select:focus{outline:2px solid rgba(242,194,48,.55);outline-offset:0;border-color:var(--gold)}
-/* Register country field (Nov 2026): bigger than the other fields,
-   with the selected country's flag as a prefix badge inside the
-   field. A native select cannot render an image inside itself, so
-   the flag sits in the wrapper and the select's left padding clears
-   it. Doubled class beats globals.css's pointer:coarse 16px rule
-   (equal specificity, v48.css is imported after globals.css). */
-.rg48-country-wrap{position:relative}
-.rg48-country-flag{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:26px;line-height:1;pointer-events:none}
-.rg48-f.rg48-country select{min-height:56px;font-size:17px;padding:14px 13px 14px 52px}
-.rg48-f.rg48-country select:focus{outline:2px solid rgba(242,194,48,.55);outline-offset:0;border-color:var(--gold)}
+/* Register country toggle (Nov 2026): both countries shown side by
+   side as big tappable buttons — no dropdown. Selected option gets
+   the gold border + tint; the other stays muted/dark. Same bigger
+   sizing as the field it replaces (56px tall, 17px text). */
+.rg48-country-toggle{display:flex;gap:10px}
+.rg48-country-toggle .rg48-country-opt{flex:1;min-height:56px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:8px;background:#070A18;border:1px solid var(--line);border-radius:11px;color:var(--ink);font:inherit;font-size:17px;font-weight:700;padding:14px 10px;cursor:pointer}
+.rg48-country-toggle .rg48-country-opt .rg48-country-flag{font-size:26px;line-height:1}
+.rg48-country-toggle .rg48-country-opt[aria-pressed="true"]{border-color:var(--gold);background:rgba(242,194,48,.12);color:var(--gold-2)}
+.rg48-country-toggle .rg48-country-opt:focus-visible{outline:2px solid rgba(242,194,48,.55);outline-offset:0;border-color:var(--gold)}
 .rg48-err{color:#FF8580;font-size:13.5px;font-weight:700;min-height:18px;margin:2px 0 8px}
 .rg48-demo{background:rgba(242,194,48,.07);border:1px dashed rgba(242,194,48,.45);border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.55;color:var(--ink);margin-top:14px}
 .rg48-demo b{color:var(--gold-2)}
