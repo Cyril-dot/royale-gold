@@ -1989,6 +1989,17 @@ body.toast-on .bottle-msg.win,body.toast-on .bottle-msg.lose{top:calc(10px + env
 .rg48-country-toggle .rg48-country-opt .rg48-country-flag{font-size:26px;line-height:1}
 .rg48-country-toggle .rg48-country-opt[aria-pressed="true"]{border-color:var(--gold);background:rgba(242,194,48,.12);color:var(--gold-2)}
 .rg48-country-toggle .rg48-country-opt:focus-visible{outline:2px solid rgba(242,194,48,.55);outline-offset:0;border-color:var(--gold)}
+/* Password eye (Nov 2026): show/hide toggle inside the password
+   field — login + register. The button sits inside the field on the
+   right; the input's extra right padding keeps typed text clear of it.
+   Focus stays in the field on tap (the button prevents mousedown
+   focus); keyboard users can tab to it and toggle with Enter/Space. */
+.rg48-passwrap{position:relative}
+.rg48-f .rg48-passwrap input{padding-right:44px}
+.rg48-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:none;border:0;color:var(--muted);cursor:pointer;border-radius:8px;padding:0}
+.rg48-eye svg{width:20px;height:20px}
+.rg48-eye:hover,.rg48-eye:focus-visible{color:var(--gold-2)}
+.rg48-eye:focus-visible{outline:2px solid rgba(242,194,48,.55);outline-offset:0}
 .rg48-err{color:#FF8580;font-size:13.5px;font-weight:700;min-height:18px;margin:2px 0 8px}
 .rg48-demo{background:rgba(242,194,48,.07);border:1px dashed rgba(242,194,48,.45);border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.55;color:var(--ink);margin-top:14px}
 .rg48-demo b{color:var(--gold-2)}

@@ -8,6 +8,27 @@ import { useStore } from "../lib/store";
 import { api } from "../lib/api";
 import { COUNTRIES, phonePlaceholder } from "../lib/country";
 
+// Show/hide eye for the password fields — inline SVG, no dependency.
+// onMouseDown prevents the tap from stealing focus out of the field.
+function PassEye({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className="rg48-eye"
+      aria-label={shown ? "Hide password" : "Show password"}
+      aria-pressed={shown}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onToggle}
+    >
+      {shown ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+      )}
+    </button>
+  );
+}
+
 export default function AuthModal() {
   const { authOpen, authMode, closeAuth, openAuth, login, loginTotp, register, toast, refPrefill } = useStore();
   const [tab, setTab] = useState<"login" | "register">(authMode);
@@ -51,6 +72,11 @@ export default function AuthModal() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [authOpen, closeAuth]);
+
+// Password eye (Nov 2026): show/hide on both password fields so a
+  // mistyped password can be seen before it is stored or sent.
+  const [showLoginPass, setShowLoginPass] = useState(false);
+  const [showRegPass, setShowRegPass] = useState(false);
 
   // Resend countdown — ticks down once a second while it runs.
   useEffect(() => {
@@ -188,8 +214,8 @@ export default function AuthModal() {
               </form>
             ) : (
               <form onSubmit={doLogin} autoComplete="off">
-                <div className="rg48-f"><label htmlFor="liContact">Email or phone</label><input id="liContact" type="text" placeholder={phonePlaceholder("GH")} value={contact} onChange={(e) => setContact(e.target.value)} required /></div>
-                <div className="rg48-f"><label htmlFor="liPass">Password</label><input id="liPass" type="password" placeholder="Your password" value={pass} onChange={(e) => setPass(e.target.value)} required /></div>
+                <div className="rg48-f"><label htmlFor="liContact">Email or phone</label><input id="liContact" type="text" placeholder={phonePlaceholder("GH")} value={contact} onChange={(e) => setContact(e.target.value)} required autoCapitalize="off" autoCorrect="off" spellCheck={false} inputMode="email" /></div>
+                <div className="rg48-f"><label htmlFor="liPass">Password</label><div className="rg48-passwrap"><input id="liPass" type={showLoginPass ? "text" : "password"} placeholder="Your password" value={pass} onChange={(e) => setPass(e.target.value)} required autoCapitalize="off" autoCorrect="off" spellCheck={false} /><PassEye shown={showLoginPass} onToggle={() => setShowLoginPass((s) => !s)} /></div></div>
                 <p className="rg48-err">{err}</p>
                 <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
               </form>
@@ -198,7 +224,7 @@ export default function AuthModal() {
             <form onSubmit={otpVerified ? doRegister : (e) => { e.preventDefault(); if (!otpSent) void doSendOtp(); else void doVerifyOtp(); }} autoComplete="off">
               {!otpVerified ? (
                 <>
-                  <div className="rg48-f"><label htmlFor="rgOtpEmail">Email — we&apos;ll send you a code to confirm it&apos;s real</label><input id="rgOtpEmail" type="email" placeholder="you@example.com" value={otpEmail} onChange={(e) => { setOtpEmail(e.target.value); setOtpErr(""); }} required /></div>
+                  <div className="rg48-f"><label htmlFor="rgOtpEmail">Email — we&apos;ll send you a code to confirm it&apos;s real</label><input id="rgOtpEmail" type="email" placeholder="you@example.com" value={otpEmail} onChange={(e) => { setOtpEmail(e.target.value); setOtpErr(""); }} required autoCapitalize="off" autoCorrect="off" spellCheck={false} /></div>
                   {otpSent && (
                     <div className="rg48-f"><label htmlFor="rgOtpCode">6-digit code</label><input id="rgOtpCode" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="123456" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))} required /></div>
                   )}
@@ -224,7 +250,7 @@ export default function AuthModal() {
                 <>
                   <p className="rg48-mini" style={{ marginBottom: 10 }}>✓ Email verified: <b>{otpEmail.trim().toLowerCase()}</b> · <button type="button" className="linklike" onClick={resetOtp}>Change</button></p>
                   <div className="rg48-f"><label htmlFor="rgName">Full name</label><input id="rgName" type="text" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required /></div>
-                  <div className="rg48-f"><label htmlFor="rgPass">Password</label><input id="rgPass" type="password" placeholder="Pick a password" value={pass} onChange={(e) => setPass(e.target.value)} required minLength={6} /></div>
+                  <div className="rg48-f"><label htmlFor="rgPass">Password</label><div className="rg48-passwrap"><input id="rgPass" type={showRegPass ? "text" : "password"} placeholder="Pick a password" value={pass} onChange={(e) => setPass(e.target.value)} required minLength={6} autoCapitalize="off" autoCorrect="off" spellCheck={false} /><PassEye shown={showRegPass} onToggle={() => setShowRegPass((s) => !s)} /></div></div>
                   <div className="rg48-f rg48-country">
                     <label id="rgCountryLabel">Country</label>
                     <div className="rg48-country-toggle" role="group" aria-labelledby="rgCountryLabel">
