@@ -58,7 +58,7 @@ export default function OwnerGatewayPage() {
 
   return (
     <div>
-      <PageHeader title="Gateway & payments" sub="Payment methods, PayTeller gateway, wallet and currency config." />
+      <PageHeader title="Gateway & payments" sub="Payment methods, Ghana MoMo gateway, wallet and currency config." />
       <OwnerRangeBar />
       <Card title="Payment methods">
         {payLoading ? (
@@ -72,7 +72,7 @@ export default function OwnerGatewayPage() {
         )}
       </Card>
 
-      <Card title="PayTeller gateway">
+      <Card title="Ghana MoMo gateway">
         <OwnerGatewaySection />
       </Card>
 

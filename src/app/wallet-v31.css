@@ -21,3 +21,10 @@
 .pt-status .pt-amt{display:block;font-size:30px;margin-top:8px}
 .pt-note{margin:18px 0 0;font-size:13px;color:var(--muted,rgba(255,246,216,.7))}
 .pt-return .btn{display:inline-block;margin-top:18px;min-height:48px}
+
+/* Wallet tabs (Nov 2026): Deposit / Withdrawal — Deposit first, default.
+   Same gold segmented look as .rg48-tabs; two short labels, no wrap. */
+.wallet-tabs{display:flex;gap:8px;margin:18px 0 0}
+.wallet-tabs button{flex:1;min-height:48px;padding:11px 8px;border-radius:11px;border:1px solid var(--line);background:var(--steel);color:var(--ink);font:inherit;font-weight:800;white-space:nowrap;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.wallet-tabs button.on{background:var(--gold);color:#231a02;border-color:var(--gold)}
+.wallet-tab-panel{margin-top:14px}

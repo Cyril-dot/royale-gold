@@ -665,7 +665,7 @@ model GatewaySettings {
   thetellerMerchantId    String?
   thetellerCallbackSecret String?
   thetellerBaseUrl       String?
-  ghMomoGateway          String   @default("demo") // "demo" | "theteller" | "payteller"
+  ghMomoGateway          String   @default("payteller") // "demo" | "theteller" | "payteller"
   updatedAt              DateTime @updatedAt
 }
 

@@ -85,14 +85,16 @@ async function getRow(): Promise<GatewayRow | null> {
   return prisma.gatewaySettings.findUnique({ where: { id: "global" } });
 }
 
-/** The Ghana MoMo gateway in force — "demo" when nothing is set.
- *  Nov 2026: three-way — "demo" | "theteller" (direct MoMo push) |
- *  "payteller" (hosted checkout, kept as the fallback choice). */
+/** The Ghana MoMo gateway in force — "payteller" when nothing is set
+ *  (Nov 2026, Chuks: live by default, no more silent demo credit).
+ *  Three-way — "demo" | "theteller" (direct MoMo push) |
+ *  "payteller" (hosted checkout, the default). The owner can still
+ *  explicitly pick demo; only the default changed. */
 export async function getGhMomoGateway(): Promise<"demo" | "payteller" | "theteller"> {
   const row = await getRow();
-  if (row?.ghMomoGateway === "payteller") return "payteller";
+  if (row?.ghMomoGateway === "demo") return "demo";
   if (row?.ghMomoGateway === "theteller") return "theteller";
-  return "demo";
+  return "payteller";
 }
 
 /** Decrypt one stored field; a bad key / bad ciphertext reads as empty. */
@@ -259,7 +261,7 @@ export async function getMaskedGatewaySettings(): Promise<MaskedGatewaySettings>
   const tBaseUrl = (tRow?.thetellerBaseUrl ?? "").trim() || null;
   return {
     ghMomoGateway:
-      row?.ghMomoGateway === "payteller" ? "payteller" : row?.ghMomoGateway === "theteller" ? "theteller" : "demo",
+      row?.ghMomoGateway === "demo" ? "demo" : row?.ghMomoGateway === "theteller" ? "theteller" : "payteller",
     paytellerConfigured: Boolean(apiKey && merchantId && username && webhookSecret),
     paytellerApiKey: maskSecret(apiKey),
     paytellerMerchantId: maskSecret(merchantId),
@@ -368,7 +370,7 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
       thetellerMerchantId: data.thetellerMerchantId,
       thetellerCallbackSecret: data.thetellerCallbackSecret,
       thetellerBaseUrl: baseUrlValue,
-      ghMomoGateway: gateway === "payteller" ? "payteller" : gateway === "theteller" ? "theteller" : "demo",
+      ghMomoGateway: gateway === "demo" ? "demo" : gateway === "theteller" ? "theteller" : "payteller",
     },
   });
   void row;

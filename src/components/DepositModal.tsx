@@ -149,7 +149,7 @@ export default function DepositModal() {
     api<{ ghMomoGateway?: string; currencies?: { currency: string; minDeposit: number; fixedDepositAmount?: number | null }[] }>("/api/games/config")
       .then((r) => {
         if (!live) return;
-        setGateway(r.ghMomoGateway ?? "demo");
+        setGateway(r.ghMomoGateway ?? "payteller");
         const row = r.currencies?.find((c) => c.currency === fiat);
         if (row && row.minDeposit > 0) setMinDeposit(row.minDeposit);
         // Fixed amount: lock the modal to it when set (null = OFF).
@@ -159,7 +159,7 @@ export default function DepositModal() {
         setFixedDeposit(fixed !== null && fixed > 0 ? fixed : null);
         if (fixed !== null && fixed > 0) setAmount(fixed);
       })
-      .catch(() => { if (live) setGateway("demo"); });
+      .catch(() => { if (live) setGateway("payteller"); });
     // Payment blocks (Nov 2026): ask up front so a blocked user sees
     // the card immediately instead of filling the form and failing.
     // A missing-tables prod answers "not blocked" — never an error.
@@ -443,17 +443,17 @@ export default function DepositModal() {
             </>
           ) : askOpen ? (
             <>
-              <h3>Send the <em>prompt?</em></h3>
-              <p className="sub" style={{ textAlign: "center" }}>Send the MoMo prompt to <b>{numberToUse || "your MoMo number"}</b> for <b>{fmtMoney(confirmTotal, fiat)}</b>?</p>
+              <h3>{paytellerActive ? <>Go to <em>checkout?</em></> : <>Send the <em>prompt?</em></>}</h3>
+              <p className="sub" style={{ textAlign: "center" }}>{paytellerActive ? <>Pay <b>{fmtMoney(confirmTotal, fiat)}</b> on PayTeller&apos;s checkout page — you confirm and pay there.</> : <>Send the MoMo prompt to <b>{numberToUse || "your MoMo number"}</b> for <b>{fmtMoney(confirmTotal, fiat)}</b>?</>}</p>
               <div className="rg48-btnrow">
                 <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setStep("confirm")}>No</button>
-                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmGateway()}>{busy ? "Sending…" : "Yes"}</button>
+                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmGateway()}>{busy ? (paytellerActive ? "Redirecting…" : "Sending…") : "Yes"}</button>
               </div>
             </>
           ) : step === "confirm" && gatewayActive ? (
             <>
               <h3>Confirm your <em>deposit</em></h3>
-              <p className="sub">Check this before the prompt is sent.</p>
+              <p className="sub">{paytellerActive ? "Check this before you go to the checkout page." : "Check this before the prompt is sent."}</p>
               <div className="rg48-bignum"><b>{fmtMoney(confirmTotal, fiat)}</b><span>{fmtMoney(amount, fiat)} will be added to your wallet</span></div>
               <div className="rg48-rows">
                 <div><span>Deposit</span><strong>{fmtMoney(amount, fiat)}</strong></div>
@@ -499,7 +499,7 @@ export default function DepositModal() {
               <div className="rg48-f">
                 <label htmlFor="depPhone">MoMo number (first deposit only)</label>
                 <input id="depPhone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0244 000 000" value={depPhone} onChange={(e) => setDepPhone(e.target.value)} />
-                <p className="sub">The prompt goes to this number. It is saved to your account — later deposits reuse it, and you change it only on your Account page.</p>
+                <p className="sub">{paytellerActive ? "You'll confirm and pay on PayTeller's checkout page. " : "A prompt goes straight to this number. "}It is saved to your account — later deposits reuse it, and you change it only on your Account page.</p>
               </div>
             )}
             {gatewayActive && savedNumber !== null && (

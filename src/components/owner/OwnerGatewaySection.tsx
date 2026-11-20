@@ -12,6 +12,12 @@
 // button and the callback URL. Theteller is the direct MoMo push
 // path (prompt straight to the phone, no checkout page); PayTeller
 // stays as the hosted-checkout choice.
+// Nov 2026 layout fix (Chuks: "scattered and arranged badly" on his
+// phone): ONE gateway at a time — only the selected gateway's section
+// renders, so the active gateway's keys are never buried under an
+// inactive gateway's fields. The selector is the switcher. Demo gets
+// one honest line instead of an empty gap. No logic changed: same
+// state, same save/test/flip handlers, same confirm dialog.
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { useStore } from "../../lib/store";
@@ -157,11 +163,24 @@ export function OwnerGatewaySection() {
         ? "New Ghana MoMo deposits will go through Theteller direct MoMo push — the prompt goes straight to the customer's phone, no checkout page."
         : "New Ghana MoMo deposits will go through the demo flow instead of a live gateway.";
   return (
-    <div>
-      <p>
+    <div className="st-gw">
+      <p className="st-gw-status">
         <b>Ghana MoMo gateway</b>{" "}
-        {gw.thetellerConfigured ? <Badge variant="ok">Theteller keys saved</Badge> : null}{" "}
-        {gw.paytellerConfigured ? <Badge variant="ok">PayTeller keys saved</Badge> : <Badge variant="warn">No keys</Badge>}
+        {gw.ghMomoGateway === "payteller" ? (
+          gw.paytellerConfigured ? (
+            <Badge variant="ok">PayTeller keys saved</Badge>
+          ) : (
+            <Badge variant="warn">No keys</Badge>
+          )
+        ) : gw.ghMomoGateway === "theteller" ? (
+          gw.thetellerConfigured ? (
+            <Badge variant="ok">Theteller keys saved</Badge>
+          ) : (
+            <Badge variant="warn">No keys</Badge>
+          )
+        ) : (
+          <Badge variant="muted">Play money</Badge>
+        )}
       </p>
       <Segmented
         label="Ghana MoMo gateway"
@@ -173,64 +192,82 @@ export function OwnerGatewaySection() {
         value={gw.ghMomoGateway}
         onChange={(id) => flip(id as "demo" | "payteller" | "theteller")}
       />
-      <p>Theteller is the direct MoMo push path. PayTeller stays as the hosted-checkout choice.</p>
-      <h3>Theteller (direct MoMo push)</h3>
-      <Segmented
-        label="Theteller environment"
-        items={[
-          { id: "test", label: "Test" },
-          { id: "live", label: "Live" },
-        ]}
-        value={tEnv ?? (gw.thetellerBaseUrl === "https://prod.theteller.net" ? "live" : "test")}
-        onChange={(id) => setTEnv(id as "test" | "live")}
-      />
-      <Button variant="secondary" size="sm" loading={tTestBusy} onClick={() => void testTheteller()}>
-        Test Theteller connection
-      </Button>
-      {tTestResult ? <p role="status">{tTestResult}</p> : null}
-      <FormField label={`API user ${gw.thetellerApiUser ? `(${gw.thetellerApiUser})` : "(not set)"}`}>
-        <Input type="text" autoComplete="off" value={tApiUser} onChange={(e) => setTApiUser(e.target.value)} placeholder="Theteller API username" aria-label="Theteller API user" />
-      </FormField>
-      <FormField label={`API key ${gw.thetellerApiKey ? `(${gw.thetellerApiKey})` : "(not set)"}`}>
-        <Input type="password" autoComplete="off" value={tApiKey} onChange={(e) => setTApiKey(e.target.value)} placeholder="Paste new key to replace" aria-label="Theteller API key" />
-      </FormField>
-      <FormField label={`Merchant ID ${gw.thetellerMerchantId ? `(${gw.thetellerMerchantId})` : "(not set)"}`}>
-        <Input type="text" autoComplete="off" value={tMerchantId} onChange={(e) => setTMerchantId(e.target.value)} placeholder="TTM-00000000" aria-label="Theteller Merchant ID" />
-      </FormField>
-      <FormField label={`Callback secret ${gw.thetellerCallbackSecret ? `(${gw.thetellerCallbackSecret})` : "(not set)"}`}>
-        <Input type="password" autoComplete="off" value={tCallbackSecret} onChange={(e) => setTCallbackSecret(e.target.value)} placeholder="Paste new secret to replace" aria-label="Theteller callback secret" />
-      </FormField>
-      <Button variant="primary" size="sm" loading={busy} onClick={saveThetellerKeys}>
-        Save Theteller keys
-      </Button>
-      <p>Callback URL — register this with PaySwitch if your account supports a notification URL for direct payments (the docs do not say how it is configured — confirm with PaySwitch). Replace &lt;secret&gt; with the callback secret above:</p>
-      <p>
-        <code>{gw.thetellerCallbackUrl}</code> <CopyButton text={gw.thetellerCallbackUrl} label="Copy Theteller callback URL" />
-      </p>
-      <h3>PayTeller (hosted checkout)</h3>
-      <Button variant="secondary" size="sm" loading={testBusy} onClick={() => void test()}>
-        Test connection
-      </Button>
-      {testResult ? <p role="status">{testResult}</p> : null}
-      <FormField label={`API key ${gw.paytellerApiKey ? `(${gw.paytellerApiKey})` : "(not set)"}`}>
-        <Input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Paste new key to replace" aria-label="PayTeller API key" />
-      </FormField>
-      <FormField label={`Merchant ID ${gw.paytellerMerchantId ? `(${gw.paytellerMerchantId})` : "(not set)"}`}>
-        <Input type="text" autoComplete="off" value={merchantId} onChange={(e) => setMerchantId(e.target.value)} placeholder="TTM-00000000" aria-label="PayTeller Merchant ID" />
-      </FormField>
-      <FormField label={`Username ${gw.paytellerUsername ? `(${gw.paytellerUsername})` : "(not set)"}`}>
-        <Input type="text" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="PayTeller username" aria-label="PayTeller username" />
-      </FormField>
-      <FormField label={`Webhook secret ${gw.paytellerWebhookSecret ? `(${gw.paytellerWebhookSecret})` : "(not set)"}`}>
-        <Input type="password" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} placeholder="Paste new secret to replace" aria-label="PayTeller webhook secret" />
-      </FormField>
-      <Button variant="primary" size="sm" loading={busy} onClick={saveKeys}>
-        Save keys
-      </Button>
-      <p>Webhook URL — register this in PayTeller Settings before the first payment:</p>
-      <p>
-        <code>{gw.webhookUrl}</code> <CopyButton text={gw.webhookUrl} label="Copy webhook URL" />
-      </p>
+      {gw.ghMomoGateway === "demo" ? (
+        <div className="st-gw-section">
+          <h3 className="st-gw-title">Demo (play money)</h3>
+          <p className="st-gw-desc">Deposits credit instantly. No real payment, no keys needed.</p>
+        </div>
+      ) : gw.ghMomoGateway === "theteller" ? (
+        <div className="st-gw-section">
+          <h3 className="st-gw-title">Theteller (direct MoMo push)</h3>
+          <p className="st-gw-desc">The prompt goes straight to the customer&apos;s phone, no checkout page.</p>
+          <div className="st-gw-env">
+            <span className="st-gw-env-label">Environment</span>
+            <Segmented
+              label="Theteller environment"
+              items={[
+                { id: "test", label: "Test" },
+                { id: "live", label: "Live" },
+              ]}
+              value={tEnv ?? (gw.thetellerBaseUrl === "https://prod.theteller.net" ? "live" : "test")}
+              onChange={(id) => setTEnv(id as "test" | "live")}
+            />
+          </div>
+          <Button variant="secondary" size="sm" block loading={tTestBusy} onClick={() => void testTheteller()}>
+            Test Theteller connection
+          </Button>
+          {tTestResult ? <p role="status">{tTestResult}</p> : null}
+          <FormField label={`API user ${gw.thetellerApiUser ? `(${gw.thetellerApiUser})` : "(not set)"}`}>
+            <Input type="text" autoComplete="off" value={tApiUser} onChange={(e) => setTApiUser(e.target.value)} placeholder="Theteller API username" aria-label="Theteller API user" />
+          </FormField>
+          <FormField label={`API key ${gw.thetellerApiKey ? `(${gw.thetellerApiKey})` : "(not set)"}`}>
+            <Input type="password" autoComplete="off" value={tApiKey} onChange={(e) => setTApiKey(e.target.value)} placeholder="Paste new key to replace" aria-label="Theteller API key" />
+          </FormField>
+          <FormField label={`Merchant ID ${gw.thetellerMerchantId ? `(${gw.thetellerMerchantId})` : "(not set)"}`}>
+            <Input type="text" autoComplete="off" value={tMerchantId} onChange={(e) => setTMerchantId(e.target.value)} placeholder="TTM-00000000" aria-label="Theteller Merchant ID" />
+          </FormField>
+          <FormField label={`Callback secret ${gw.thetellerCallbackSecret ? `(${gw.thetellerCallbackSecret})` : "(not set)"}`}>
+            <Input type="password" autoComplete="off" value={tCallbackSecret} onChange={(e) => setTCallbackSecret(e.target.value)} placeholder="Paste new secret to replace" aria-label="Theteller callback secret" />
+          </FormField>
+          <Button variant="primary" size="sm" block loading={busy} onClick={saveThetellerKeys}>
+            Save Theteller keys
+          </Button>
+          <div className="st-gw-url">
+            <p className="st-gw-url-label">Callback URL — register this with PaySwitch. Replace &lt;secret&gt; with the callback secret above.</p>
+            <code className="st-gw-url-value">{gw.thetellerCallbackUrl}</code>
+            <CopyButton text={gw.thetellerCallbackUrl} label="Copy Theteller callback URL" />
+          </div>
+        </div>
+      ) : (
+        <div className="st-gw-section">
+          <h3 className="st-gw-title">PayTeller (hosted checkout)</h3>
+          <p className="st-gw-desc">The customer confirms and pays on PayTeller&apos;s checkout page.</p>
+          <Button variant="secondary" size="sm" block loading={testBusy} onClick={() => void test()}>
+            Test connection
+          </Button>
+          {testResult ? <p role="status">{testResult}</p> : null}
+          <FormField label={`API key ${gw.paytellerApiKey ? `(${gw.paytellerApiKey})` : "(not set)"}`}>
+            <Input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Paste new key to replace" aria-label="PayTeller API key" />
+          </FormField>
+          <FormField label={`Merchant ID ${gw.paytellerMerchantId ? `(${gw.paytellerMerchantId})` : "(not set)"}`}>
+            <Input type="text" autoComplete="off" value={merchantId} onChange={(e) => setMerchantId(e.target.value)} placeholder="TTM-00000000" aria-label="PayTeller Merchant ID" />
+          </FormField>
+          <FormField label={`Username ${gw.paytellerUsername ? `(${gw.paytellerUsername})` : "(not set)"}`}>
+            <Input type="text" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="PayTeller username" aria-label="PayTeller username" />
+          </FormField>
+          <FormField label={`Webhook secret ${gw.paytellerWebhookSecret ? `(${gw.paytellerWebhookSecret})` : "(not set)"}`}>
+            <Input type="password" autoComplete="off" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} placeholder="Paste new secret to replace" aria-label="PayTeller webhook secret" />
+          </FormField>
+          <Button variant="primary" size="sm" block loading={busy} onClick={saveKeys}>
+            Save keys
+          </Button>
+          <div className="st-gw-url">
+            <p className="st-gw-url-label">Webhook URL — register this in PayTeller Settings before the first payment.</p>
+            <code className="st-gw-url-value">{gw.webhookUrl}</code>
+            <CopyButton text={gw.webhookUrl} label="Copy webhook URL" />
+          </div>
+        </div>
+      )}
       <ConfirmDialog
         open={flipTarget !== null}
         onClose={() => setFlipTarget(null)}

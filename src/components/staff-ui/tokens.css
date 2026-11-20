@@ -2066,3 +2066,20 @@
   overflow-wrap: anywhere;
   overflow-x: auto;
 }
+
+/* Owner Gateway section — one gateway at a time (Nov 2026 layout fix).
+   The selector is the switcher: only the selected gateway's section
+   renders, so the active gateway's keys are never buried under an
+   inactive gateway's fields. */
+.staff .st-gw { display: flex; flex-direction: column; gap: 16px; }
+.staff .st-gw > * { margin: 0; }
+.staff .st-gw-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.staff .st-gw-section { display: flex; flex-direction: column; gap: 12px; }
+.staff .st-gw-section > * { margin: 0; }
+.staff .st-gw-title { font-size: 15px; font-weight: 800; line-height: 1.3; }
+.staff .st-gw-desc { font-size: 13px; color: var(--muted); }
+.staff .st-gw-env { display: flex; flex-direction: column; gap: 8px; }
+.staff .st-gw-env-label { font-size: var(--fs-label); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.staff .st-gw-url { display: flex; flex-direction: column; gap: 8px; }
+.staff .st-gw-url-label { font-size: 13px; color: var(--muted); }
+.staff .st-gw-url-value { display: block; font-family: var(--mono); font-size: 12px; line-height: 1.6; word-break: break-all; overflow-wrap: anywhere; background: var(--steel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; color: var(--ink); }

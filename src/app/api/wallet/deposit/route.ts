@@ -32,6 +32,10 @@ import { resolveDepositNumber } from "@/lib/deposit-number";
 // PayTeller still stops it — a blocked user deposits nothing while
 // the block lasts.
 import { assertPaymentsNotBlocked, PaymentBlockedError } from "@/lib/payment-blocks";
+// Demo-credit hole (Nov 2026, full live everywhere, no more demo):
+// the live Ghana gateway in force — the demo cashier only runs while
+// the owner has explicitly picked demo. Read live on every call.
+import { getGhMomoGateway } from "@/lib/gateway-settings";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -53,6 +57,29 @@ const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
+    // Demo-credit hole (Nov 2026, full live everywhere, no more demo):
+    // this endpoint credits real cash with no provider behind it, so
+    // it only runs while the owner has explicitly picked demo. When
+    // the Ghana gateway is payteller or theteller, a direct call here
+    // 403s — no credit, no wallet change, no failure recorded toward
+    // the payment block (a gateway-closed call is not a deposit
+    // failure). The gateway is read live on every call, never cached,
+    // so flipping the toggle takes effect immediately. A DB without
+    // the GatewaySettings table yet (PayTeller SQL not run) reads as
+    // demo, so the endpoint keeps working there as today.
+    let gateway: "demo" | "payteller" | "theteller";
+    try {
+      gateway = await getGhMomoGateway();
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "P2021" || code === "P2022") gateway = "demo";
+      else throw err;
+    }
+    if (gateway !== "demo") {
+      return fail("Demo deposits are off while the live gateway is active", 403, {
+        code: "demo_deposits_disabled",
+      });
+    }
     const body = await readJson<{ amount?: number; method?: string }>(req);
     if (!body) return fail("Invalid JSON body");
     const amount = Number(body.amount);

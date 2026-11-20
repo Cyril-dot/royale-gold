@@ -22,6 +22,9 @@ export default function WalletPage() {
   // conversions have no GET endpoint (and withdrawals are not tracked at
   // all), so they cannot be listed.
   const [history, setHistory] = useState<GameHistoryRow[] | null>(null);
+  // Wallet tabs (Nov 2026): Deposit first and default, Withdrawal
+  // second. Presentation only — the tabs switch which section shows.
+  const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   useEffect(() => {
     if (!user) return;
     let live = true;
@@ -75,16 +78,29 @@ export default function WalletPage() {
           <WalletCard holder={user.name} last4={last4} balance={cardBalance} balanceLabel={cardLabel} />
           <CoinCard holder={user.name} coins={fmtCoins(coins)} />
         </div>
-        {/* Round 12: SIM mode is demo-only — the action is an instant
-            SIM top-up, never a real-money deposit. */}
-        {mode === "SIM" ? (
-          <button className="btn btn-gold wallet-dep" type="button" onClick={topUpSim}>Top up SIM +{sym} 1,000</button>
-        ) : (
-          <button className="btn btn-gold wallet-dep" type="button" onClick={() => setDepositOpen(true)}>Deposit</button>
-        )}
-        {mode === "SIM" && (
-          <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
-        )}
+        {/* Wallet tabs (Nov 2026): Deposit first and default, Withdrawal
+            second. The Deposit tab holds the same deposit action (the
+            modal in REAL, SIM top-up in SIM); the Withdrawal tab holds
+            the same WithdrawSection — neither flow changed, only how
+            you switch between them. */}
+        <div className="wallet-tabs" role="tablist" aria-label="Deposit or withdraw">
+          <button type="button" role="tab" aria-selected={tab === "deposit"} className={tab === "deposit" ? "on" : ""} onClick={() => setTab("deposit")}>Deposit</button>
+          <button type="button" role="tab" aria-selected={tab === "withdraw"} className={tab === "withdraw" ? "on" : ""} onClick={() => setTab("withdraw")}>Withdrawal</button>
+        </div>
+        {tab === "deposit" ? (
+          <div className="wallet-tab-panel">
+            {/* Round 12: SIM mode is demo-only — the action is an instant
+                SIM top-up, never a real-money deposit. */}
+            {mode === "SIM" ? (
+              <button className="btn btn-gold wallet-dep" type="button" onClick={topUpSim}>Top up SIM +{sym} 1,000</button>
+            ) : (
+              <button className="btn btn-gold wallet-dep" type="button" onClick={() => setDepositOpen(true)}>Deposit</button>
+            )}
+            {mode === "SIM" && (
+              <p className="rg48-mini wallet-note">SIM is play money — top up anytime, it never touches your real cash.</p>
+            )}
+          </div>
+        ) : null}
         {/* Win logic (Nov 2026): the Stake/Winnings split of the cash
             balance — REAL mode only (in SIM mode the card shows the SIM
             balance). Shown once the wallet split has loaded. */}
@@ -103,14 +119,19 @@ export default function WalletPage() {
           </section>
         )}
         {/* Withdraw (Nov 2026): the wallet page had no withdraw option —
-            the same request form as the Convert page, same endpoint. */}
-        <WithdrawSection
-          cash={cash}
-          stake={wallet?.stake}
-          winnings={wallet?.winnings}
-          fiat={fiat}
-          sym={sym}
-        />
+            the same request form as the Convert page, same endpoint.
+            Lives under the Withdrawal tab now; the form is untouched. */}
+        {tab === "withdraw" ? (
+          <div className="wallet-tab-panel">
+            <WithdrawSection
+              cash={cash}
+              stake={wallet?.stake}
+              winnings={wallet?.winnings}
+              fiat={fiat}
+              sym={sym}
+            />
+          </div>
+        ) : null}
         {/* Round 31: History — recent game rounds (stake out, payout in),
             the only wallet movement an existing endpoint returns. */}
         <section className="wallet-hist" aria-label="Wallet history">
