@@ -30,6 +30,9 @@ import { creditPaytellerPayment } from "@/lib/payteller-deposit";
 // failed is a genuine failure — recorded here so two in 24h trip
 // the block. Never throws into the webhook flow.
 import { recordDepositFailure } from "@/lib/payment-blocks";
+// Deposit MoMo number (Nov 2026): the failure keys on the saved
+// deposit number first, the login phone second.
+import { resolveDepositNumber } from "@/lib/deposit-number";
 
 export async function POST(req: Request) {
   try {
@@ -106,9 +109,12 @@ export async function POST(req: Request) {
           where: { id: payment.userId },
           select: { phone: true },
         });
+        // Deposit MoMo number (Nov 2026): the failure keys on the saved
+        // deposit number first, the login phone second.
+        const depositNumber = await resolveDepositNumber(payment.userId, owner?.phone ?? null);
         await recordDepositFailure({
           userId: payment.userId,
-          phoneNumber: owner?.phone ?? null,
+          phoneNumber: depositNumber,
           depositRef: payment.reference,
         });
       }

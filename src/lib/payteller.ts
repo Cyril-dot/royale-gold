@@ -146,6 +146,44 @@ export interface CreatePaymentInput {
   requestFn?: FetchFn;
 }
 
+/**
+ * POST /api/v1/payments/initiate — the "initiate" alias for payment
+ * creation (docs §02). Same authentication, body, response,
+ * duplicate-reference protection and HOSTED CHECKOUT as /payments:
+ * creating a payment does NOT send a phone prompt or charge the
+ * customer — the prompt is triggered from the checkout page, where
+ * the customer confirms their MoMo number. There is no PayTeller
+ * endpoint that sends a MoMo prompt straight to a phone from a
+ * server call (no phone field exists in the create body). This
+ * alias is used by the create route so the code reads as an
+ * initiation, not a checkout-page build.
+ */
+export async function initiatePayment({
+  reference,
+  amountGhs,
+  email,
+  description,
+  returnUrl,
+  requestFn,
+}: CreatePaymentInput): Promise<PaytellerPaymentResponse> {
+  if (!reference) throw providerError("Reference is required", 400, "reference_required");
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
+    throw providerError("A valid customer email is required", 400, "invalid_email");
+  }
+  return request("/payments/initiate", {
+    method: "POST",
+    requestFn,
+    body: {
+      amount: toAmountString(amountGhs),
+      currency: "GHS",
+      reference: String(reference),
+      customer_email: String(email).trim(),
+      description: String(description || "Royale Gold wallet deposit").slice(0, 250),
+      ...(returnUrl ? { return_url: String(returnUrl) } : {}),
+    },
+  });
+}
+
 export async function createPayment({
   reference,
   amountGhs,

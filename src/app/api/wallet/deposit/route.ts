@@ -22,6 +22,10 @@ import { enforceFixedDeposit } from "@/lib/fixed-deposit";
 // deposit x the owner-set rate in force now (no-op when the rate is
 // OFF or the tables do not exist yet).
 import { getWinnings, splitCash, topUpAllowance } from "@/lib/win-logic";
+// Deposit MoMo number (Nov 2026): the block keys on the saved number
+// first, the login phone second. The demo path never asks for or
+// saves a number — it is play money, no prompt goes out.
+import { resolveDepositNumber } from "@/lib/deposit-number";
 // Payment blocks (Nov 2026): two failed PayTeller deposits in 24h
 // blocks the account AND the number from deposits for 24h. The demo
 // path cannot record a failure (no provider), but a block earned on
@@ -61,11 +65,14 @@ export async function POST(req: Request) {
     const me = await prisma.user.findUnique({ where: { id: user.id } });
     // P0 Batch 1 (A8): a blocked player cannot deposit.
     if (me?.blockedAt) return fail("This account is blocked and cannot deposit", 403);
+    // Deposit MoMo number (Nov 2026): the block keys on the saved
+    // deposit number first, the login phone second.
+    const depositNumber = await resolveDepositNumber(user.id, me?.phone ?? null);
     // Payment blocks (Nov 2026): a 24h deposit block earned on
     // PayTeller stops the demo path too. The 403 carries
     // code + blockedUntil so the modal shows the card, not a line.
     try {
-      await assertPaymentsNotBlocked({ userId: user.id, phoneNumber: me?.phone ?? null });
+      await assertPaymentsNotBlocked({ userId: user.id, phoneNumber: depositNumber });
     } catch (err) {
       if (err instanceof PaymentBlockedError) {
         return fail(err.message, 403, { code: err.code, blockedUntil: err.blockedUntil });

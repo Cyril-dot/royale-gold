@@ -1,9 +1,17 @@
 // Deposit modal — demo cashier (POST /api/wallet/deposit) by default.
 // Phase 2 PayTeller (Nov 2026): when the player's fiat is GHS and the
 // owner toggle has Ghana MoMo on PayTeller, the MTN / Telecel /
-// AirtelTigo buttons start a PayTeller hosted checkout instead (POST
-// /api/wallet/payteller/create → redirect to checkout_url). Card stays
-// demo, and NGN users never see the PayTeller path.
+// AirtelTigo buttons start a PayTeller payment instead (POST
+// /api/wallet/payteller/create → redirect to checkout_url, where the
+// MoMo prompt is triggered — PayTeller has no direct-push endpoint).
+// The confirm card's "Deposit" opens a Yes/No popup first; Yes
+// initiates, No goes back and sends nothing. Card stays demo, and
+// NGN users never see the PayTeller path.
+// Deposit MoMo number (Nov 2026): set ONCE on the first PayTeller
+// deposit, saved to the account, reused after that — the confirm card
+// and the popup show the saved number, and the number is changed only
+// on the Account page. The server enforces the saved number over
+// anything the client sends.
 // PayTeller needs a customer email: a phone-only GHS user is prompted
 // to add one here first (POST /api/wallet/payteller/email — the phone
 // stays on the account); until then PayTeller is blocked with a clear
@@ -55,9 +63,11 @@ export default function DepositModal() {
   // on submit (a block that landed after the modal opened).
   const [blockedUntil, setBlockedUntil] = useState<string | null>(null);
   // Pre-pay confirm (Nov 2026, PayTeller only): "confirm" shows the
-  // card with the real totals before anything is sent. The demo path
-  // never enters it — play money, no real MoMo charge to confirm.
-  const [step, setStep] = useState<"form" | "confirm">("form");
+  // card with the real totals before anything is sent; "ask" is the
+  // Yes/No popup — Yes initiates the payment, No goes back to the
+  // confirm card and sends nothing. The demo path never enters
+  // either — play money, no real MoMo charge to confirm.
+  const [step, setStep] = useState<"form" | "confirm" | "ask">("form");
   // Phase 2 PayTeller (Nov 2026): the live Ghana gateway, read from the
   // public config when the modal opens. null = not loaded yet (treated
   // as demo until it arrives, so the button never flickers gateways).
@@ -79,6 +89,15 @@ export default function DepositModal() {
   // owner). Null = no referring admin / no pct on file — the sentence is
   // hidden then instead of showing a blank %.
   const [refPct, setRefPct] = useState<number | null>(null);
+  // Deposit MoMo number (Nov 2026): the number saved on the account
+  // (null = never set — this is the first PayTeller deposit, so the
+  // form asks for it once). Fetched fresh every open. The demo path
+  // never reads it — no prompt goes out there.
+  const [savedNumber, setSavedNumber] = useState<string | null>(null);
+  // The number typed on a first PayTeller deposit (only shown when
+  // nothing is saved yet). Sent with the create call; the server
+  // saves it, then ignores any typed number on later deposits.
+  const [depPhone, setDepPhone] = useState("");
   useEffect(() => {
     if (!depositOpen || !user?.referralCodeUsed) { setRefPct(null); return; }
     let live = true;
@@ -111,6 +130,12 @@ export default function DepositModal() {
     api<{ blocked: boolean; blockedUntil?: string | null }>("/api/wallet/payment-block")
       .then((r) => { if (live) setBlockedUntil(r.blocked ? r.blockedUntil ?? null : null); })
       .catch(() => { if (live) setBlockedUntil(null); });
+    // Deposit MoMo number (Nov 2026): the saved number, or null when
+    // this is the first PayTeller deposit. A missing-table prod
+    // answers null — the form asks once, as designed.
+    api<{ depositPhone?: string | null }>("/api/wallet/deposit-number")
+      .then((r) => { if (live) setSavedNumber(r.depositPhone ?? null); })
+      .catch(() => { if (live) setSavedNumber(null); });
     return () => { live = false; };
   }, [depositOpen, fiat]);
 
@@ -134,9 +159,12 @@ export default function DepositModal() {
     }
     return null;
   }
-
   const paytellerActive =
     fiat === "GHS" && gateway === "payteller" && (MOMO_METHODS as readonly string[]).includes(method);
+  // The Yes/No popup can only be reached from the confirm card; if
+  // the gateway or method changed under it, fall back to the form
+  // rather than asking about a payment that can no longer start.
+  const askOpen = step === "ask" && paytellerActive;
   // What the customer authorizes on PayTeller: principal + the 2%
   // Theteller MoMo fee (docs §05). The wallet is credited the full
   // principal once PayTeller confirms — the fee is on top, not out of it.
@@ -144,6 +172,16 @@ export default function DepositModal() {
   // The 2% Theteller MoMo fee, on top of the principal — shown as its
   // own row on the confirm card so the total is never a surprise.
   const paytellerFee = Math.round((paytellerTotal - amount) * 100) / 100;
+  // Deposit MoMo number (Nov 2026): the saved number when one is set,
+  // otherwise the number typed on this first deposit.
+  const numberToUse = savedNumber ?? depPhone.trim();
+
+  /** Ghana MoMo number: 10 digits starting with 0 (054..., 024...). */
+  const normalizeDepPhone = (raw: string): string | null => {
+    const digits = raw.replace(/[\s()-]/g, "");
+    const local = digits.startsWith("+233") ? `0${digits.slice(4)}` : digits;
+    return /^0\d{9}$/.test(local) ? local : null;
+  };
 
   const saveEmail = async () => {
     const v = emailInput.trim();
@@ -170,6 +208,13 @@ export default function DepositModal() {
     if (paytellerActive) {
       if (!user?.email) {
         setErr("Add an email below first — PayTeller needs it for your receipt.");
+        return;
+      }
+      // Deposit MoMo number (Nov 2026): first PayTeller deposit needs
+      // the number typed once — the server saves it. Later deposits
+      // reuse the saved number and never ask again.
+      if (!savedNumber && !normalizeDepPhone(depPhone)) {
+        setErr("Enter a valid Ghana MoMo number (e.g. 0244 000 000)");
         return;
       }
       // Pre-pay confirm (Nov 2026): show the card with the real
@@ -201,17 +246,21 @@ export default function DepositModal() {
     }
   };
 
-  // PayTeller confirm step: only reached from the confirm card's
-  // "Yes, go to checkout" — Cancel never calls this, so Cancel sends
-  // nothing. A 403 with code "payment_blocked" swaps the card for
-  // the blocked card; any other failure goes back to the form with
-  // the plain error line.
+  // PayTeller confirm step: only reached from "Yes" on the ask
+  // popup — Cancel never calls this, and No goes back to the confirm
+  // card, so neither sends anything. A 403 with code
+  // "payment_blocked" swaps the card for the blocked card; any other
+  // failure goes back to the form with the plain error line.
   const confirmPayteller = async () => {
     setBusy(true);
     try {
+      // Deposit MoMo number (Nov 2026): the saved number when one is
+      // set, otherwise the number typed on this first deposit — the
+      // server saves it. A typed number is ignored server-side once
+      // one is saved, so a forged body phone can never move the push.
       const r = await api<{ checkoutUrl: string; reference: string }>("/api/wallet/payteller/create", {
         method: "POST",
-        body: JSON.stringify({ amount, method }),
+        body: JSON.stringify({ amount, method, phone: numberToUse || undefined }),
       });
       window.location.href = r.checkoutUrl;
     } catch (ex) {
@@ -238,22 +287,31 @@ export default function DepositModal() {
               <p className="sub" style={{ textAlign: "center", marginBottom: 16 }}>If you think this is a mistake, contact support.</p>
               <button className="btn btn-gold" type="button" style={{ width: "100%" }} onClick={() => setDepositOpen(false)}>Got it</button>
             </>
+          ) : askOpen ? (
+            <>
+              <h3>Send the <em>prompt?</em></h3>
+              <p className="sub" style={{ textAlign: "center" }}>Send the MoMo prompt to <b>{numberToUse || "your MoMo number"}</b> for <b>{fmtMoney(paytellerTotal, fiat)}</b>?</p>
+              <div className="rg48-btnrow">
+                <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setStep("confirm")}>No</button>
+                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmPayteller()}>{busy ? "Sending…" : "Yes"}</button>
+              </div>
+            </>
           ) : step === "confirm" && paytellerActive ? (
             <>
               <h3>Confirm your <em>deposit</em></h3>
-              <p className="sub">Check this before the checkout opens.</p>
+              <p className="sub">Check this before the prompt is sent.</p>
               <div className="rg48-bignum"><b>{fmtMoney(paytellerTotal, fiat)}</b><span>{fmtMoney(amount, fiat)} will be added to your wallet</span></div>
               <div className="rg48-rows">
                 <div><span>Deposit</span><strong>{fmtMoney(amount, fiat)}</strong></div>
                 <div><span>MoMo fee (2%)</span><strong>{fmtMoney(paytellerFee, fiat)}</strong></div>
                 <div className="rg48-total"><span>Total from your MoMo</span><strong>{fmtMoney(paytellerTotal, fiat)}</strong></div>
                 <div><span>Network</span><strong>{NETWORK_LABEL[method] ?? method}</strong></div>
-                <div><span>Number</span><strong>{user?.phone ?? "You'll enter it on the checkout page"}</strong></div>
+                <div><span>Number</span><strong>{numberToUse || "You'll enter it on the checkout page"}</strong></div>
               </div>
               <p className="rg48-warn">Make sure you have at least <b>{fmtMoney(paytellerTotal, fiat)}</b> in your {NETWORK_LABEL[method] ?? method} wallet. If your balance is lower, the payment will fail.</p>
               <div className="rg48-btnrow">
                 <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setStep("form")}>Cancel</button>
-                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmPayteller()}>{busy ? "Opening checkout…" : "Checkout"}</button>
+                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => setStep("ask")}>Deposit</button>
               </div>
             </>
           ) : (
@@ -274,6 +332,16 @@ export default function DepositModal() {
                 ))}
               </div>
             </div>
+            {paytellerActive && savedNumber === null && (
+              <div className="rg48-f">
+                <label htmlFor="depPhone">MoMo number (first deposit only)</label>
+                <input id="depPhone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0244 000 000" value={depPhone} onChange={(e) => setDepPhone(e.target.value)} />
+                <p className="sub">The prompt goes to this number. It is saved to your account — later deposits reuse it, and you change it only on your Account page.</p>
+              </div>
+            )}
+            {paytellerActive && savedNumber !== null && (
+              <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Deposit number: <b>{savedNumber}</b> — change it on your Account page.</p>
+            )}
             {paytellerActive && !user?.email && (
               <div className="rg48-f">
                 <label htmlFor="depEmail">Email for your PayTeller receipt</label>

@@ -154,6 +154,36 @@ export default function AccountPage() {
   // page. The loyalty birthday bonus pays on it, once per year.
   const [birthday, setBirthday] = useState("");
   const [birthdayBusy, setBirthdayBusy] = useState(false);
+  // Deposit MoMo number (Nov 2026): the ONLY place it can be changed.
+  // Set once on the first PayTeller deposit, reused after that.
+  // depNumber = the saved number (null = never set yet).
+  const [depNumber, setDepNumber] = useState<string | null>(null);
+  const [depNumberInput, setDepNumberInput] = useState("");
+  const [depNumberBusy, setDepNumberBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api<{ depositPhone?: string | null }>("/api/wallet/deposit-number")
+      .then((r) => { if (live) { setDepNumber(r.depositPhone ?? null); setDepNumberInput(r.depositPhone ?? ""); } })
+      .catch(() => { if (live) setDepNumber(null); });
+    return () => { live = false; };
+  }, []);
+  const saveDepNumber = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDepNumberBusy(true);
+    try {
+      const r = await api<{ depositPhone: string }>("/api/wallet/deposit-number", {
+        method: "POST",
+        body: JSON.stringify({ phone: depNumberInput }),
+      });
+      setDepNumber(r.depositPhone);
+      setDepNumberInput(r.depositPhone);
+      toast(`Deposit number saved — ${r.depositPhone}`, "win");
+    } catch (ex) {
+      toast(ex instanceof Error ? ex.message : "Could not save deposit number", "lose");
+    } finally {
+      setDepNumberBusy(false);
+    }
+  };
   useEffect(() => { setBirthday(user?.birthday ?? ""); }, [user?.birthday]);
 
   const saveBirthday = async (e: React.FormEvent) => {
@@ -448,6 +478,19 @@ export default function AccountPage() {
           <form onSubmit={saveBirthday}>
             <div className="rg48-f"><label htmlFor="acBirthday">Your birthday (optional)</label><input id="acBirthday" type="date" value={birthday} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setBirthday(e.target.value)} /></div>
             <button className="btn btn-gold" type="submit" disabled={birthdayBusy}>{birthdayBusy ? "Saving…" : "Save birthday"}</button>
+          </form>
+        </section>
+
+        {/* Deposit MoMo number (Nov 2026): the number PayTeller MoMo
+            prompts go to. Set once on the first PayTeller deposit and
+            reused after that — this page is the ONLY place it changes.
+            The deposit flow never asks for it again. */}
+        <section className="ac-sec" aria-label="Deposit MoMo number">
+          <h3>Deposit MoMo number</h3>
+          <form onSubmit={saveDepNumber}>
+            <div className="rg48-f"><label htmlFor="acDepNumber">Your MoMo number for deposits</label><input id="acDepNumber" type="tel" inputMode="tel" autoComplete="tel" placeholder="0244 000 000" value={depNumberInput} onChange={(e) => setDepNumberInput(e.target.value)} /></div>
+            <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>{depNumber === null ? "Not set yet — you will set it on your first PayTeller deposit, then every deposit reuses it." : `Prompts go to ${depNumber}. Change it here any time.`}</p>
+            <button className="btn btn-gold" type="submit" disabled={depNumberBusy}>{depNumberBusy ? "Saving…" : "Save deposit number"}</button>
           </form>
         </section>
 

@@ -1,8 +1,13 @@
 // Phase 2 PayTeller (Nov 2026): start a Ghana MoMo deposit through
-// PayTeller hosted checkout. Creates the local PaytellerPayment row,
-// then the PayTeller payment — the customer is redirected to the
-// returned checkout_url and pays there. No money moves here: the wallet
-// only credits from the webhook / status poll after verification.
+// PayTeller. Creates the local PaytellerPayment row, then initiates
+// the PayTeller payment (POST /payments/initiate — the initiate alias,
+// docs §02: same contract as /payments, hosted checkout). The
+// customer is redirected to the returned checkout_url and the MoMo
+// prompt is triggered from the checkout page — PayTeller offers no
+// server-side direct-push endpoint, so there is no way to send the
+// prompt straight to the phone without the checkout page. No money
+// moves here: the wallet only credits from the webhook / status poll
+// after verification.
 //
 // Guards, in order: signed in, not blocked, GHS account only (NGN users
 // never reach this), an email on file (PayTeller requires customer_email
@@ -21,17 +26,27 @@ import { getGhMomoGateway } from "@/lib/gateway-settings";
 // enforcement, see the check below.
 import { enforceFixedDeposit } from "@/lib/fixed-deposit";
 import {
-  createPayment,
+  initiatePayment,
   PaytellerError,
   toAmountString,
   type PaytellerPaymentResponse,
 } from "@/lib/payteller";
+// Deposit MoMo number (Nov 2026): set once on the first PayTeller
+// deposit, reused after that. The block and the failure log key on
+// the saved number first, the login phone second.
+import {
+  DEPOSIT_NUMBER_SQL,
+  getDepositPhone,
+  normalizeDepositPhone,
+  setDepositPhone,
+} from "@/lib/deposit-number";
 // Payment blocks (Nov 2026): two failed PayTeller deposits in 24h
 // blocks the account AND the number from deposits for 24h. The guard
 // runs before any provider call; a start the provider rejects records
 // a failure (the 409 resume does NOT — the prompt is still live).
 import {
   assertPaymentsNotBlocked,
+  normalizePhone,
   PaymentBlockedError,
   recordDepositFailure,
 } from "@/lib/payment-blocks";
@@ -51,7 +66,7 @@ function paytellerFail(err: unknown) {
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
-    const body = await readJson<{ amount?: number; method?: string }>(req);
+    const body = await readJson<{ amount?: number; method?: string; phone?: string }>(req);
     if (!body) return fail("Invalid JSON body");
     const amount = Number(body.amount);
     const method = body.method ?? "";
@@ -62,11 +77,19 @@ export async function POST(req: Request) {
 
     const me = await prisma.user.findUnique({ where: { id: user.id } });
     if (me?.blockedAt) return fail("This account is blocked and cannot deposit", 403);
+    // Deposit MoMo number (Nov 2026): the SAVED number (table only)
+    // and the effective number (saved first, login phone second — the
+    // block keys on the effective one). They must stay separate: a
+    // login phone is NOT a saved deposit number, and treating it as
+    // one would skip the save below and leave the account with
+    // nothing saved — the next deposit would ask again.
+    const savedNumber = await getDepositPhone(user.id);
+    const depositNumber = savedNumber ?? normalizePhone(me?.phone ?? null);
     // Payment blocks (Nov 2026): the guard runs before any provider
     // call, so a blocked user never burns a PayTeller start. The 403
     // carries code + blockedUntil so the modal shows the card.
     try {
-      await assertPaymentsNotBlocked({ userId: user.id, phoneNumber: me?.phone ?? null });
+      await assertPaymentsNotBlocked({ userId: user.id, phoneNumber: depositNumber });
     } catch (err) {
       if (err instanceof PaymentBlockedError) {
         return fail(err.message, 403, { code: err.code, blockedUntil: err.blockedUntil });
@@ -116,6 +139,30 @@ export async function POST(req: Request) {
     const limitErr = await checkDepositLimit(user.id, amount, "GHS");
     if (limitErr) return fail(limitErr, 403);
 
+    // Deposit MoMo number (Nov 2026): the prompt goes to the SAVED
+    // number. A saved number is never overwritten by a free-typed one
+    // — a body phone is ignored when one is saved. First PayTeller
+    // deposit (nothing saved — a login phone does NOT count): the
+    // supplied number is required and saved to the account here,
+    // before any provider call. A missing DepositNumber table in prod
+    // fails closed with a 503 naming the SQL — the deposit cannot
+    // start without somewhere to save it.
+    let numberToUse = depositNumber;
+    if (!savedNumber) {
+      const supplied = normalizeDepositPhone(body.phone);
+      if (!supplied) {
+        return fail("Add your MoMo number — the prompt goes to the number you set on your first deposit");
+      }
+      try {
+        numberToUse = await setDepositPhone(user.id, supplied);
+      } catch (err) {
+        if (err instanceof Error && err.message.includes(DEPOSIT_NUMBER_SQL)) {
+          return fail(err.message, 503);
+        }
+        throw err;
+      }
+    }
+
     const reference = `RG-${randomBytes(8).toString("hex")}`;
     const returnUrl = `${RETURN_URL_BASE}?ref=${reference}`;
     const payment = await prisma.paytellerPayment.create({
@@ -130,7 +177,7 @@ export async function POST(req: Request) {
 
     let created: PaytellerPaymentResponse;
     try {
-      created = await createPayment({
+      created = await initiatePayment({
         reference,
         amountGhs: amount,
         email: me.email,
@@ -166,7 +213,7 @@ export async function POST(req: Request) {
       // never reaches here: a resume is not a failure.)
       await recordDepositFailure({
         userId: user.id,
-        phoneNumber: me?.phone ?? null,
+        phoneNumber: numberToUse,
         depositRef: reference,
       });
       return paytellerFail(err);

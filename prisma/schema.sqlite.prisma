@@ -620,6 +620,19 @@ model DepositFailure {
   @@index([userId, createdAt])
 }
 
+// Deposit MoMo number (Nov 2026): the number a PayTeller MoMo prompt
+// goes to, set ONCE on the user's first PayTeller deposit and reused
+// after that — changed only on the Account page, never re-typed per
+// deposit. Own table (not a User column) on purpose: getSessionUser
+// reads the whole User row unselected, so a User column missing in
+// prod would 500 every authenticated request; a missing table here
+// just degrades to "ask once" (P2021/P2022-safe reads below).
+model DepositNumber {
+  userId    String   @id
+  phone     String
+  updatedAt DateTime @updatedAt
+}
+
 // Phase 1 country-based (Nov 2026): gateway credentials + the Ghana
 // MoMo gateway toggle. Created NOW so Phase 2 (PayTeller) has
 // somewhere to write — the PayTeller fields stay EMPTY this phase.

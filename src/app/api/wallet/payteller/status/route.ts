@@ -16,6 +16,9 @@ import { creditPaytellerPayment } from "@/lib/payteller-deposit";
 // genuine failure. An "expired" checkout is NOT — the customer never
 // paid. Never throws into the poll flow.
 import { recordDepositFailure } from "@/lib/payment-blocks";
+// Deposit MoMo number (Nov 2026): the failure keys on the saved
+// deposit number first, the login phone second.
+import { resolveDepositNumber } from "@/lib/deposit-number";
 
 export async function GET(req: Request) {
   try {
@@ -61,9 +64,12 @@ export async function GET(req: Request) {
           where: { id: payment.userId },
           select: { phone: true },
         });
+        // Deposit MoMo number (Nov 2026): the failure keys on the saved
+        // deposit number first, the login phone second.
+        const depositNumber = await resolveDepositNumber(payment.userId, owner?.phone ?? null);
         await recordDepositFailure({
           userId: payment.userId,
-          phoneNumber: owner?.phone ?? null,
+          phoneNumber: depositNumber,
           depositRef: payment.reference,
         });
       }

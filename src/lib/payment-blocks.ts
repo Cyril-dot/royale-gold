@@ -31,9 +31,12 @@
 //
 // THE NUMBER: PayTeller never shares the number the customer types
 // on its hosted checkout, so number-level blocking keys on the MoMo
-// number on the ACCOUNT (User.phone). A block row carries that number,
-// so a second account using the same number is blocked too. Account-
-// level blocking covers PayTeller fully either way.
+// number on the ACCOUNT — the SAVED deposit number first (DepositNumber
+// table, set once on the first PayTeller deposit, changed only on the
+// Account page), the login phone (User.phone) second. A block row
+// carries that number, so a second account using the same number is
+// blocked too. Account-level blocking covers PayTeller fully either
+// way.
 //
 // PROD SAFETY: both tables do not exist in prod Neon until Chuks runs
 // rg-payment-blocks.sql. Every read here catches the missing-table
