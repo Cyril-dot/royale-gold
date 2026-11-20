@@ -225,13 +225,16 @@ export default function AuthModal() {
                   <p className="rg48-mini" style={{ marginBottom: 10 }}>✓ Email verified: <b>{otpEmail.trim().toLowerCase()}</b> · <button type="button" className="linklike" onClick={resetOtp}>Change</button></p>
                   <div className="rg48-f"><label htmlFor="rgName">Full name</label><input id="rgName" type="text" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required /></div>
                   <div className="rg48-f"><label htmlFor="rgPass">Password</label><input id="rgPass" type="password" placeholder="Pick a password" value={pass} onChange={(e) => setPass(e.target.value)} required minLength={6} /></div>
-                  <div className="rg48-f">
+                  <div className="rg48-f rg48-country">
                     <label htmlFor="rgCountry">Country</label>
-                    <select id="rgCountry" value={country} onChange={(e) => setCountry(e.target.value)} required>
-                      {COUNTRIES.map((c) => (
-                        <option key={c.code} value={c.code}>{c.name} ({c.currency})</option>
-                      ))}
-                    </select>
+                    <div className="rg48-country-wrap">
+                      <span className="rg48-country-flag" aria-hidden="true">{(COUNTRIES.find((c) => c.code === country) ?? COUNTRIES[0]).flag}</span>
+                      <select id="rgCountry" value={country} onChange={(e) => setCountry(e.target.value)} required>
+                        {COUNTRIES.map((c) => (
+                          <option key={c.code} value={c.code}>{c.flag} {c.name} ({c.currency})</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <div className="rg48-f"><label htmlFor="rgRef">Referral code (optional) — worth 5 free coins</label><input id="rgRef" type="text" placeholder="e.g. RG-DEMO1" value={ref} onChange={(e) => setRef(e.target.value.toUpperCase())} /></div>
                   <p className="rg48-err">{err}</p>

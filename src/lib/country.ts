@@ -53,10 +53,12 @@ export function symbolFor(currency: string | null | undefined): string {
   return CURRENCY_SYMBOLS[currency.toUpperCase()] ?? "GH₵";
 }
 
-/** Countries the register picker offers this phase — GH + NG only. */
+/** Countries the register picker offers this phase — GH + NG only.
+ * `flag` is the regional-indicator emoji — it renders as the real
+ * flag on phones, which is where the register form is previewed. */
 export const COUNTRIES = [
-  { code: "GH", name: "Ghana", currency: "GHS" },
-  { code: "NG", name: "Nigeria", currency: "NGN" },
+  { code: "GH", name: "Ghana", currency: "GHS", flag: "🇬🇭" },
+  { code: "NG", name: "Nigeria", currency: "NGN", flag: "🇳🇬" },
 ] as const;
 
 /** True when the country code is one the picker offers. */
