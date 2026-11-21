@@ -14,6 +14,13 @@
 // inactive gateway's fields. The selector is the switcher. Demo gets
 // one honest line instead of an empty gap. No logic changed: same
 // state, same save/test/flip handlers, same confirm dialog.
+// Nov 2026 Flutterwave v3 (Nigeria only): the same shape again for
+// Nigeria — the 3 Flutterwave fields (public key, secret key, webhook
+// secret hash) + the environment the keys belong to (test/live) +
+// the Nigeria toggle (Demo / Flutterwave) + Test connection + the
+// webhook URL to register in the Flutterwave dashboard. The two
+// gateways are independent: Ghana stays PayTeller, Nigeria is
+// Flutterwave, and neither save touches the other's fields.
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { useStore } from "../../lib/store";
@@ -31,6 +38,10 @@ import { useOwnerFetch } from "./useOwnerFetch";
 // toggle (Demo / PayTeller), a Test connection button, and the webhook
 // URL to register in PayTeller Settings. Blank fields keep the saved
 // value; the toggle alone never needs the encryption key.
+// Nov 2026 Flutterwave v3 (Nigeria only): the same again for Nigeria
+// — the 3 Flutterwave fields + the environment (test/live) + the
+// Nigeria toggle (Demo / Flutterwave) + Test connection + the webhook
+// URL to register in the Flutterwave dashboard.
 interface GatewaySettingsShape {
   ghMomoGateway: "demo" | "payteller";
   paytellerConfigured: boolean;
@@ -39,6 +50,13 @@ interface GatewaySettingsShape {
   paytellerUsername: string | null;
   paytellerWebhookSecret: string | null;
   webhookUrl: string;
+  ngGateway: "demo" | "flutterwave";
+  flutterwaveConfigured: boolean;
+  flutterwavePublicKey: string | null;
+  flutterwaveSecretKey: string | null;
+  flutterwaveWebhookSecret: string | null;
+  flutterwaveEnvironment: string | null;
+  flutterwaveWebhookUrl: string;
   updatedAt: string | null;
 }
 
@@ -52,6 +70,16 @@ export function OwnerGatewaySection() {
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState("");
   const [flipTarget, setFlipTarget] = useState<"demo" | "payteller" | null>(null);
+  // Nov 2026 Flutterwave v3 (Nigeria only): the Nigeria fields.
+  const [flwPublicKey, setFlwPublicKey] = useState("");
+  const [flwSecretKey, setFlwSecretKey] = useState("");
+  const [flwWebhookSecret, setFlwWebhookSecret] = useState("");
+  // "" = unchanged (the saved environment shows until the owner picks
+  // one); "test" | "live" once picked.
+  const [flwEnvironment, setFlwEnvironment] = useState("");
+  const [flwTestBusy, setFlwTestBusy] = useState(false);
+  const [flwTestResult, setFlwTestResult] = useState("");
+  const [flwFlipTarget, setFlwFlipTarget] = useState<"demo" | "flutterwave" | null>(null);
 
   const { data: gw, err, loading, reload } = useOwnerFetch<GatewaySettingsShape>(
     user ? "/api/owner/gateway" : null,
@@ -65,6 +93,10 @@ export function OwnerGatewaySection() {
       setMerchantId("");
       setUsername("");
       setWebhookSecret("");
+      setFlwPublicKey("");
+      setFlwSecretKey("");
+      setFlwWebhookSecret("");
+      setFlwEnvironment("");
       toast("Gateway settings saved", "win");
       reload();
     } catch (ex) {
@@ -100,6 +132,34 @@ export function OwnerGatewaySection() {
       setTestBusy(false);
     }
   };
+  // Nov 2026 Flutterwave v3 (Nigeria only): the Nigeria handlers.
+  const saveFlwKeys = () =>
+    void save({
+      flutterwavePublicKey: flwPublicKey,
+      flutterwaveSecretKey: flwSecretKey,
+      flutterwaveWebhookSecret: flwWebhookSecret,
+      flutterwaveEnvironment: flwEnvironment,
+    });
+  const flipNg = (g: "demo" | "flutterwave") => {
+    if (!gw || g === gw.ngGateway) return;
+    if (g === "flutterwave" && !gw.flutterwaveConfigured) {
+      toast("Save the 3 Flutterwave keys first (or set them as env vars), then test the connection", "lose");
+      return;
+    }
+    setFlwFlipTarget(g);
+  };
+  const testFlw = async () => {
+    setFlwTestBusy(true);
+    setFlwTestResult("");
+    try {
+      const r = await api<{ authenticated: boolean }>("/api/owner/gateway/flutterwave-test", { method: "POST" });
+      setFlwTestResult(r.authenticated ? "Connected — Flutterwave accepted the secret key." : "Flutterwave did not confirm these credentials.");
+    } catch (ex) {
+      setFlwTestResult(ex instanceof Error ? ex.message : "Connection test failed");
+    } finally {
+      setFlwTestBusy(false);
+    }
+  };
   if (loading) return <Skeleton lines={5} title />;
   if (err) return <ErrorState text={err} onRetry={reload} />;
   if (!gw) return null;
@@ -109,7 +169,16 @@ export function OwnerGatewaySection() {
     flipTarget === "payteller"
       ? "New Ghana MoMo deposits will go through PayTeller's hosted checkout instead of the demo flow."
       : "New Ghana MoMo deposits will go through the demo flow instead of a live gateway.";
+  // Nov 2026 Flutterwave v3 (Nigeria only): the Nigeria flip dialog.
+  const flwGatewayLabel = gw.ngGateway === "flutterwave" ? "Flutterwave" : "Demo";
+  const flwFlipLabel = flwFlipTarget === "flutterwave" ? "Flutterwave" : "Demo";
+  const flwFlipBody =
+    flwFlipTarget === "flutterwave"
+      ? "New Nigeria deposits will go through Flutterwave's hosted checkout instead of the demo flow."
+      : "New Nigeria deposits will go through the demo flow instead of a live gateway.";
+  const flwEnvValue = flwEnvironment || gw.flutterwaveEnvironment || "test";
   return (
+    <>
     <div className="st-gw">
       <p className="st-gw-status">
         <b>Ghana MoMo gateway</b>{" "}
@@ -185,5 +254,90 @@ export function OwnerGatewaySection() {
         busy={busy}
       />
     </div>
+    {/* Nov 2026 Flutterwave v3 (Nigeria only): the Nigeria gateway —
+        the same one-at-a-time shape as Ghana, independent of it. */}
+    <div className="st-gw">
+      <p className="st-gw-status">
+        <b>Nigeria gateway</b>{" "}
+        {gw.ngGateway === "flutterwave" ? (
+          gw.flutterwaveConfigured ? (
+            <Badge variant="ok">Flutterwave keys saved</Badge>
+          ) : (
+            <Badge variant="warn">No keys</Badge>
+          )
+        ) : (
+          <Badge variant="muted">Play money</Badge>
+        )}
+      </p>
+      <Segmented
+        label="Nigeria gateway"
+        items={[
+          { id: "demo", label: "Demo" },
+          { id: "flutterwave", label: "Flutterwave" },
+        ]}
+        value={gw.ngGateway}
+        onChange={(id) => flipNg(id as "demo" | "flutterwave")}
+      />
+      {gw.ngGateway === "demo" ? (
+        <div className="st-gw-section">
+          <h3 className="st-gw-title">Demo (play money)</h3>
+          <p className="st-gw-desc">Deposits credit instantly. No real payment, no keys needed.</p>
+        </div>
+      ) : (
+        <div className="st-gw-section">
+          <h3 className="st-gw-title">Flutterwave (hosted checkout)</h3>
+          <p className="st-gw-desc">The customer confirms and pays on Flutterwave&apos;s checkout page — card, bank transfer, USSD or bank account. The customer pays exactly the deposit; Flutterwave&apos;s fee is on us.</p>
+          <Button variant="secondary" size="sm" block loading={flwTestBusy} onClick={() => void testFlw()}>
+            Test connection
+          </Button>
+          {flwTestResult ? <p role="status">{flwTestResult}</p> : null}
+          <Segmented
+            label="Flutterwave environment"
+            items={[
+              { id: "test", label: "Test" },
+              { id: "live", label: "Live" },
+            ]}
+            value={flwEnvValue}
+            onChange={(id) => setFlwEnvironment(id as "test" | "live")}
+          />
+          <p className="st-gw-desc">The keys below belong to the {flwEnvValue === "live" ? "live" : "test"} environment — test keys start FLWSECK_TEST-, live keys start FLWSECK-.</p>
+          <FormField label={`Public key ${gw.flutterwavePublicKey ? `(${gw.flutterwavePublicKey})` : "(not set)"}`}>
+            <Input type="text" autoComplete="off" value={flwPublicKey} onChange={(e) => setFlwPublicKey(e.target.value)} placeholder="FLWPUBK-..." aria-label="Flutterwave public key" />
+          </FormField>
+          <FormField label={`Secret key ${gw.flutterwaveSecretKey ? `(${gw.flutterwaveSecretKey})` : "(not set)"}`}>
+            <Input type="password" autoComplete="off" value={flwSecretKey} onChange={(e) => setFlwSecretKey(e.target.value)} placeholder="FLWSECK-... (or FLWSECK_TEST-...)" aria-label="Flutterwave secret key" />
+          </FormField>
+          <FormField label={`Webhook secret ${gw.flutterwaveWebhookSecret ? `(${gw.flutterwaveWebhookSecret})` : "(not set)"}`}>
+            <Input type="password" autoComplete="off" value={flwWebhookSecret} onChange={(e) => setFlwWebhookSecret(e.target.value)} placeholder="Secret hash from Flutterwave Settings → Webhooks" aria-label="Flutterwave webhook secret" />
+          </FormField>
+          <Button variant="primary" size="sm" block loading={busy} onClick={saveFlwKeys}>
+            Save keys
+          </Button>
+          <div className="st-gw-url">
+            <p className="st-gw-url-label">Webhook URL — register this in Flutterwave Settings → Webhooks before the first payment, and paste the secret hash back here.</p>
+            <code className="st-gw-url-value">{gw.flutterwaveWebhookUrl}</code>
+            <CopyButton text={gw.flutterwaveWebhookUrl} label="Copy webhook URL" />
+          </div>
+        </div>
+      )}
+      <ConfirmDialog
+        open={flwFlipTarget !== null}
+        onClose={() => setFlwFlipTarget(null)}
+        onConfirm={() => {
+          if (!flwFlipTarget) return;
+          setFlwFlipTarget(null);
+          return save({ ngGateway: flwFlipTarget });
+        }}
+        title="Switch Nigeria gateway"
+        body={flwFlipBody}
+        facts={[
+          { label: "Current", value: flwGatewayLabel },
+          { label: "New", value: flwFlipLabel },
+        ]}
+        confirmLabel={`Switch to ${flwFlipLabel}`}
+        busy={busy}
+      />
+    </div>
+    </>
   );
 }

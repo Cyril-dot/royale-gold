@@ -79,8 +79,57 @@ type GatewayRow = {
   updatedAt: Date;
 };
 
+/** Nov 2026 Flutterwave v3 (Nigeria only): the new columns, read with
+ *  an explicit select so a prod DB without them (rg-flutterwave.sql
+ *  not run yet) degrades to null instead of P2022. */
+type NgGatewayRow = {
+  flutterwavePublicKey: string | null;
+  flutterwaveSecretKey: string | null;
+  flutterwaveWebhookSecret: string | null;
+  flutterwaveEnvironment: string | null;
+  ngGateway: string | null;
+};
+
+function isMissingTable(err: unknown): boolean {
+  const code = (err as { code?: string }).code;
+  return code === "P2021" || code === "P2022";
+}
+
 async function getRow(): Promise<GatewayRow | null> {
-  return prisma.gatewaySettings.findUnique({ where: { id: "global" } });
+  // Explicit select (pre-Flutterwave columns only): a plain findUnique
+  // would name the new Flutterwave columns too and P2022 before
+  // rg-flutterwave.sql runs — the Ghana reads must never break for
+  // that (17 Nov owner-500s lesson).
+  return prisma.gatewaySettings.findUnique({
+    where: { id: "global" },
+    select: {
+      paytellerApiKey: true,
+      paytellerMerchantId: true,
+      paytellerUsername: true,
+      paytellerWebhookSecret: true,
+      ghMomoGateway: true,
+      updatedAt: true,
+    },
+  });
+}
+
+/** The Nigeria columns, or null when the table/columns do not exist yet. */
+async function getNgRow(): Promise<NgGatewayRow | null> {
+  try {
+    return await prisma.gatewaySettings.findUnique({
+      where: { id: "global" },
+      select: {
+        flutterwavePublicKey: true,
+        flutterwaveSecretKey: true,
+        flutterwaveWebhookSecret: true,
+        flutterwaveEnvironment: true,
+        ngGateway: true,
+      },
+    });
+  } catch (err) {
+    if (isMissingTable(err)) return null;
+    throw err;
+  }
 }
 
 /** The Ghana MoMo gateway in force — "payteller" when nothing is set
@@ -97,6 +146,26 @@ export async function getGhMomoGateway(): Promise<"demo" | "payteller" | "thetel
   // The "theteller" member stays in the type so existing callers keep
   // compiling; it is never returned.
   return "payteller";
+}
+
+/** The Nigeria gateway in force — "flutterwave" when nothing is set
+ *  (Nov 2026: live by default, no more silent demo credit — the same
+ *  call as Ghana's PayTeller default). Two-way — "demo" |
+ *  "flutterwave" (hosted checkout, the default). Never throws: a DB
+ *  without the columns reads as the default, and the create route
+ *  turns that into a 503 naming rg-flutterwave.sql. */
+export async function getNgGateway(): Promise<"demo" | "flutterwave"> {
+  const row = await getNgRow().catch(() => null);
+  if (row?.ngGateway === "demo") return "demo";
+  return "flutterwave";
+}
+
+/** True when the Nigeria columns exist in the DB (rg-flutterwave.sql
+ *  has run). The create route uses this to fail closed with the SQL
+ *  name instead of a misleading "not configured". */
+export async function isFlutterwaveSetup(): Promise<boolean> {
+  const row = await getNgRow().catch(() => null);
+  return row !== null;
 }
 
 /** Decrypt one stored field; a bad key / bad ciphertext reads as empty. */
@@ -141,6 +210,44 @@ export async function getPaytellerWebhookSecret(): Promise<string> {
   );
 }
 
+export interface FlutterwaveCredentials {
+  publicKey: string;
+  secretKey: string;
+}
+
+/**
+ * Decrypted Flutterwave v3 credentials, DB first, env fallback.
+ * Returns null when the secret key is missing (the caller turns that
+ * into a 503). The public key is not needed for the standard hosted
+ * checkout (only the secret signs the Bearer <redacted> — but the panel
+ * collects it anyway, and the flip guard wants all three fields set.
+ */
+export async function getFlutterwaveCredentials(): Promise<FlutterwaveCredentials | null> {
+  const row = await getNgRow().catch(() => null);
+  const publicKey =
+    (row ? decryptField(row.flutterwavePublicKey) : "") || process.env.FLUTTERWAVE_PUBLIC_KEY || "";
+  const secretKey =
+    (row ? decryptField(row.flutterwaveSecretKey) : "") || process.env.FLUTTERWAVE_SECRET_KEY || "";
+  if (!secretKey) return null;
+  return { publicKey, secretKey };
+}
+
+/** The v3 webhook secret hash, DB first, env fallback ("" = not configured). */
+export async function getFlutterwaveWebhookSecret(): Promise<string> {
+  const row = await getNgRow().catch(() => null);
+  return (
+    (row ? decryptField(row.flutterwaveWebhookSecret) : "") ||
+    process.env.FLUTTERWAVE_WEBHOOK_SECRET ||
+    ""
+  );
+}
+
+/** The environment the saved keys belong to ("test" | "live", "" = unset). */
+export async function getFlutterwaveEnvironment(): Promise<string> {
+  const row = await getNgRow().catch(() => null);
+  return row?.flutterwaveEnvironment ?? "";
+}
+
 export interface MaskedGatewaySettings {
   ghMomoGateway: "demo" | "payteller" | "theteller";
   paytellerConfigured: boolean;
@@ -148,6 +255,12 @@ export interface MaskedGatewaySettings {
   paytellerMerchantId: string | null;
   paytellerUsername: string | null;
   paytellerWebhookSecret: string | null;
+  ngGateway: "demo" | "flutterwave";
+  flutterwaveConfigured: boolean;
+  flutterwavePublicKey: string | null;
+  flutterwaveSecretKey: string | null;
+  flutterwaveWebhookSecret: string | null;
+  flutterwaveEnvironment: string | null;
   updatedAt: string | null;
 }
 
@@ -158,6 +271,10 @@ export async function getMaskedGatewaySettings(): Promise<MaskedGatewaySettings>
   const merchantId = row ? decryptField(row.paytellerMerchantId) : "";
   const username = row ? decryptField(row.paytellerUsername) : "";
   const webhookSecret = row ? decryptField(row.paytellerWebhookSecret) : "";
+  const ngRow = await getNgRow().catch(() => null);
+  const flwPublicKey = ngRow ? decryptField(ngRow.flutterwavePublicKey) : "";
+  const flwSecretKey = ngRow ? decryptField(ngRow.flutterwaveSecretKey) : "";
+  const flwWebhookSecret = ngRow ? decryptField(ngRow.flutterwaveWebhookSecret) : "";
   return {
     // Nov 2026: a stale "theteller" row reads as PayTeller.
     ghMomoGateway:
@@ -167,6 +284,12 @@ export async function getMaskedGatewaySettings(): Promise<MaskedGatewaySettings>
     paytellerMerchantId: maskSecret(merchantId),
     paytellerUsername: maskSecret(username),
     paytellerWebhookSecret: maskSecret(webhookSecret),
+    ngGateway: ngRow?.ngGateway === "demo" ? "demo" : "flutterwave",
+    flutterwaveConfigured: Boolean(flwPublicKey && flwSecretKey && flwWebhookSecret),
+    flutterwavePublicKey: maskSecret(flwPublicKey),
+    flutterwaveSecretKey: maskSecret(flwSecretKey),
+    flutterwaveWebhookSecret: maskSecret(flwWebhookSecret),
+    flutterwaveEnvironment: ngRow?.flutterwaveEnvironment || null,
     updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
   };
 }
@@ -177,7 +300,18 @@ export interface SaveGatewayInput {
   paytellerMerchantId?: string;
   paytellerUsername?: string;
   paytellerWebhookSecret?: string;
+  ngGateway?: string;
+  flutterwavePublicKey?: string;
+  flutterwaveSecretKey?: string;
+  flutterwaveWebhookSecret?: string;
+  flutterwaveEnvironment?: string;
 }
+
+/** Flutterwave secret keys start FLWSECK- (live) or FLWSECK_TEST- (test)
+ *  — the BetWins v3 validation. A pasted public key (FLWPUBK-) is the
+ *  common mistake; say so plainly instead of a bare "invalid". */
+const FLW_SECRET_RE = /^FLWSECK(_TEST)?-/;
+const FLW_PUBLIC_RE = /^FLWPUBK(_TEST)?-/;
 
 /**
  * Owner save: the toggle + any of the fields. A blank field KEEPS the
@@ -201,6 +335,35 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
   if (merchantId && !MERCHANT_ID_RE.test(merchantId)) {
     throw new GatewayError("PayTeller Merchant ID must look like TTM-00984532.", 400);
   }
+  // Nov 2026 Flutterwave v3 (Nigeria only): the NG toggle is two-way,
+  // and a secret key must look like one (FLWSECK- / FLWSECK_TEST-) —
+  // a pasted public key (FLWPUBK-) is the common mistake.
+  const ngGateway = (input.ngGateway ?? "").trim().toLowerCase();
+  if (ngGateway !== "" && ngGateway !== "demo" && ngGateway !== "flutterwave") {
+    throw new GatewayError("Nigeria deposit gateway must be demo or flutterwave", 400);
+  }
+  if (input.flutterwaveSecretKey?.trim() && !FLW_SECRET_RE.test(input.flutterwaveSecretKey.trim())) {
+    if (FLW_PUBLIC_RE.test(input.flutterwaveSecretKey.trim())) {
+      throw new GatewayError(
+        "That looks like a Flutterwave PUBLIC key (FLWPUBK-) — paste the SECRET key (FLWSECK-)",
+        400,
+      );
+    }
+    throw new GatewayError(
+      "That does not look like a Flutterwave secret key — it starts FLWSECK- (live) or FLWSECK_TEST- (test)",
+      400,
+    );
+  }
+  if (input.flutterwavePublicKey?.trim() && !FLW_PUBLIC_RE.test(input.flutterwavePublicKey.trim())) {
+    throw new GatewayError(
+      "That does not look like a Flutterwave public key — it starts FLWPUBK- (live) or FLWPUBK_TEST- (test)",
+      400,
+    );
+  }
+  const flwEnv = (input.flutterwaveEnvironment ?? "").trim().toLowerCase();
+  if (flwEnv !== "" && flwEnv !== "test" && flwEnv !== "live") {
+    throw new GatewayError("Flutterwave environment must be test or live", 400);
+  }
   const fields: Array<[keyof SaveGatewayInput, "paytellerApiKey" | "paytellerMerchantId" | "paytellerUsername" | "paytellerWebhookSecret"]> = [
     ["paytellerApiKey", "paytellerApiKey"],
     ["paytellerMerchantId", "paytellerMerchantId"],
@@ -220,21 +383,83 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
       data[column] = null;
     }
   }
-  const row = await prisma.gatewaySettings.upsert({
-    where: { id: "global" },
-    update: {
-      ...data,
-      ...(gateway !== "" ? { ghMomoGateway: gateway } : {}),
-    },
-    create: {
-      id: "global",
-      paytellerApiKey: data.paytellerApiKey,
-      paytellerMerchantId: data.paytellerMerchantId,
-      paytellerUsername: data.paytellerUsername,
-      paytellerWebhookSecret: data.paytellerWebhookSecret,
-      ghMomoGateway: gateway === "demo" ? "demo" : "payteller",
-    },
-  });
+  // Nov 2026 Flutterwave v3: the NG columns are written ONLY when the
+  // save mentions Nigeria at all (any Flutterwave field or the toggle).
+  // A Ghana-only save never names them, so it can never P2022 on a DB
+  // where rg-flutterwave.sql has not run yet. When they ARE mentioned,
+  // a missing-column error is a 503 naming that file.
+  const touchesNg =
+    input.ngGateway !== undefined ||
+    input.flutterwavePublicKey !== undefined ||
+    input.flutterwaveSecretKey !== undefined ||
+    input.flutterwaveWebhookSecret !== undefined ||
+    input.flutterwaveEnvironment !== undefined;
+  const ngData: Record<string, string | null> = {};
+  if (touchesNg) {
+    const ngExisting = await getNgRow().catch(() => null);
+    const ngFields: Array<
+      [keyof SaveGatewayInput, "flutterwavePublicKey" | "flutterwaveSecretKey" | "flutterwaveWebhookSecret"]
+    > = [
+      ["flutterwavePublicKey", "flutterwavePublicKey"],
+      ["flutterwaveSecretKey", "flutterwaveSecretKey"],
+      ["flutterwaveWebhookSecret", "flutterwaveWebhookSecret"],
+    ];
+    for (const [inputKey, column] of ngFields) {
+      const value = (input[inputKey] ?? "").trim();
+      if (value) {
+        ngData[column] = encrypt(value);
+      } else if (ngExisting) {
+        ngData[column] = ngExisting[column as keyof typeof ngExisting] as string | null;
+      } else {
+        ngData[column] = null;
+      }
+    }
+    if (flwEnv !== "") ngData.flutterwaveEnvironment = flwEnv;
+    else if (ngExisting?.flutterwaveEnvironment) ngData.flutterwaveEnvironment = ngExisting.flutterwaveEnvironment;
+    if (ngGateway !== "") ngData.ngGateway = ngGateway;
+    else if (ngExisting?.ngGateway) ngData.ngGateway = ngExisting.ngGateway;
+  }
+  let row: { id: string };
+  try {
+    // select {id} only: a full upsert RETURNING would name the new
+    // Flutterwave columns and P2022 on a column-less DB (the
+    // max-withdrawal lesson — upsert returns ALL columns by default).
+    row = await prisma.gatewaySettings.upsert({
+      where: { id: "global" },
+      update: {
+        ...data,
+        ...(touchesNg ? ngData : {}),
+        ...(gateway !== "" ? { ghMomoGateway: gateway } : {}),
+      },
+      create: {
+        id: "global",
+        paytellerApiKey: data.paytellerApiKey,
+        paytellerMerchantId: data.paytellerMerchantId,
+        paytellerUsername: data.paytellerUsername,
+        paytellerWebhookSecret: data.paytellerWebhookSecret,
+        ghMomoGateway: gateway === "demo" ? "demo" : "payteller",
+        ...(touchesNg
+          ? {
+              flutterwavePublicKey: ngData.flutterwavePublicKey ?? null,
+              flutterwaveSecretKey: ngData.flutterwaveSecretKey ?? null,
+              flutterwaveWebhookSecret: ngData.flutterwaveWebhookSecret ?? null,
+              flutterwaveEnvironment: ngData.flutterwaveEnvironment ?? null,
+              ngGateway: ngData.ngGateway ?? "flutterwave",
+            }
+          : {}),
+      },
+      select: { id: true },
+    });
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === "P2021" || code === "P2022") {
+      if (touchesNg) {
+        throw new GatewayError("Flutterwave settings are not set up yet — run rg-flutterwave.sql in Neon first", 503);
+      }
+      throw new GatewayError("Gateway settings are not set up yet — run rg-payment-blocks.sql in Neon first", 503);
+    }
+    throw err;
+  }
   void row;
   return getMaskedGatewaySettings();
 }

@@ -102,6 +102,9 @@ model User {
   // Nov 2026 Theteller (PaySwitch) direct MoMo push: one row per
   // push attempt. Opposite side of ThetellerPayment.user.
   thetellerPayments ThetellerPayment[]
+  // Nov 2026 Flutterwave v3 (Nigeria only): the hosted-checkout
+  // payments for this player. Opposite side of FlutterwavePayment.user.
+  flutterwavePayments FlutterwavePayment[]
   // Nov 2026: the player's ONE saved withdrawal account (bank or
   // MoMo) — set on the convert page, snapshotted onto each request.
   withdrawalAccount WithdrawalAccount?
@@ -675,6 +678,22 @@ model GatewaySettings {
   thetellerCallbackSecret String?
   thetellerBaseUrl       String?
   ghMomoGateway          String   @default("payteller") // "demo" | "theteller" | "payteller"
+  // Nov 2026 Flutterwave v3 (Nigeria only): the v3 credentials, AES-256-GCM
+  // encrypted by the app like PayTeller's (public key FLWPUBK-, secret key
+  // FLWSECK-, webhook secret hash) + the environment the saved keys belong
+  // to ("test" | "live", a label — v3 test/live is decided by the keys
+  // themselves, the API base is the same) + the Nigeria gateway toggle
+  // ("demo" | "flutterwave", live-by-default like Ghana's PayTeller).
+  // ngGateway is NULLABLE with NO Prisma @default ON PURPOSE: a @default
+  // makes every GatewaySettings upsert name the column in its INSERT
+  // (SQLite INSERT ... ON CONFLICT lists all defaulted columns), which
+  // P2022s a Ghana-only save on a DB where rg-flutterwave.sql has not
+  // run yet. Null reads as "flutterwave" everywhere (getNgGateway).
+  flutterwavePublicKey    String?
+  flutterwaveSecretKey    String?
+  flutterwaveWebhookSecret String?
+  flutterwaveEnvironment String?
+  ngGateway              String? // "demo" | "flutterwave", null = flutterwave
   updatedAt              DateTime @updatedAt
 }
 
@@ -714,6 +733,49 @@ model PaytellerPayment {
 // reference (no FK) so a stray event can still be recorded.
 model PaytellerWebhookEvent {
   eventId    String   @id // PayTeller event id, e.g. "payment-<uuid>"
+  paymentId  String?
+  eventType  String
+  receivedAt DateTime @default(now())
+}
+
+// Nov 2026 Flutterwave v3 (Nigeria only): one row per hosted-checkout
+// payment. Reference RG-<16 hex> is our tx_ref (unique per payment).
+// The wallet is credited with the FULL principal — the house absorbs
+// Flutterwave's ~2% local-Nigeria fee (same house rule as PayTeller's
+// 10%). flutterwaveFee records what Flutterwave took, for
+// reconciliation; it is never the credit. flwTransactionId is the
+// numeric Flutterwave transaction id, filled in from the redirect /
+// webhook once the customer has paid — the status poll verifies with
+// it, and verify_by_reference is the fallback when it is unknown.
+model FlutterwavePayment {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reference         String   @unique // RG-<16 hex>, our tx_ref
+  flwTransactionId  String? // Flutterwave's numeric transaction id (for /verify)
+  amount            Decimal  @db.Decimal(12, 2) // principal, NGN
+  fiatCurrency      String   @default("NGN")
+  flutterwaveFee    Decimal? @db.Decimal(12, 2)
+  status            String   @default("pending") // pending|processing|successful|failed|expired
+  checkoutUrl       String?
+  expiresAt         DateTime?
+  providerPayload   Json?
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+// Nov 2026 Flutterwave v3 (Nigeria only): the webhook dedup table.
+// Flutterwave webhooks carry no unique event id of their own, so the
+// key is synthetic — "<event>:<transaction id>" (e.g.
+// "charge.completed:1234567"). The unique constraint IS the dedup
+// (Flutterwave retries a failed delivery 3 times, 30 min apart).
+// paymentId is a loose string reference (no FK) so a stray event can
+// still be recorded.
+model FlutterwaveWebhookEvent {
+  eventId    String   @id // "<event>:<flutterwave transaction id>"
   paymentId  String?
   eventType  String
   receivedAt DateTime @default(now())

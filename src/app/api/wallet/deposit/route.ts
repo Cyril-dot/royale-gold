@@ -35,7 +35,7 @@ import { assertPaymentsNotBlocked, PaymentBlockedError } from "@/lib/payment-blo
 // Demo-credit hole (Nov 2026, full live everywhere, no more demo):
 // the live Ghana gateway in force — the demo cashier only runs while
 // the owner has explicitly picked demo. Read live on every call.
-import { getGhMomoGateway } from "@/lib/gateway-settings";
+import { getGhMomoGateway, getNgGateway } from "@/lib/gateway-settings";
 
 const METHODS = ["MTN", "Telecel", "AirtelTigo", "card"] as const;
 
@@ -59,17 +59,22 @@ export async function POST(req: Request) {
     const user = await requireAuth();
     // Demo-credit hole (Nov 2026, full live everywhere, no more demo):
     // this endpoint credits real cash with no provider behind it, so
-    // it only runs while the owner has explicitly picked demo. When
-    // the Ghana gateway is payteller, a direct call here
-    // 403s — no credit, no wallet change, no failure recorded toward
-    // the payment block (a gateway-closed call is not a deposit
-    // failure). The gateway is read live on every call, never cached,
-    // so flipping the toggle takes effect immediately. A DB without
-    // the GatewaySettings table yet (PayTeller SQL not run) reads as
-    // demo, so the endpoint keeps working there as today.
-    let gateway: "demo" | "payteller" | "theteller";
+    // it only runs while the owner has explicitly picked demo for the
+    // player's own fiat — Ghana checks the Ghana toggle, Nigeria the
+    // Nigeria toggle (Nov 2026 Flutterwave v3: an NG user on demo must
+    // not be blocked by Ghana being live, and vice versa). When the
+    // player's gateway is live, a direct call here 403s — no credit,
+    // no wallet change, no failure recorded toward the payment block
+    // (a gateway-closed call is not a deposit failure). The gateway is
+    // read live on every call, never cached, so flipping the toggle
+    // takes effect immediately. A DB without the GatewaySettings table
+    // yet (PayTeller SQL not run) reads as demo, so the endpoint keeps
+    // working there as today.
+    const me = await prisma.user.findUnique({ where: { id: user.id } });
+    const fiat = me?.currency ?? "GHS";
+    let gateway: "demo" | "payteller" | "theteller" | "flutterwave";
     try {
-      gateway = await getGhMomoGateway();
+      gateway = fiat === "NGN" ? await getNgGateway() : await getGhMomoGateway();
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === "P2021" || code === "P2022") gateway = "demo";
@@ -89,7 +94,6 @@ export async function POST(req: Request) {
       return fail(`Method must be one of: ${METHODS.join(", ")}`);
     }
 
-    const me = await prisma.user.findUnique({ where: { id: user.id } });
     // P0 Batch 1 (A8): a blocked player cannot deposit.
     if (me?.blockedAt) return fail("This account is blocked and cannot deposit", 403);
     // Deposit MoMo number (Nov 2026): the block keys on the saved

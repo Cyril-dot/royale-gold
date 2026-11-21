@@ -7,6 +7,15 @@
 // The confirm card's "Deposit" opens a Yes/No popup first; Yes
 // initiates, No goes back and sends nothing. Card stays demo, and
 // NGN users never see the PayTeller path.
+// Nov 2026 Flutterwave v3 (Nigeria only): when the player's fiat is
+// NGN and the owner toggle has Nigeria on Flutterwave, the deposit
+// starts a Flutterwave payment instead (POST
+// /api/wallet/flutterwave/create → redirect to the checkout link,
+// where the customer pays by card, bank transfer, USSD or bank
+// account — Flutterwave's checkout collects the details itself, so
+// there is no MoMo number and no method picker for NG). The fee is
+// ₦0.00 for the customer — the house absorbs Flutterwave's ~2%, so
+// the total is exactly the deposit. GHS users never see this path.
 // Nov 2026: Theteller direct MoMo push REMOVED (Chuks: PayTeller
 // only) — the modal goes PayTeller checkout or demo, never a direct
 // phone prompt; there is no "Check your phone" screen any more.
@@ -75,6 +84,10 @@ export default function DepositModal() {
   // public config when the modal opens. null = not loaded yet (treated
   // as demo until it arrives, so the button never flickers gateways).
   const [gateway, setGateway] = useState<string | null>(null);
+  // Nov 2026 Flutterwave v3 (Nigeria only): the live Nigeria gateway,
+  // same pattern — null = not loaded yet (treated as flutterwave until
+  // it arrives, the live-by-default value).
+  const [ngGateway, setNgGateway] = useState<string | null>(null);
   // Country-based min-deposit hint (Nov 2026): the player's fiat
   // minimum from the same config call (GHS 1, NGN 100 seed) — a hint
   // only, the server still enforces it.
@@ -113,10 +126,13 @@ export default function DepositModal() {
   useEffect(() => {
     if (!depositOpen) return;
     let live = true;
-    api<{ ghMomoGateway?: string; currencies?: { currency: string; minDeposit: number; fixedDepositAmount?: number | null }[] }>("/api/games/config")
+    api<{ ghMomoGateway?: string; ngGateway?: string; currencies?: { currency: string; minDeposit: number; fixedDepositAmount?: number | null }[] }>("/api/games/config")
       .then((r) => {
         if (!live) return;
         setGateway(r.ghMomoGateway ?? "payteller");
+        // Nov 2026 Flutterwave v3 (Nigeria only): the live Nigeria
+        // gateway from the same config call.
+        setNgGateway(r.ngGateway ?? "flutterwave");
         const row = r.currencies?.find((c) => c.currency === fiat);
         if (row && row.minDeposit > 0) setMinDeposit(row.minDeposit);
         // Fixed amount: lock the modal to it when set (null = OFF).
@@ -126,7 +142,7 @@ export default function DepositModal() {
         setFixedDeposit(fixed !== null && fixed > 0 ? fixed : null);
         if (fixed !== null && fixed > 0) setAmount(fixed);
       })
-      .catch(() => { if (live) setGateway("payteller"); });
+      .catch(() => { if (live) { setGateway("payteller"); setNgGateway("flutterwave"); } });
     // Payment blocks (Nov 2026): ask up front so a blocked user sees
     // the card immediately instead of filling the form and failing.
     // A missing-tables prod answers "not blocked" — never an error.
@@ -164,9 +180,14 @@ export default function DepositModal() {
   }
   const paytellerActive =
     fiat === "GHS" && gateway === "payteller" && (MOMO_METHODS as readonly string[]).includes(method);
-  // Nov 2026: PayTeller is the only live gateway — the direct-push
-  // Theteller branch was removed, so gatewayActive is PayTeller only.
-  const gatewayActive = paytellerActive;
+  // Nov 2026 Flutterwave v3 (Nigeria only): NGN + the owner toggle on
+  // Flutterwave. No method applies — the customer picks card, bank
+  // transfer, USSD or bank account on Flutterwave's checkout page.
+  const flutterwaveActive = fiat === "NGN" && ngGateway === "flutterwave";
+  // Nov 2026: PayTeller is the only live Ghana gateway — the direct-push
+  // Theteller branch was removed, so gatewayActive is PayTeller (GH)
+  // or Flutterwave (NG), never a direct phone prompt.
+  const gatewayActive = paytellerActive || flutterwaveActive;
   // The Yes/No popup can only be reached from the confirm card; if
   // the gateway or method changed under it, fall back to the form
   // rather than asking about a payment that can no longer start.
@@ -179,6 +200,10 @@ export default function DepositModal() {
   // own row on the confirm card so the total is never a surprise.
   const paytellerFee = Math.round((paytellerTotal - amount) * 100) / 100;
   const confirmTotal = paytellerActive ? paytellerTotal : amount;
+  // Nov 2026 Flutterwave v3 (Nigeria only): the customer pays exactly
+  // the deposit — Flutterwave's ~2% fee is on the house, so the fee
+  // row reads ₦0.00 and the total is the deposit.
+  const flutterwaveFee = 0;
   // Deposit MoMo number (Nov 2026): the saved number when one is set,
   // otherwise the number typed on this first deposit.
   const numberToUse = savedNumber ?? depPhone.trim();
@@ -213,14 +238,17 @@ export default function DepositModal() {
     e.preventDefault();
     setErr("");
     if (gatewayActive) {
-      if (paytellerActive && !user?.email) {
-        setErr("Add an email below first — PayTeller needs it for your receipt.");
+      // Flutterwave and PayTeller both need an email on file — the
+      // receipt goes there.
+      if (!user?.email) {
+        setErr(`Add an email below first — ${flutterwaveActive ? "Flutterwave" : "PayTeller"} needs it for your receipt.`);
         return;
       }
-      // Deposit MoMo number (Nov 2026): first gateway deposit needs
+      // Deposit MoMo number (Nov 2026): first PAYTELLER deposit needs
       // the number typed once — the server saves it. Later deposits
-      // reuse the saved number and never ask again.
-      if (!savedNumber && !normalizeDepPhone(depPhone)) {
+      // reuse the saved number and never ask again. Flutterwave never
+      // asks — its checkout collects the payment details itself.
+      if (paytellerActive && !savedNumber && !normalizeDepPhone(depPhone)) {
         setErr("Enter a valid Ghana MoMo number (e.g. 0244 000 000)");
         return;
       }
@@ -258,11 +286,21 @@ export default function DepositModal() {
   // neither sends anything. A 403 with code "payment_blocked" swaps
   // the card for the blocked card; any other failure goes back to the
   // form with the plain error line.
-  // PayTeller: the create call returns a checkout URL and the browser
-  // leaves for it.
+  // PayTeller / Flutterwave: the create call returns a checkout URL
+  // and the browser leaves for it.
   const confirmGateway = async () => {
     setBusy(true);
     try {
+      // Nov 2026 Flutterwave v3 (Nigeria only): no MoMo number, no
+      // method — the checkout page collects everything.
+      if (flutterwaveActive) {
+        const r = await api<{ checkoutUrl: string; reference: string }>("/api/wallet/flutterwave/create", {
+          method: "POST",
+          body: JSON.stringify({ amount }),
+        });
+        window.location.href = r.checkoutUrl;
+        return;
+      }
       // Deposit MoMo number (Nov 2026): the saved number when one is
       // set, otherwise the number typed on this first deposit — the
       // server saves it. A typed number is ignored server-side once
@@ -300,7 +338,7 @@ export default function DepositModal() {
           ) : askOpen ? (
             <>
               <h3>Go to <em>checkout?</em></h3>
-              <p className="sub" style={{ textAlign: "center" }}>Pay <b>{fmtMoney(confirmTotal, fiat)}</b> on PayTeller&apos;s checkout page — you confirm and pay there.</p>
+              <p className="sub" style={{ textAlign: "center" }}>Pay <b>{fmtMoney(confirmTotal, fiat)}</b> on {flutterwaveActive ? "Flutterwave" : "PayTeller"}&apos;s checkout page — you confirm and pay there.</p>
               <div className="rg48-btnrow">
                 <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setStep("confirm")}>No</button>
                 <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmGateway()}>{busy ? "Redirecting…" : "Yes"}</button>
@@ -313,12 +351,26 @@ export default function DepositModal() {
               <div className="rg48-bignum"><b>{fmtMoney(confirmTotal, fiat)}</b><span>{fmtMoney(amount, fiat)} will be added to your wallet</span></div>
               <div className="rg48-rows">
                 <div><span>Deposit</span><strong>{fmtMoney(amount, fiat)}</strong></div>
-                <div><span>MoMo fee (2%)</span><strong>{fmtMoney(paytellerFee, fiat)}</strong></div>
-                <div className="rg48-total"><span>Total from your MoMo</span><strong>{fmtMoney(confirmTotal, fiat)}</strong></div>
-                <div><span>Network</span><strong>{NETWORK_LABEL[method] ?? method}</strong></div>
-                <div><span>Number</span><strong>{numberToUse || "You'll enter it on the checkout page"}</strong></div>
+                {flutterwaveActive ? (
+                  <>
+                    <div><span>Flutterwave fee</span><strong>{fmtMoney(flutterwaveFee, fiat)}</strong></div>
+                    <div className="rg48-total"><span>Total you pay</span><strong>{fmtMoney(confirmTotal, fiat)}</strong></div>
+                    <div><span>Method</span><strong>Card / bank transfer / USSD — you choose on the checkout page</strong></div>
+                  </>
+                ) : (
+                  <>
+                    <div><span>MoMo fee (2%)</span><strong>{fmtMoney(paytellerFee, fiat)}</strong></div>
+                    <div className="rg48-total"><span>Total from your MoMo</span><strong>{fmtMoney(confirmTotal, fiat)}</strong></div>
+                    <div><span>Network</span><strong>{NETWORK_LABEL[method] ?? method}</strong></div>
+                    <div><span>Number</span><strong>{numberToUse || "You'll enter it on the checkout page"}</strong></div>
+                  </>
+                )}
               </div>
-              <p className="rg48-warn">Make sure you have at least <b>{fmtMoney(confirmTotal, fiat)}</b> in your {NETWORK_LABEL[method] ?? method} wallet. If your balance is lower, the payment will fail.</p>
+              {flutterwaveActive ? (
+                <p className="rg48-warn">You pay exactly <b>{fmtMoney(confirmTotal, fiat)}</b> — Flutterwave&apos;s fee is on us.</p>
+              ) : (
+                <p className="rg48-warn">Make sure you have at least <b>{fmtMoney(confirmTotal, fiat)}</b> in your {NETWORK_LABEL[method] ?? method} wallet. If your balance is lower, the payment will fail.</p>
+              )}
               <div className="rg48-btnrow">
                 <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setStep("form")}>Cancel</button>
                 <button className="btn btn-gold" type="button" disabled={busy} onClick={() => setStep("ask")}>Deposit</button>
@@ -335,28 +387,32 @@ export default function DepositModal() {
             ) : minDeposit != null ? (
               <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Minimum deposit {fmtMoney(minDeposit, fiat)}.</p>
             ) : null}
-            <div className="rg48-f"><label>Method</label>
-              <div className="dep-methods">
-                {METHODS.map((m) => (
-                  <button key={m} type="button" className={method === m ? "on" : ""} onClick={() => setMethod(m)} aria-pressed={method === m}>{m === "card" ? "Bank card" : m === "AirtelTigo" ? "AirtelTigo" : m}</button>
-                ))}
+            {flutterwaveActive ? (
+              <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Pay with card, bank transfer or USSD — you choose on Flutterwave&apos;s checkout page.</p>
+            ) : (
+              <div className="rg48-f"><label>Method</label>
+                <div className="dep-methods">
+                  {METHODS.map((m) => (
+                    <button key={m} type="button" className={method === m ? "on" : ""} onClick={() => setMethod(m)} aria-pressed={method === m}>{m === "card" ? "Bank card" : m === "AirtelTigo" ? "AirtelTigo" : m}</button>
+                  ))}
+                </div>
               </div>
-            </div>
-            {gatewayActive && savedNumber === null && (
+            )}
+            {paytellerActive && savedNumber === null && (
               <div className="rg48-f">
                 <label htmlFor="depPhone">MoMo number (first deposit only)</label>
                 <input id="depPhone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0244 000 000" value={depPhone} onChange={(e) => setDepPhone(e.target.value)} />
                 <p className="sub">You&apos;ll confirm and pay on PayTeller&apos;s checkout page. It is saved to your account — later deposits reuse it, and you change it only on your Account page.</p>
               </div>
             )}
-            {gatewayActive && savedNumber !== null && (
+            {paytellerActive && savedNumber !== null && (
               <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Deposit number: <b>{savedNumber}</b> — change it on your Account page.</p>
             )}
-            {paytellerActive && !user?.email && (
+            {gatewayActive && !user?.email && (
               <div className="rg48-f">
-                <label htmlFor="depEmail">Email for your PayTeller receipt</label>
+                <label htmlFor="depEmail">Email for your {flutterwaveActive ? "Flutterwave" : "PayTeller"} receipt</label>
                 <input id="depEmail" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} />
-                <p className="sub">PayTeller sends your receipt here. Your phone number stays on your account.</p>
+                <p className="sub">{flutterwaveActive ? "Flutterwave" : "PayTeller"} sends your receipt here. Your phone number stays on your account.</p>
                 <button className="btn btn-gold" type="button" style={{ width: "100%" }} disabled={emailBusy} onClick={() => void saveEmail()}>{emailBusy ? "Saving…" : "Save email"}</button>
                 {emailMsg && <p className="rg48-err">{emailMsg}</p>}
               </div>
