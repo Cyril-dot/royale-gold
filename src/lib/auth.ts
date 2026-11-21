@@ -83,13 +83,51 @@ export async function getSession(): Promise<SessionPayload | null> {
   }
 }
 
+/**
+ * Every scalar User column. The session-user fetch selects exactly
+ * these, so auth reads a fixed shape. Keep this list in step with
+ * the User model: tsc fails any caller that uses a field missing
+ * here.
+ */
+export const SESSION_USER_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  passwordHash: true,
+  role: true,
+  country: true,
+  currency: true,
+  cashBalance: true,
+  simBalance: true,
+  coins: true,
+  commissionPct: true,
+  active: true,
+  blockedAt: true,
+  blockedReason: true,
+  permissions: true,
+  sessionVersion: true,
+  totpSecret: true,
+  totpEnabled: true,
+  referredByAdminId: true,
+  parentAdminId: true,
+  referralCodeUsed: true,
+  xp: true,
+  level: true,
+  createdAt: true,
+  birthday: true,
+} as const;
+
 /** Load the session user (or null). Inactive accounts cannot act, and a
  * token issued before the user's sessions were killed (P0 Batch 3 O15)
  * is rejected — the stored sessionVersion must match the token's. */
 export async function getSessionUser() {
   const session = await getSession();
   if (!session) return null;
-  const user = await prisma.user.findUnique({ where: { id: session.userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: SESSION_USER_SELECT,
+  });
   if (!user || !user.active) return null;
   if ((session.sv ?? 0) !== user.sessionVersion) return null;
   return user;

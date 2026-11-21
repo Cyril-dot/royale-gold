@@ -12,12 +12,12 @@ export async function POST(req: Request) {
     const body = await readJson<{ code?: string }>(req);
     const code = (body?.code ?? "").trim();
     if (!code) return fail("A code is required");
-    const me = await prisma.user.findUnique({ where: { id: user.id } });
+    const me = await prisma.user.findUnique({ where: { id: user.id }, select: { totpSecret: true } });
     if (!me?.totpSecret) return fail("Set up two-factor auth first", 400);
     const valid = await verifyTotp(me.totpSecret, code);
     if (!valid) return fail("Invalid code — check your authenticator app", 401);
     await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { totpEnabled: true } });
+      await tx.user.update({ where: { id: user.id }, data: { totpEnabled: true }, select: { id: true } });
       await tx.auditLog.create({
         data: { actorId: user.id, action: "auth.2fa.enable", targetId: user.id, detail: "Enabled two-factor auth" },
       });

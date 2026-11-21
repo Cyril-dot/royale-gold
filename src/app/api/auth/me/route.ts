@@ -1,4 +1,4 @@
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUser, SESSION_USER_SELECT } from "@/lib/auth";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { publicUser } from "@/lib/serialize";
@@ -26,7 +26,12 @@ export async function PATCH(req: Request) {
     if (!user) return fail("Not signed in", 401);
     const body = await readJson<{ name?: string; emailOrPhone?: string; birthday?: string }>(req);
     if (!body) return fail("Invalid JSON body");
-    const data: { name?: string; email?: string | null; phone?: string | null; birthday?: Date | null } = {};
+    const data: {
+      name?: string;
+      email?: string | null;
+      phone?: string | null;
+      birthday?: Date | null;
+    } = {};
     if (body.name !== undefined) {
       const name = body.name.trim();
       if (!name) return fail("Name cannot be empty");
@@ -39,7 +44,7 @@ export async function PATCH(req: Request) {
       if (contact.includes("@")) {
         const email = contact.toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Enter a valid email address");
-        const taken = await prisma.user.findUnique({ where: { email } });
+        const taken = await prisma.user.findUnique({ where: { email }, select: { id: true } });
         if (taken && taken.id !== user.id) return fail("That email is already in use", 409);
         data.email = email;
         data.phone = null;
@@ -66,7 +71,9 @@ export async function PATCH(req: Request) {
       }
     }
     if (Object.keys(data).length === 0) return fail("Nothing to update");
-    const updated = await prisma.user.update({ where: { id: user.id }, data });
+    // Explicit select: the update's RETURNING clause names only
+    // the session columns.
+    const updated = await prisma.user.update({ where: { id: user.id }, data, select: SESSION_USER_SELECT });
     return ok({ user: publicUser(updated) });
   } catch (err) {
     return toErrorResponse(err);

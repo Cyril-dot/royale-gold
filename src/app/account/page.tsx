@@ -470,6 +470,7 @@ export default function AccountPage() {
           </div>
         )}
 
+
         {/* P2 Batch 2 (O28): birthday — optional. The loyalty birthday
             bonus pays on this day, once per year, when the owner runs
             "Pay birthday bonuses for today". */}

@@ -4,10 +4,10 @@
 //
 // This endpoint sets ONLY the email — the phone stays on the account
 // (unlike PATCH /api/auth/me, which follows the one-contact-only
-// profile rule and would clear it). Format-validated only: no
-// email-verification infra exists. No fake email is ever invented — a
-// phone-only user who does not add one simply cannot use PayTeller;
-// the demo cashier needs no email and keeps working for them.
+// profile rule and would clear it). Format-validated only. No fake
+// email is ever invented — a phone-only user who does not add one
+// simply cannot use PayTeller; the demo cashier needs no email and
+// keeps working for them.
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";

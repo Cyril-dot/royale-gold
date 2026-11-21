@@ -3,7 +3,7 @@
 // ran (POST /api/auth/login returned totpRequired). A valid TOTP code
 // creates the session; a wrong one does not.
 import { prisma } from "@/lib/prisma";
-import { createSession, setSessionCookie } from "@/lib/auth";
+import { createSession, setSessionCookie, SESSION_USER_SELECT } from "@/lib/auth";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { publicUser } from "@/lib/serialize";
 import { verifyTotp } from "@/lib/totp";
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const code = (body.code ?? "").trim();
     if (!userId || !code) return fail("Account and code are required");
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: SESSION_USER_SELECT });
     if (!user || !user.active) return fail("Invalid code", 401);
     if (!user.totpEnabled || !user.totpSecret) return fail("Two-factor auth is not enabled for this account", 400);
     const valid = await verifyTotp(user.totpSecret, code);

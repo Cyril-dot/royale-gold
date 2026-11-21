@@ -31,18 +31,6 @@ export function createMailer(): Transporter {
   });
 }
 
-/** The verification code mail — plain, short, no links to click. */
-export async function sendVerificationEmail(to: string, code: string): Promise<void> {
-  const mailer = createMailer();
-  await mailer.sendMail({
-    from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
-    to,
-    subject: "Your Royale Gold verification code",
-    text: `Your Royale Gold code is ${code}. It expires in 10 minutes.\n\nIf you didn't ask for this, ignore this email.`,
-    html: `<p>Your Royale Gold code is <b>${code}</b>.</p><p>It expires in 10 minutes. If you didn't ask for this, ignore this email.</p>`,
-  });
-}
-
 /** An owner message to one customer — subject + text exactly as the
  *  owner typed them, plain text with a matching HTML version. */
 export async function sendOwnerEmail(to: string, subject: string, text: string): Promise<void> {

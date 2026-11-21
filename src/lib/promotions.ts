@@ -217,7 +217,8 @@ async function grantPromotion(
     auditAction: "promotion.grant" | "promotion.cashback";
   },
 ) {
-  const fresh = await tx.user.findUnique({ where: { id: opts.userId } });
+  // Explicit select (only the three fields this function reads).
+  const fresh = await tx.user.findUnique({ where: { id: opts.userId }, select: { cashBalance: true, coins: true, currency: true } });
   if (!fresh) throw new Error("User not found");
   if (opts.wallet === "cash") {
     await tx.user.update({ where: { id: opts.userId }, data: { cashBalance: round2(dec(fresh.cashBalance) + opts.amount) } });

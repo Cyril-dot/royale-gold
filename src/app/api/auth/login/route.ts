@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { createSession, setSessionCookie } from "@/lib/auth";
+import { createSession, setSessionCookie, SESSION_USER_SELECT } from "@/lib/auth";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { publicUser } from "@/lib/serialize";
 
@@ -14,10 +14,11 @@ export async function POST(req: Request) {
 
     // '@' -> email branch (lowercased); otherwise phone branch.
     // Phone is not unique, so a shared phone resolves to nobody — those
-    // users sign in by email.
+    // users sign in by email. Explicit select: sign-in fetches only
+    // the session columns.
     const user = emailOrPhone.includes("@")
-      ? await prisma.user.findUnique({ where: { email: emailOrPhone.toLowerCase() } })
-      : await prisma.user.findFirst({ where: { phone: emailOrPhone, active: true } });
+      ? await prisma.user.findUnique({ where: { email: emailOrPhone.toLowerCase() }, select: SESSION_USER_SELECT })
+      : await prisma.user.findFirst({ where: { phone: emailOrPhone, active: true }, select: SESSION_USER_SELECT });
 
     if (!user) return fail("Invalid credentials", 401);
     if (!user.active) return fail("This account has been deactivated", 403);

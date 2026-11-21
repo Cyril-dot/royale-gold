@@ -5,7 +5,6 @@
 
 import { useEffect, useState } from "react";
 import { useStore } from "../lib/store";
-import { api } from "../lib/api";
 import { COUNTRIES, phonePlaceholder } from "../lib/country";
 
 // Show/hide eye for the password fields — inline SVG, no dependency.
@@ -34,6 +33,7 @@ export default function AuthModal() {
   const [tab, setTab] = useState<"login" | "register">(authMode);
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [ref, setRef] = useState("");
   // Phase 1 country-based (Nov 2026): the country the account plays
@@ -46,18 +46,6 @@ export default function AuthModal() {
   // step returns totpRequired, cleared on close / tab switch.
   const [totpUserId, setTotpUserId] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState("");
-  // Email OTP (Nov 2026): step 1 proves the email is real (send code
-  // → enter it → verify); step 2 (name, password, …) unlocks only
-  // after that. The verify token is spent by the register call.
-  const [otpEmail, setOtpEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpVerified, setOtpVerified] = useState(false);
-  const [verifyToken, setVerifyToken] = useState("");
-  const [otpErr, setOtpErr] = useState("");
-  const [otpInfo, setOtpInfo] = useState("");
-  const [otpBusy, setOtpBusy] = useState(false);
-  const [resendIn, setResendIn] = useState(0);
 
   useEffect(() => {
     setTab(authMode);
@@ -77,61 +65,6 @@ export default function AuthModal() {
   // mistyped password can be seen before it is stored or sent.
   const [showLoginPass, setShowLoginPass] = useState(false);
   const [showRegPass, setShowRegPass] = useState(false);
-
-  // Resend countdown — ticks down once a second while it runs.
-  useEffect(() => {
-    if (resendIn <= 0) return;
-    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendIn]);
-
-  const resetOtp = () => {
-    setOtpSent(false);
-    setOtpVerified(false);
-    setVerifyToken("");
-    setOtpCode("");
-    setOtpErr("");
-    setOtpInfo("");
-    setResendIn(0);
-  };
-
-  const doSendOtp = async () => {
-    const email = otpEmail.trim().toLowerCase();
-    if (!email.includes("@")) { setOtpErr("Enter a valid email address"); return; }
-    setOtpErr("");
-    setOtpInfo("");
-    setOtpBusy(true);
-    try {
-      await api("/api/auth/email-otp/send", { method: "POST", body: JSON.stringify({ email }) });
-      setOtpSent(true);
-      setOtpCode("");
-      setOtpInfo("Code sent — check your inbox (and spam). It expires in 10 minutes.");
-      setResendIn(60);
-    } catch (ex) {
-      setOtpErr(ex instanceof Error ? ex.message : "Could not send the code");
-    } finally {
-      setOtpBusy(false);
-    }
-  };
-
-  const doVerifyOtp = async () => {
-    if (otpCode.length !== 6) { setOtpErr("Enter the 6-digit code"); return; }
-    setOtpErr("");
-    setOtpBusy(true);
-    try {
-      const r = await api<{ verifyToken: string }>("/api/auth/email-otp/verify", {
-        method: "POST",
-        body: JSON.stringify({ email: otpEmail.trim().toLowerCase(), code: otpCode.trim() }),
-      });
-      setVerifyToken(r.verifyToken);
-      setOtpVerified(true);
-      setOtpInfo("");
-    } catch (ex) {
-      setOtpErr(ex instanceof Error ? ex.message : "Verification failed");
-    } finally {
-      setOtpBusy(false);
-    }
-  };
 
   if (!authOpen) return null;
 
@@ -178,9 +111,9 @@ export default function AuthModal() {
     setErr("");
     setBusy(true);
     try {
-      // Email OTP: the verified email IS the account email — the
-      // register call carries the one-time token from the verify step.
-      const r = await register(name.trim(), otpEmail.trim().toLowerCase(), pass, ref.trim() || undefined, country, verifyToken);
+      // Real-email check: the server refuses a fake address before
+      // the account is created — no code step, no token.
+      const r = await register(name.trim(), email.trim().toLowerCase(), pass, ref.trim() || undefined, country);
       toast(
         r.referredBonusCoins ? `Account created — 5 free coins + ${r.referredBonusCoins} referral coins` : "Account created — 5 free coins",
         "win"
@@ -200,8 +133,8 @@ export default function AuthModal() {
           <button className="icon-btn rg48-x" type="button" aria-label="Close" onClick={closeAuth}>✕</button>
           <h3>{tab === "login" ? <>Welcome <em>back</em></> : <>Create your <em>account</em></>}</h3>
           <div className="rg48-tabs" role="group" aria-label="Login or register">
-            <button type="button" aria-pressed={tab === "login"} onClick={() => { setTab("login"); setErr(""); resetOtp(); }}>Log in</button>
-            <button type="button" aria-pressed={tab === "register"} onClick={() => { setTab("register"); setErr(""); resetOtp(); }}>Register</button>
+            <button type="button" aria-pressed={tab === "login"} onClick={() => { setTab("login"); setErr(""); }}>Log in</button>
+            <button type="button" aria-pressed={tab === "register"} onClick={() => { setTab("register"); setErr(""); }}>Register</button>
           </div>
           {tab === "login" ? (
             totpUserId ? (
@@ -221,51 +154,23 @@ export default function AuthModal() {
               </form>
             )
           ) : (
-            <form onSubmit={otpVerified ? doRegister : (e) => { e.preventDefault(); if (!otpSent) void doSendOtp(); else void doVerifyOtp(); }} autoComplete="off">
-              {!otpVerified ? (
-                <>
-                  <div className="rg48-f"><label htmlFor="rgOtpEmail">Email — we&apos;ll send you a code to confirm it&apos;s real</label><input id="rgOtpEmail" type="email" placeholder="you@example.com" value={otpEmail} onChange={(e) => { setOtpEmail(e.target.value); setOtpErr(""); }} required autoCapitalize="off" autoCorrect="off" spellCheck={false} /></div>
-                  {otpSent && (
-                    <div className="rg48-f"><label htmlFor="rgOtpCode">6-digit code</label><input id="rgOtpCode" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="123456" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))} required /></div>
-                  )}
-                  <p className="rg48-err">{otpErr}</p>
-                  {otpInfo && <p className="rg48-mini" style={{ color: "#9ACD8A" }}>{otpInfo}</p>}
-                  {!otpSent ? (
-                    <button className="btn btn-gold" type="button" onClick={() => void doSendOtp()} style={{ width: "100%" }} disabled={otpBusy}>{otpBusy ? "Sending…" : "Send verification code"}</button>
-                  ) : (
-                    <>
-                      <button className="btn btn-gold" type="button" onClick={() => void doVerifyOtp()} style={{ width: "100%" }} disabled={otpBusy || otpCode.length !== 6}>{otpBusy ? "Verifying…" : "Verify code"}</button>
-                      <p className="rg48-mini" style={{ marginTop: 10 }}>
-                        {resendIn > 0 ? (
-                          <>Resend code in {resendIn}s</>
-                        ) : (
-                          <button type="button" className="linklike" onClick={() => void doSendOtp()} disabled={otpBusy}>Resend code</button>
-                        )}
-                        {" · "}<button type="button" className="linklike" onClick={() => { setOtpSent(false); setOtpCode(""); setOtpErr(""); setOtpInfo(""); }}>Change email</button>
-                      </p>
-                    </>
-                  )}
-                </>
-              ) : (
-                <>
-                  <p className="rg48-mini" style={{ marginBottom: 10 }}>✓ Email verified: <b>{otpEmail.trim().toLowerCase()}</b> · <button type="button" className="linklike" onClick={resetOtp}>Change</button></p>
-                  <div className="rg48-f"><label htmlFor="rgName">Full name</label><input id="rgName" type="text" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required /></div>
-                  <div className="rg48-f"><label htmlFor="rgPass">Password</label><div className="rg48-passwrap"><input id="rgPass" type={showRegPass ? "text" : "password"} placeholder="Pick a password" value={pass} onChange={(e) => setPass(e.target.value)} required minLength={6} autoCapitalize="off" autoCorrect="off" spellCheck={false} /><PassEye shown={showRegPass} onToggle={() => setShowRegPass((s) => !s)} /></div></div>
-                  <div className="rg48-f rg48-country">
-                    <label id="rgCountryLabel">Country</label>
-                    <div className="rg48-country-toggle" role="group" aria-labelledby="rgCountryLabel">
-                      {COUNTRIES.map((c) => (
-                        <button key={c.code} type="button" className="rg48-country-opt" aria-pressed={country === c.code} onClick={() => setCountry(c.code)}>
-                          <span className="rg48-country-flag" aria-hidden="true">{c.flag}</span> {c.name} ({c.currency})
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rg48-f"><label htmlFor="rgRef">Referral code (optional) — worth 5 free coins</label><input id="rgRef" type="text" placeholder="e.g. RG-DEMO1" value={ref} onChange={(e) => setRef(e.target.value.toUpperCase())} /></div>
-                  <p className="rg48-err">{err}</p>
-                  <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Creating…" : `Create account · get ${ref.trim() ? 10 : 5} free coins`}</button>
-                </>
-              )}
+            <form onSubmit={doRegister} autoComplete="off">
+              <div className="rg48-f"><label htmlFor="rgEmail">Email</label><input id="rgEmail" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoCapitalize="off" autoCorrect="off" spellCheck={false} /></div>
+              <div className="rg48-f"><label htmlFor="rgName">Full name</label><input id="rgName" type="text" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required /></div>
+              <div className="rg48-f"><label htmlFor="rgPass">Password</label><div className="rg48-passwrap"><input id="rgPass" type={showRegPass ? "text" : "password"} placeholder="Pick a password" value={pass} onChange={(e) => setPass(e.target.value)} required minLength={6} autoCapitalize="off" autoCorrect="off" spellCheck={false} /><PassEye shown={showRegPass} onToggle={() => setShowRegPass((s) => !s)} /></div></div>
+              <div className="rg48-f rg48-country">
+                <label id="rgCountryLabel">Country</label>
+                <div className="rg48-country-toggle" role="group" aria-labelledby="rgCountryLabel">
+                  {COUNTRIES.map((c) => (
+                    <button key={c.code} type="button" className="rg48-country-opt" aria-pressed={country === c.code} onClick={() => setCountry(c.code)}>
+                      <span className="rg48-country-flag" aria-hidden="true">{c.flag}</span> {c.name} ({c.currency})
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="rg48-f"><label htmlFor="rgRef">Referral code (optional) — worth 5 free coins</label><input id="rgRef" type="text" placeholder="e.g. RG-DEMO1" value={ref} onChange={(e) => setRef(e.target.value.toUpperCase())} /></div>
+              <p className="rg48-err">{err}</p>
+              <button className="btn btn-gold" type="submit" style={{ width: "100%" }} disabled={busy}>{busy ? "Creating…" : `Create account · get ${ref.trim() ? 10 : 5} free coins`}</button>
             </form>
           )}
           <p className="rg48-mini" style={{ marginTop: 12 }}>

@@ -10,7 +10,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { mailerConfigured, sendOwnerEmail } from "@/lib/mailer";
-import { normalizeEmail } from "@/lib/email-otp";
+import { normalizeEmail } from "@/lib/serialize";
 
 const SEND_CAP = 100;
 

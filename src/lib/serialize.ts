@@ -85,6 +85,15 @@ export function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
+/** Lowercase + trim, or null when it is not a plausible email. */
+export function normalizeEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const e = email.trim().toLowerCase();
+  if (e.length === 0 || e.length > 254) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return null;
+  return e;
+}
+
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L
 
 export function randomCode(): string {

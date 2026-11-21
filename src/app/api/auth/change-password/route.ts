@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       return fail("New password must be different from the current one");
     }
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash }, select: { id: true } });
     return ok({ ok: true });
   } catch (err) {
     return toErrorResponse(err);
