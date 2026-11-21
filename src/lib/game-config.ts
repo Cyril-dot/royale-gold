@@ -82,6 +82,12 @@ export interface CurrencyConfigShape {
   conversionRate: number; // fiat per 1 coin
   decayStep: number; // LIVE win-chance decay step for this fiat
   withdrawalOwnerThreshold: number; // withdrawals above this need the owner too
+  // Max withdrawal per request (Nov 2026, owner-set): null = no max
+  // (today's behaviour — a player can request their full cash
+  // balance). Populated by getCurrencyConfig / getAllCurrencyConfigs
+  // from the CurrencyConfig.withdrawalMax column (P2021/P2022-safe —
+  // null when the column does not exist yet).
+  withdrawalMax: number | null;
   enabled: boolean;
   // Fixed deposit amount (Nov 2026): null = OFF (any amount >= min
   // deposit). Set = every deposit in this fiat must be exactly this
@@ -103,22 +109,28 @@ export interface CurrencyConfigShape {
 
 /** Seed defaults — the owner panel can change every one of these. */
 export const CURRENCY_DEFAULTS: Record<string, CurrencyConfigShape> = {
-  GHS: { currency: "GHS", symbol: "GH₵", minDeposit: 1, minStake: 1, conversionRate: 5, decayStep: 100, withdrawalOwnerThreshold: 500, enabled: true, fixedDepositAmount: null, winRatePct: null, winExceptionPct: null },
+  GHS: { currency: "GHS", symbol: "GH₵", minDeposit: 1, minStake: 1, conversionRate: 5, decayStep: 100, withdrawalOwnerThreshold: 500, withdrawalMax: null, enabled: true, fixedDepositAmount: null, winRatePct: null, winExceptionPct: null },
   // NGN seed values are 100x the GHS ones (same "effort") — Chuks sets
   // his own numbers in the owner panel; these are NOT the 7UP limits.
-  NGN: { currency: "NGN", symbol: "₦", minDeposit: 100, minStake: 100, conversionRate: 500, decayStep: 10000, withdrawalOwnerThreshold: 50000, enabled: true, fixedDepositAmount: null, winRatePct: null, winExceptionPct: null },
+  NGN: { currency: "NGN", symbol: "₦", minDeposit: 100, minStake: 100, conversionRate: 500, decayStep: 10000, withdrawalOwnerThreshold: 50000, withdrawalMax: null, enabled: true, fixedDepositAmount: null, winRatePct: null, winExceptionPct: null },
 };
 
-function currencyRowToShape(row: {
-  currency: string;
-  symbol: string;
-  minDeposit: Prisma.Decimal | number;
-  minStake: Prisma.Decimal | number;
-  conversionRate: Prisma.Decimal | number;
-  decayStep: Prisma.Decimal | number;
-  withdrawalOwnerThreshold: Prisma.Decimal | number;
-  enabled: boolean;
-}): CurrencyConfigShape {
+function currencyRowToShape(
+  row: {
+    currency: string;
+    symbol: string;
+    minDeposit: Prisma.Decimal | number;
+    minStake: Prisma.Decimal | number;
+    conversionRate: Prisma.Decimal | number;
+    decayStep: Prisma.Decimal | number;
+    withdrawalOwnerThreshold: Prisma.Decimal | number;
+    enabled: boolean;
+  },
+  // Max withdrawal, merged from getAllWithdrawalMaxes() — the row read
+  // itself uses an explicit select WITHOUT the column, so a prod DB
+  // without it yet never 500s here.
+  withdrawalMax: number | null = null,
+): CurrencyConfigShape {
   return {
     currency: row.currency,
     symbol: row.symbol,
@@ -127,12 +139,38 @@ function currencyRowToShape(row: {
     conversionRate: dec(row.conversionRate),
     decayStep: dec(row.decayStep),
     withdrawalOwnerThreshold: dec(row.withdrawalOwnerThreshold),
+    withdrawalMax,
     enabled: row.enabled,
     // Fixed amount is merged by the getters below (separate table).
     fixedDepositAmount: null,
     winRatePct: null,
     winExceptionPct: null,
   };
+}
+
+/**
+ * Max withdrawal per fiat, keyed by currency — P2021/P2022-safe
+ * (missing column → {} = no max anywhere). The column lives on
+ * CurrencyConfig, but the main row reads below deliberately do NOT
+ * select it: on a prod DB without the column yet, a select that
+ * mentions it throws P2022 and would 500 every config read site-wide
+ * (the 17 Nov owner-500s lesson). This separate read degrades to
+ * "no max" instead.
+ */
+export async function getAllWithdrawalMaxes(): Promise<Record<string, number>> {
+  try {
+    const rows = await prisma.currencyConfig.findMany({ select: { currency: true, withdrawalMax: true } });
+    const out: Record<string, number> = {};
+    for (const r of rows) {
+      if (r.withdrawalMax == null) continue;
+      const v = dec(r.withdrawalMax);
+      if (v > 0) out[r.currency.toUpperCase()] = round2(v);
+    }
+    return out;
+  } catch (err) {
+    if (isMissingTable(err)) return {};
+    throw err;
+  }
 }
 
 /**
@@ -147,10 +185,25 @@ export async function getCurrencyConfig(
   settings?: PlatformSettingsShape,
 ): Promise<CurrencyConfigShape> {
   const code = (currency || "GHS").toUpperCase();
-  const row = await prisma.currencyConfig.findUnique({ where: { currency: code } });
+  // Explicit select WITHOUT withdrawalMax (see getAllWithdrawalMaxes):
+  // a prod DB without the column yet must not 500 this read.
+  const row = await prisma.currencyConfig.findUnique({
+    where: { currency: code },
+    select: {
+      currency: true,
+      symbol: true,
+      minDeposit: true,
+      minStake: true,
+      conversionRate: true,
+      decayStep: true,
+      withdrawalOwnerThreshold: true,
+      enabled: true,
+    },
+  });
+  const maxes = await getAllWithdrawalMaxes();
   let base: CurrencyConfigShape;
   if (row) {
-    base = currencyRowToShape(row);
+    base = currencyRowToShape(row, maxes[code] ?? null);
   } else {
     const def = CURRENCY_DEFAULTS[code];
     if (def) {
@@ -167,6 +220,7 @@ export async function getCurrencyConfig(
         conversionRate: 5,
         decayStep: 100,
         withdrawalOwnerThreshold: 500,
+        withdrawalMax: null,
         enabled: true,
         fixedDepositAmount: null,
         winRatePct: null,
@@ -184,8 +238,22 @@ export async function getCurrencyConfig(
 
 /** Every known currency row (seed rows included), for the owner editor. */
 export async function getAllCurrencyConfigs(): Promise<CurrencyConfigShape[]> {
-  const rows = await prisma.currencyConfig.findMany({ orderBy: { currency: "asc" } });
-  const byCode = new Map(rows.map((r) => [r.currency, currencyRowToShape(r)]));
+  // Explicit select WITHOUT withdrawalMax (see getAllWithdrawalMaxes).
+  const rows = await prisma.currencyConfig.findMany({
+    orderBy: { currency: "asc" },
+    select: {
+      currency: true,
+      symbol: true,
+      minDeposit: true,
+      minStake: true,
+      conversionRate: true,
+      decayStep: true,
+      withdrawalOwnerThreshold: true,
+      enabled: true,
+    },
+  });
+  const maxes = await getAllWithdrawalMaxes();
+  const byCode = new Map(rows.map((r) => [r.currency, currencyRowToShape(r, maxes[r.currency.toUpperCase()] ?? null)]));
   const fixed = await getAllFixedDeposits();
   const rates = await getAllWinRates();
   const exceptions = await getAllWinExceptionChances();
@@ -213,29 +281,52 @@ export async function upsertCurrencyConfig(
   const code = (currency || "GHS").toUpperCase();
   const current = await getCurrencyConfig(code);
   const next = { ...current, ...patch, currency: code };
-  const row = await prisma.currencyConfig.upsert({
-    where: { currency: code },
-    update: {
-      symbol: next.symbol,
-      minDeposit: next.minDeposit,
-      minStake: next.minStake,
-      conversionRate: next.conversionRate,
-      decayStep: next.decayStep,
-      withdrawalOwnerThreshold: next.withdrawalOwnerThreshold,
-      enabled: next.enabled,
-    },
-    create: {
-      currency: code,
-      symbol: next.symbol,
-      minDeposit: next.minDeposit,
-      minStake: next.minStake,
-      conversionRate: next.conversionRate,
-      decayStep: next.decayStep,
-      withdrawalOwnerThreshold: next.withdrawalOwnerThreshold,
-      enabled: next.enabled,
-    },
-  });
-  return currencyRowToShape(row);
+  // withdrawalMax is written ONLY when the patch explicitly carries
+  // it (the owner set or cleared it this save). Any other save must
+  // not touch the column — on a prod DB without it yet, writing it
+  // would P2022 and 500 an unrelated edit.
+  const base = {
+    symbol: next.symbol,
+    minDeposit: next.minDeposit,
+    minStake: next.minStake,
+    conversionRate: next.conversionRate,
+    decayStep: next.decayStep,
+    withdrawalOwnerThreshold: next.withdrawalOwnerThreshold,
+    enabled: next.enabled,
+  };
+  const maxWrite =
+    "withdrawalMax" in patch ? { withdrawalMax: patch.withdrawalMax ?? null } : {};
+  let row;
+  try {
+    row = await prisma.currencyConfig.upsert({
+      where: { currency: code },
+      update: { ...base, ...maxWrite },
+      create: { currency: code, ...base, ...maxWrite },
+      // Explicit select WITHOUT withdrawalMax: Prisma returns the
+      // upserted row (RETURNING), and selecting the column would
+      // P2022 on a prod DB without it yet — 500ing even an unrelated
+      // edit. The effective max is merged from `patch` / `current`.
+      select: {
+        currency: true,
+        symbol: true,
+        minDeposit: true,
+        minStake: true,
+        conversionRate: true,
+        decayStep: true,
+        withdrawalOwnerThreshold: true,
+        enabled: true,
+      },
+    });
+  } catch (err) {
+    if (isMissingTable(err)) {
+      throw new Error("Withdrawal max is not set up yet — run rg-withdrawal-max.sql in Neon first");
+    }
+    throw err;
+  }
+  return currencyRowToShape(
+    row,
+    "withdrawalMax" in patch ? patch.withdrawalMax ?? null : current.withdrawalMax,
+  );
 }
 
 /**

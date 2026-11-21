@@ -32,6 +32,9 @@ type Body = {
   conversionRate?: number;
   decayStep?: number;
   withdrawalOwnerThreshold?: number;
+  // Max withdrawal per request (Nov 2026): a number > 0 sets it,
+  // null clears it back to no max. Omitted = leave it alone.
+  withdrawalMax?: number | null;
   enabled?: boolean;
 };
 
@@ -82,12 +85,32 @@ export async function POST(req: Request) {
       patch.withdrawalOwnerThreshold = v;
       changes.push(`owner-approval threshold = ${symbolFor(currency)} ${v.toFixed(2)}`);
     }
+    if ("withdrawalMax" in body) {
+      if (body.withdrawalMax === null) {
+        patch.withdrawalMax = null;
+        changes.push("max withdrawal cleared (no max)");
+      } else {
+        const v = money(body.withdrawalMax, "withdrawalMax", 0.01);
+        if (v === null) return fail("withdrawalMax must be an amount > 0");
+        patch.withdrawalMax = v;
+        changes.push(`max withdrawal = ${symbolFor(currency)} ${v.toFixed(2)}`);
+      }
+    }
     if (typeof body.enabled === "boolean") {
       patch.enabled = body.enabled;
       changes.push(body.enabled ? "enabled" : "disabled");
     }
     if (changes.length === 0) return fail("Nothing to update");
-    const updated = await upsertCurrencyConfig(currency, patch);
+    let updated;
+    try {
+      updated = await upsertCurrencyConfig(currency, patch);
+    } catch (err) {
+      // Missing column in prod → plain 503, never a 500.
+      if (err instanceof Error && err.message.includes("rg-withdrawal-max.sql")) {
+        return fail(err.message, 503);
+      }
+      throw err;
+    }
     await prisma.auditLog.create({
       data: {
         actorId: owner.id,

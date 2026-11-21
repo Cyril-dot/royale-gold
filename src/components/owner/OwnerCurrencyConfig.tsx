@@ -38,6 +38,11 @@ export function OwnerCurrencyConfig() {
       decayStep: d.decayStep ?? row.decayStep,
       withdrawalOwnerThreshold: d.withdrawalOwnerThreshold ?? row.withdrawalOwnerThreshold,
       enabled: d.enabled ?? row.enabled,
+      // Max withdrawal is sent ONLY when the owner edited it this
+      // save (set or cleared). Any other save must not touch the
+      // column — on a prod DB without it yet, writing it would 503
+      // an unrelated edit.
+      ...(d.withdrawalMax !== undefined ? { withdrawalMax: d.withdrawalMax } : {}),
     };
     setBusy(row.currency);
     try {
@@ -60,6 +65,14 @@ export function OwnerCurrencyConfig() {
   if (rows.length === 0) return <EmptyState title="No currency settings yet." text="No currency settings yet." />;
   const val = (row: CurrencyConfigShape, key: keyof CurrencyConfigShape) =>
     String((draft[row.currency] as Record<string, unknown> | undefined)?.[key as string] ?? row[key]);
+  // Max withdrawal input value: "" when unset (null) — the plain val()
+  // helper would render "null". A cleared draft (null) must stay ""
+  // and not fall through to the saved value.
+  const valMax = (row: CurrencyConfigShape) => {
+    const d = draft[row.currency];
+    const v = d && "withdrawalMax" in d ? d.withdrawalMax : row.withdrawalMax;
+    return v == null ? "" : String(v);
+  };
   return (
     <div>
       {rows.map((row) => (
@@ -67,7 +80,8 @@ export function OwnerCurrencyConfig() {
           {!row.enabled ? <Badge variant="muted">Disabled</Badge> : null}
           <p>
             1 coin = {symbolFor(row.currency)} {val(row, "conversionRate")} · LIVE decay step {val(row, "decayStep")} · owner
-            approval above {symbolFor(row.currency)} {val(row, "withdrawalOwnerThreshold")}.
+            approval above {symbolFor(row.currency)} {val(row, "withdrawalOwnerThreshold")} · max withdrawal{" "}
+            {valMax(row) === "" ? "none" : `${symbolFor(row.currency)} ${valMax(row)}`}.
           </p>
           <FormField label={`Min deposit (${row.symbol})`}>
             <AmountInput value={val(row, "minDeposit")} onChange={(e) => set(row.currency, { minDeposit: Number(e.target.value) })} aria-label={`${row.currency} minimum deposit`} />
@@ -83,6 +97,9 @@ export function OwnerCurrencyConfig() {
           </FormField>
           <FormField label={`Owner-approval threshold (${row.symbol})`}>
             <AmountInput value={val(row, "withdrawalOwnerThreshold")} onChange={(e) => set(row.currency, { withdrawalOwnerThreshold: Number(e.target.value) })} aria-label={`${row.currency} owner approval threshold`} />
+          </FormField>
+          <FormField label={`Max withdrawal (${row.symbol}) — blank = no max`}>
+            <AmountInput value={valMax(row)} onChange={(e) => set(row.currency, { withdrawalMax: e.target.value === "" ? null : Number(e.target.value) })} aria-label={`${row.currency} max withdrawal`} />
           </FormField>
           <FormField label="Enabled">
             <input type="checkbox" checked={draft[row.currency]?.enabled ?? row.enabled} onChange={(e) => set(row.currency, { enabled: e.target.checked })} aria-label={`${row.currency} enabled`} />

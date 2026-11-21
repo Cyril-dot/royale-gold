@@ -8,6 +8,8 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import { dec, round2 } from "@/lib/money";
+import { getCurrencyConfig } from "@/lib/game-config";
+import { symbolFor } from "@/lib/country";
 import { WITHDRAWAL_METHODS } from "@/lib/withdrawals";
 // P2 Batch 2 (O31): automated risk rules — evaluated inside the same
 // transaction as the request, AFTER the request is created, so a hold
@@ -61,6 +63,13 @@ export async function POST(req: Request) {
     // Phase 1 country-based (Nov 2026): the request is in the
     // player's fiat — stamped so the queues never blend fiats.
     const fiatCurrency = fresh.currency ?? "GHS";
+    // Nov 2026: owner-set max withdrawal (null = no max, today's
+    // behaviour). P2022-safe: a prod DB without the column reads null.
+    // Compare on round2 — the stored amount is round2(amount).
+    const cfg = await getCurrencyConfig(fiatCurrency);
+    if (cfg.withdrawalMax !== null && round2(amount) > cfg.withdrawalMax) {
+      return fail(`Maximum withdrawal is ${symbolFor(fiatCurrency)} ${cfg.withdrawalMax.toFixed(2)}`);
+    }
     // Nov 2026: snapshot the saved withdrawal account (if any) onto
     // the request — the admin queue shows where the money goes even if
     // the player changes the account later. No account saved? The

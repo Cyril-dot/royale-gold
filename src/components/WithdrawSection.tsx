@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtMoney } from "../lib/api";
+import { useFiat } from "../lib/use-fiat";
 import { WITHDRAWAL_METHODS } from "../lib/withdrawal-flags";
 import { useStore } from "../lib/store";
 
@@ -226,6 +227,9 @@ function WithdrawForm({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // Owner-set max withdrawal for this fiat (null = no max) — shown
+  // under the amount field so players see the cap before submitting.
+  const { withdrawalMax } = useFiat(fiat);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,6 +264,9 @@ function WithdrawForm({
       <h3>Withdraw</h3>
       <form onSubmit={submit}>
         <div className="rg48-f"><label htmlFor="wdAmt">Amount ({sym})</label><input id="wdAmt" type="number" min={0.01} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} required /></div>
+        {withdrawalMax !== null && (
+          <p className="rg48-mini">Max {fmtMoney(withdrawalMax, fiat)} per withdrawal</p>
+        )}
         <div className="rg48-f"><label htmlFor="wdMethod">Method</label>
           <select id="wdMethod" value={method} onChange={(e) => setMethod(e.target.value)}>
             {WITHDRAWAL_METHODS.map((m) => (

@@ -16,6 +16,8 @@ export interface FiatCfg {
   conversionRate: number;
   decayStep: number;
   withdrawalOwnerThreshold: number;
+  // Max withdrawal per request (Nov 2026, owner-set): null = no max.
+  withdrawalMax: number | null;
 }
 
 let cache: Promise<FiatCfg[]> | null = null;
@@ -38,6 +40,7 @@ export function useFiat(currency: string): {
   minStake: number;
   minDeposit: number;
   decayStep: number;
+  withdrawalMax: number | null;
 } {
   const [cfg, setCfg] = useState<FiatCfg | null>(null);
   useEffect(() => {
@@ -57,5 +60,6 @@ export function useFiat(currency: string): {
     minStake: cfg?.minStake ?? 1,
     minDeposit: cfg?.minDeposit ?? 1,
     decayStep: cfg?.decayStep ?? 100,
+    withdrawalMax: cfg?.withdrawalMax ?? null,
   };
 }

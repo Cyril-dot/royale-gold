@@ -521,6 +521,14 @@ model PaymentMethodConfig {
 //     GHS 100, NGN 10,000 (same "effort", 100x scale).
 //   withdrawalOwnerThreshold — withdrawals above this need the
 //     owner's second approval: GHS 500, NGN 50,000.
+//   withdrawalMax — owner-set max per withdrawal request (Nov 2026):
+//     null = no max (today's behaviour). A column on this table on
+//     purpose (the owner edits it beside the threshold), BUT reads
+//     stay P2022-safe: getCurrencyConfig / getAllCurrencyConfigs use
+//     an explicit select WITHOUT this column and merge it from
+//     getAllWithdrawalMaxes(), so a prod DB without the column yet
+//     reads null (no max) and never 500s; only a set before
+//     rg-withdrawal-max.sql runs fails, with a plain 503.
 // Seed values are defaults Chuks can change in the owner panel.
 model CurrencyConfig {
   currency                 String   @id // "GHS" | "NGN" | ...
@@ -530,6 +538,7 @@ model CurrencyConfig {
   conversionRate           Decimal  @db.Decimal(12, 2) // fiat per 1 coin
   decayStep                Decimal  @default(100) @db.Decimal(12, 2)
   withdrawalOwnerThreshold Decimal  @default(500) @db.Decimal(12, 2)
+  withdrawalMax            Decimal? @db.Decimal(12, 2) // null = no max
   enabled                  Boolean  @default(true)
   updatedAt                DateTime @updatedAt
 }
