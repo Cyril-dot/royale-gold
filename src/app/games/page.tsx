@@ -111,7 +111,6 @@ function GamesInner() {
             <div className="gp-title"><h2>All <em>games</em></h2></div>
             <Link href="/wallet" className="gp-bal" aria-label="Open wallet">{fmtMoney(cash, user?.currency ?? "GHS")} · {fmtCoins(coins)} coins</Link>
           </div>
-          <span className="xg-ver" aria-hidden="true">v48</span>
         </div>
         <div className="wrap">
           <div className="gp-filters" role="group" aria-label="Filter games page">

@@ -244,7 +244,6 @@ export default function Header() {
             <button className="icon-btn" type="button" aria-label="Close search" onClick={() => setSearchOpen(false)}>✕</button>
           </div>
         </div>
-        <div className="ver-strip"><span className="xg-ver hdr-ver" aria-hidden="true">v48</span></div>
       </header>
       {toolsOpen && (
         <div ref={toolsPanelRef} className="hdr-tools-menu" id="hdrToolsMenu" role="menu" aria-label="More options">
