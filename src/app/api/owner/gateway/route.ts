@@ -12,6 +12,8 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, readJson, toErrorResponse } from "@/lib/http";
 import {
   GatewayError,
+  getAlphapayCredentials,
+  getAlphapayWebhookSecret,
   getFlutterwaveCredentials,
   getFlutterwaveWebhookSecret,
   getMaskedGatewaySettings,
@@ -29,6 +31,14 @@ export const PAYTELLER_WEBHOOK_URL =
 // webhook is rejected before anything is read.
 export const FLUTTERWAVE_WEBHOOK_URL =
   "https://royale-omega.vercel.app/api/public/flutterwave-webhook";
+
+// Nov 2026 AlphaPay (Ghana only, docs.alphapay.me): the webhook URL
+// to register in the AlphaPay dashboard (Webhooks). The SIGNING
+// secret shown once at webhook creation must match the one saved in
+// the owner panel, or every webhook is rejected before anything is
+// read. It is a separate secret from the API secret key.
+export const ALPHAPAY_WEBHOOK_URL =
+  "https://royale-omega.vercel.app/api/public/alphapay-webhook";
 
 /**
  * Configured means the 3 API credentials + the webhook secret resolve
@@ -48,6 +58,13 @@ async function flutterwaveConfigured(): Promise<boolean> {
   return Boolean(creds && secret);
 }
 
+/** Nov 2026 AlphaPay (Ghana only): same check for the AlphaPay side. */
+async function alphapayConfigured(): Promise<boolean> {
+  const creds = await getAlphapayCredentials().catch(() => null);
+  const secret = await getAlphapayWebhookSecret().catch(() => "");
+  return Boolean(creds && secret);
+}
+
 export async function GET() {
   try {
     await requireRole("owner");
@@ -58,6 +75,8 @@ export async function GET() {
       webhookUrl: PAYTELLER_WEBHOOK_URL,
       flutterwaveConfigured: await flutterwaveConfigured(),
       flutterwaveWebhookUrl: FLUTTERWAVE_WEBHOOK_URL,
+      alphapayConfigured: await alphapayConfigured(),
+      alphapayWebhookUrl: ALPHAPAY_WEBHOOK_URL,
     });
   } catch (err) {
     return toErrorResponse(err);
@@ -81,6 +100,12 @@ export async function POST(req: Request) {
       flutterwaveSecretKey?: string;
       flutterwaveWebhookSecret?: string;
       flutterwaveEnvironment?: string;
+      // Nov 2026 AlphaPay (Ghana only): the AlphaPay fields ride the
+      // same save — the owner panel sends them together with the Ghana
+      // ones, and the audit row names the Ghana gateway value.
+      alphapaySecretKey?: string;
+      alphapayWebhookSecret?: string;
+      alphapayEnvironment?: string;
     }>(req);
     if (!body) return fail("Invalid JSON body");
     let settings;
@@ -108,6 +133,8 @@ export async function POST(req: Request) {
       webhookUrl: PAYTELLER_WEBHOOK_URL,
       flutterwaveConfigured: await flutterwaveConfigured(),
       flutterwaveWebhookUrl: FLUTTERWAVE_WEBHOOK_URL,
+      alphapayConfigured: await alphapayConfigured(),
+      alphapayWebhookUrl: ALPHAPAY_WEBHOOK_URL,
     });
   } catch (err) {
     return toErrorResponse(err);

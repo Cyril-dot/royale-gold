@@ -90,6 +90,15 @@ type NgGatewayRow = {
   ngGateway: string | null;
 };
 
+/** Nov 2026 AlphaPay (Ghana only): the new columns, read with an
+ *  explicit select so a prod DB without them (rg-alphapay.sql not
+ *  run yet) degrades to null instead of P2022. */
+type AlphaPayRow = {
+  alphapaySecretKey: string | null;
+  alphapayWebhookSecret: string | null;
+  alphapayEnvironment: string | null;
+};
+
 function isMissingTable(err: unknown): boolean {
   const code = (err as { code?: string }).code;
   return code === "P2021" || code === "P2022";
@@ -132,16 +141,35 @@ async function getNgRow(): Promise<NgGatewayRow | null> {
   }
 }
 
+/** The AlphaPay columns, or null when the table/columns do not exist yet. */
+async function getAlphaRow(): Promise<AlphaPayRow | null> {
+  try {
+    return await prisma.gatewaySettings.findUnique({
+      where: { id: "global" },
+      select: {
+        alphapaySecretKey: true,
+        alphapayWebhookSecret: true,
+        alphapayEnvironment: true,
+      },
+    });
+  } catch (err) {
+    if (isMissingTable(err)) return null;
+    throw err;
+  }
+}
+
 /** The Ghana MoMo gateway in force — "payteller" when nothing is set
  *  (Nov 2026, Chuks: live by default, no more silent demo credit).
- *  Two-way — "demo" | "payteller" (hosted checkout, the default).
+ *  Three-way — "demo" | "payteller" (hosted checkout, the default) |
+ *  "alphapay" (direct MoMo push, Nov 2026).
  *  Theteller direct MoMo push was REMOVED Nov 2026 (Chuks: PayTeller
  *  only) — a row still stamped "theteller" reads as PayTeller, so a
  *  stale toggle can never re-enable the prompt. The owner can still
  *  explicitly pick demo; only the default changed. */
-export async function getGhMomoGateway(): Promise<"demo" | "payteller" | "theteller"> {
+export async function getGhMomoGateway(): Promise<"demo" | "payteller" | "theteller" | "alphapay"> {
   const row = await getRow();
   if (row?.ghMomoGateway === "demo") return "demo";
+  if (row?.ghMomoGateway === "alphapay") return "alphapay";
   // Nov 2026: Theteller removed — a stale "theteller" row is PayTeller.
   // The "theteller" member stays in the type so existing callers keep
   // compiling; it is never returned.
@@ -248,8 +276,55 @@ export async function getFlutterwaveEnvironment(): Promise<string> {
   return row?.flutterwaveEnvironment ?? "";
 }
 
+/** True when the AlphaPay columns exist in the DB (rg-alphapay.sql
+ *  has run). The create route uses this to fail closed with the SQL
+ *  name instead of a misleading "not configured". */
+export async function isAlphapaySetup(): Promise<boolean> {
+  const row = await getAlphaRow().catch(() => null);
+  return row !== null;
+}
+
+export interface AlphapayCredentials {
+  secretKey: string;
+}
+
+/**
+ * Decrypted AlphaPay credentials, DB first, env fallback. Returns
+ * null when the secret key is missing (the caller turns that into a
+ * 503). The secret key is the ONLY API credential AlphaPay needs —
+ * there is no public key / merchant id on this API.
+ */
+export async function getAlphapayCredentials(): Promise<AlphapayCredentials | null> {
+  const row = await getAlphaRow().catch(() => null);
+  const secretKey =
+    (row ? decryptField(row.alphapaySecretKey) : "") || process.env.ALPHAPAY_SECRET_KEY || "";
+  if (!secretKey) return null;
+  return { secretKey };
+}
+
+/**
+ * The webhook SIGNING secret, DB first, env fallback ("" = not
+ * configured). This is SEPARATE from the API secret key — it is
+ * shown once at webhook creation in the AlphaPay dashboard and never
+ * returned by any read API, so it must be pasted here by hand.
+ */
+export async function getAlphapayWebhookSecret(): Promise<string> {
+  const row = await getAlphaRow().catch(() => null);
+  return (
+    (row ? decryptField(row.alphapayWebhookSecret) : "") ||
+    process.env.ALPHAPAY_WEBHOOK_SECRET ||
+    ""
+  );
+}
+
+/** The environment the saved keys belong to ("test" | "live", "" = unset). */
+export async function getAlphapayEnvironment(): Promise<string> {
+  const row = await getAlphaRow().catch(() => null);
+  return row?.alphapayEnvironment ?? "";
+}
+
 export interface MaskedGatewaySettings {
-  ghMomoGateway: "demo" | "payteller" | "theteller";
+  ghMomoGateway: "demo" | "payteller" | "theteller" | "alphapay";
   paytellerConfigured: boolean;
   paytellerApiKey: string | null;
   paytellerMerchantId: string | null;
@@ -261,6 +336,10 @@ export interface MaskedGatewaySettings {
   flutterwaveSecretKey: string | null;
   flutterwaveWebhookSecret: string | null;
   flutterwaveEnvironment: string | null;
+  alphapayConfigured: boolean;
+  alphapaySecretKey: string | null;
+  alphapayWebhookSecret: string | null;
+  alphapayEnvironment: string | null;
   updatedAt: string | null;
 }
 
@@ -275,10 +354,13 @@ export async function getMaskedGatewaySettings(): Promise<MaskedGatewaySettings>
   const flwPublicKey = ngRow ? decryptField(ngRow.flutterwavePublicKey) : "";
   const flwSecretKey = ngRow ? decryptField(ngRow.flutterwaveSecretKey) : "";
   const flwWebhookSecret = ngRow ? decryptField(ngRow.flutterwaveWebhookSecret) : "";
+  const apRow = await getAlphaRow().catch(() => null);
+  const apSecretKey = apRow ? decryptField(apRow.alphapaySecretKey) : "";
+  const apWebhookSecret = apRow ? decryptField(apRow.alphapayWebhookSecret) : "";
   return {
     // Nov 2026: a stale "theteller" row reads as PayTeller.
     ghMomoGateway:
-      row?.ghMomoGateway === "demo" ? "demo" : "payteller",
+      row?.ghMomoGateway === "demo" ? "demo" : row?.ghMomoGateway === "alphapay" ? "alphapay" : "payteller",
     paytellerConfigured: Boolean(apiKey && merchantId && username && webhookSecret),
     paytellerApiKey: maskSecret(apiKey),
     paytellerMerchantId: maskSecret(merchantId),
@@ -290,6 +372,10 @@ export async function getMaskedGatewaySettings(): Promise<MaskedGatewaySettings>
     flutterwaveSecretKey: maskSecret(flwSecretKey),
     flutterwaveWebhookSecret: maskSecret(flwWebhookSecret),
     flutterwaveEnvironment: ngRow?.flutterwaveEnvironment || null,
+    alphapayConfigured: Boolean(apSecretKey && apWebhookSecret),
+    alphapaySecretKey: maskSecret(apSecretKey),
+    alphapayWebhookSecret: maskSecret(apWebhookSecret),
+    alphapayEnvironment: apRow?.alphapayEnvironment || null,
     updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
   };
 }
@@ -305,6 +391,9 @@ export interface SaveGatewayInput {
   flutterwaveSecretKey?: string;
   flutterwaveWebhookSecret?: string;
   flutterwaveEnvironment?: string;
+  alphapaySecretKey?: string;
+  alphapayWebhookSecret?: string;
+  alphapayEnvironment?: string;
 }
 
 /** Flutterwave secret keys start FLWSECK- (live) or FLWSECK_TEST- (test)
@@ -328,8 +417,8 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
   if (gateway === "theteller") {
     throw new GatewayError("Theteller direct MoMo prompt is removed — Ghana MoMo is PayTeller or Demo", 400);
   }
-  if (gateway !== "" && gateway !== "demo" && gateway !== "payteller") {
-    throw new GatewayError("Ghana deposit gateway must be demo or payteller", 400);
+  if (gateway !== "" && gateway !== "demo" && gateway !== "payteller" && gateway !== "alphapay") {
+    throw new GatewayError("Ghana deposit gateway must be demo, payteller or alphapay", 400);
   }
   const merchantId = (input.paytellerMerchantId ?? "").trim();
   if (merchantId && !MERCHANT_ID_RE.test(merchantId)) {
@@ -363,6 +452,21 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
   const flwEnv = (input.flutterwaveEnvironment ?? "").trim().toLowerCase();
   if (flwEnv !== "" && flwEnv !== "test" && flwEnv !== "live") {
     throw new GatewayError("Flutterwave environment must be test or live", 400);
+  }
+  // Nov 2026 AlphaPay (Ghana only): the secret key starts sk_live_
+  // or sk_test_ — anything else is a paste mistake, said plainly.
+  // The webhook signing secret has no documented shape (it is shown
+  // once in the AlphaPay dashboard), so it is never shape-checked.
+  const apSecretRe = /^sk_(live|test)_/;
+  if (input.alphapaySecretKey?.trim() && !apSecretRe.test(input.alphapaySecretKey.trim())) {
+    throw new GatewayError(
+      "That does not look like an AlphaPay secret key — it starts sk_live_ (live) or sk_test_ (test)",
+      400,
+    );
+  }
+  const apEnv = (input.alphapayEnvironment ?? "").trim().toLowerCase();
+  if (apEnv !== "" && apEnv !== "test" && apEnv !== "live") {
+    throw new GatewayError("AlphaPay environment must be test or live", 400);
   }
   const fields: Array<[keyof SaveGatewayInput, "paytellerApiKey" | "paytellerMerchantId" | "paytellerUsername" | "paytellerWebhookSecret"]> = [
     ["paytellerApiKey", "paytellerApiKey"],
@@ -419,6 +523,40 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
     if (ngGateway !== "") ngData.ngGateway = ngGateway;
     else if (ngExisting?.ngGateway) ngData.ngGateway = ngExisting.ngGateway;
   }
+  // Nov 2026 AlphaPay (Ghana only): the AlphaPay columns are written
+  // ONLY when the save mentions AlphaPay at all (any AlphaPay field).
+  // A Ghana PayTeller-only save never names them, so it can never
+  // P2022 on a DB where rg-alphapay.sql has not run yet. Flipping
+  // the toggle to alphapay does NOT touch them either — ghMomoGateway
+  // is a base column, so the flip alone works on a column-less DB
+  // (the create route then 503s naming the SQL). When they ARE
+  // mentioned, a missing-column error is a 503 naming that file.
+  const touchesAlphaPay =
+    input.alphapaySecretKey !== undefined ||
+    input.alphapayWebhookSecret !== undefined ||
+    input.alphapayEnvironment !== undefined;
+  const apData: Record<string, string | null> = {};
+  if (touchesAlphaPay) {
+    const apExisting = await getAlphaRow().catch(() => null);
+    const apFields: Array<
+      [keyof SaveGatewayInput, "alphapaySecretKey" | "alphapayWebhookSecret"]
+    > = [
+      ["alphapaySecretKey", "alphapaySecretKey"],
+      ["alphapayWebhookSecret", "alphapayWebhookSecret"],
+    ];
+    for (const [inputKey, column] of apFields) {
+      const value = (input[inputKey] ?? "").trim();
+      if (value) {
+        apData[column] = encrypt(value);
+      } else if (apExisting) {
+        apData[column] = apExisting[column as keyof typeof apExisting] as string | null;
+      } else {
+        apData[column] = null;
+      }
+    }
+    if (apEnv !== "") apData.alphapayEnvironment = apEnv;
+    else if (apExisting?.alphapayEnvironment) apData.alphapayEnvironment = apExisting.alphapayEnvironment;
+  }
   let row: { id: string };
   try {
     // select {id} only: a full upsert RETURNING would name the new
@@ -429,6 +567,7 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
       update: {
         ...data,
         ...(touchesNg ? ngData : {}),
+        ...(touchesAlphaPay ? apData : {}),
         ...(gateway !== "" ? { ghMomoGateway: gateway } : {}),
       },
       create: {
@@ -437,7 +576,7 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
         paytellerMerchantId: data.paytellerMerchantId,
         paytellerUsername: data.paytellerUsername,
         paytellerWebhookSecret: data.paytellerWebhookSecret,
-        ghMomoGateway: gateway === "demo" ? "demo" : "payteller",
+        ghMomoGateway: gateway === "demo" ? "demo" : gateway === "alphapay" ? "alphapay" : "payteller",
         ...(touchesNg
           ? {
               flutterwavePublicKey: ngData.flutterwavePublicKey ?? null,
@@ -447,12 +586,22 @@ export async function saveGatewaySettings(input: SaveGatewayInput): Promise<Mask
               ngGateway: ngData.ngGateway ?? "flutterwave",
             }
           : {}),
+        ...(touchesAlphaPay
+          ? {
+              alphapaySecretKey: apData.alphapaySecretKey ?? null,
+              alphapayWebhookSecret: apData.alphapayWebhookSecret ?? null,
+              alphapayEnvironment: apData.alphapayEnvironment ?? null,
+            }
+          : {}),
       },
       select: { id: true },
     });
   } catch (err) {
     const code = (err as { code?: string }).code;
     if (code === "P2021" || code === "P2022") {
+      if (touchesAlphaPay) {
+        throw new GatewayError("AlphaPay settings are not set up yet — run rg-alphapay.sql in Neon first", 503);
+      }
       if (touchesNg) {
         throw new GatewayError("Flutterwave settings are not set up yet — run rg-flutterwave.sql in Neon first", 503);
       }

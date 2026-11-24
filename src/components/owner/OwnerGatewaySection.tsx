@@ -21,6 +21,15 @@
 // webhook URL to register in the Flutterwave dashboard. The two
 // gateways are independent: Ghana stays PayTeller, Nigeria is
 // Flutterwave, and neither save touches the other's fields.
+// Nov 2026 AlphaPay (Ghana only, docs.alphapay.me): a third Ghana
+// option — the direct MoMo push. The Ghana toggle is Demo /
+// PayTeller / AlphaPay: 2 fields (secret key + webhook SIGNING
+// secret, a separate secret from the API key) + the environment
+// (test/live) + Test connection (calls GET /pricing/my-rates/) +
+// the webhook URL to register in the AlphaPay dashboard. The
+// environment is decided by the BASE URL called, not the key prefix
+// — a sk_test_ key called on live processes real money, so the
+// toggle matters.
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { useStore } from "../../lib/store";
@@ -43,13 +52,20 @@ import { useOwnerFetch } from "./useOwnerFetch";
 // Nigeria toggle (Demo / Flutterwave) + Test connection + the webhook
 // URL to register in the Flutterwave dashboard.
 interface GatewaySettingsShape {
-  ghMomoGateway: "demo" | "payteller";
+  ghMomoGateway: "demo" | "payteller" | "alphapay";
   paytellerConfigured: boolean;
   paytellerApiKey: string | null;
   paytellerMerchantId: string | null;
   paytellerUsername: string | null;
   paytellerWebhookSecret: string | null;
   webhookUrl: string;
+  // Nov 2026 AlphaPay (Ghana only, docs.alphapay.me): the direct
+  // push — secret key + webhook SIGNING secret + environment.
+  alphapayConfigured: boolean;
+  alphapaySecretKey: string | null;
+  alphapayWebhookSecret: string | null;
+  alphapayEnvironment: string | null;
+  alphapayWebhookUrl: string;
   ngGateway: "demo" | "flutterwave";
   flutterwaveConfigured: boolean;
   flutterwavePublicKey: string | null;
@@ -69,7 +85,15 @@ export function OwnerGatewaySection() {
   const [busy, setBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState("");
-  const [flipTarget, setFlipTarget] = useState<"demo" | "payteller" | null>(null);
+  const [flipTarget, setFlipTarget] = useState<"demo" | "payteller" | "alphapay" | null>(null);
+  // Nov 2026 AlphaPay (Ghana only, docs.alphapay.me): the AlphaPay fields.
+  const [apSecretKey, setApSecretKey] = useState("");
+  const [apWebhookSecret, setApWebhookSecret] = useState("");
+  // "" = unchanged (the saved environment shows until the owner picks
+  // one); "test" | "live" once picked.
+  const [apEnvironment, setApEnvironment] = useState("");
+  const [apTestBusy, setApTestBusy] = useState(false);
+  const [apTestResult, setApTestResult] = useState("");
   // Nov 2026 Flutterwave v3 (Nigeria only): the Nigeria fields.
   const [flwPublicKey, setFlwPublicKey] = useState("");
   const [flwSecretKey, setFlwSecretKey] = useState("");
@@ -97,6 +121,9 @@ export function OwnerGatewaySection() {
       setFlwSecretKey("");
       setFlwWebhookSecret("");
       setFlwEnvironment("");
+      setApSecretKey("");
+      setApWebhookSecret("");
+      setApEnvironment("");
       toast("Gateway settings saved", "win");
       reload();
     } catch (ex) {
@@ -112,10 +139,16 @@ export function OwnerGatewaySection() {
       paytellerUsername: username,
       paytellerWebhookSecret: webhookSecret,
     });
-  const flip = (g: "demo" | "payteller") => {
+  const flip = (g: "demo" | "payteller" | "alphapay") => {
     if (!gw || g === gw.ghMomoGateway) return;
     if (g === "payteller" && !gw.paytellerConfigured) {
       toast("Save the 4 PayTeller keys first (or set them as env vars), then test the connection", "lose");
+      return;
+    }
+    // Nov 2026 AlphaPay (Ghana only): same flip guard — AlphaPay
+    // needs its secret key + webhook signing secret saved first.
+    if (g === "alphapay" && !gw.alphapayConfigured) {
+      toast("Save the AlphaPay secret key and webhook signing secret first (or set them as env vars), then test the connection", "lose");
       return;
     }
     setFlipTarget(g);
@@ -130,6 +163,29 @@ export function OwnerGatewaySection() {
       setTestResult(ex instanceof Error ? ex.message : "Connection test failed");
     } finally {
       setTestBusy(false);
+    }
+  };
+  // Nov 2026 AlphaPay (Ghana only, docs.alphapay.me): the AlphaPay handlers.
+  const saveApKeys = () =>
+    void save({
+      alphapaySecretKey: apSecretKey,
+      alphapayWebhookSecret: apWebhookSecret,
+      alphapayEnvironment: apEnvironment,
+    });
+  const testAp = async () => {
+    setApTestBusy(true);
+    setApTestResult("");
+    try {
+      const r = await api<{ authenticated: boolean; ghanaNetworks?: string[]; ratesFound?: number }>("/api/owner/gateway/alphapay-test", { method: "POST" });
+      setApTestResult(
+        r.authenticated
+          ? `Connected — AlphaPay accepted the secret key.${r.ghanaNetworks?.length ? ` Ghana networks: ${r.ghanaNetworks.join(", ")}.` : ""}`
+          : "AlphaPay did not confirm these credentials.",
+      );
+    } catch (ex) {
+      setApTestResult(ex instanceof Error ? ex.message : "Connection test failed");
+    } finally {
+      setApTestBusy(false);
     }
   };
   // Nov 2026 Flutterwave v3 (Nigeria only): the Nigeria handlers.
@@ -163,12 +219,14 @@ export function OwnerGatewaySection() {
   if (loading) return <Skeleton lines={5} title />;
   if (err) return <ErrorState text={err} onRetry={reload} />;
   if (!gw) return null;
-  const gatewayLabel = gw.ghMomoGateway === "payteller" ? "PayTeller" : "Demo";
-  const flipLabel = flipTarget === "payteller" ? "PayTeller" : "Demo";
+  const gatewayLabel = gw.ghMomoGateway === "payteller" ? "PayTeller" : gw.ghMomoGateway === "alphapay" ? "AlphaPay" : "Demo";
+  const flipLabel = flipTarget === "payteller" ? "PayTeller" : flipTarget === "alphapay" ? "AlphaPay" : "Demo";
   const flipBody =
     flipTarget === "payteller"
       ? "New Ghana MoMo deposits will go through PayTeller's hosted checkout instead of the demo flow."
-      : "New Ghana MoMo deposits will go through the demo flow instead of a live gateway.";
+      : flipTarget === "alphapay"
+        ? "New Ghana MoMo deposits will go through AlphaPay's direct push to the customer's phone instead of the demo flow."
+        : "New Ghana MoMo deposits will go through the demo flow instead of a live gateway.";
   // Nov 2026 Flutterwave v3 (Nigeria only): the Nigeria flip dialog.
   const flwGatewayLabel = gw.ngGateway === "flutterwave" ? "Flutterwave" : "Demo";
   const flwFlipLabel = flwFlipTarget === "flutterwave" ? "Flutterwave" : "Demo";
@@ -177,6 +235,9 @@ export function OwnerGatewaySection() {
       ? "New Nigeria deposits will go through Flutterwave's hosted checkout instead of the demo flow."
       : "New Nigeria deposits will go through the demo flow instead of a live gateway.";
   const flwEnvValue = flwEnvironment || gw.flutterwaveEnvironment || "test";
+  // Nov 2026 AlphaPay (Ghana only): the saved environment until the
+  // owner picks one — same "" = unchanged shape as Flutterwave.
+  const apEnvValue = apEnvironment || gw.alphapayEnvironment || "test";
   return (
     <>
     <div className="st-gw">
@@ -185,6 +246,12 @@ export function OwnerGatewaySection() {
         {gw.ghMomoGateway === "payteller" ? (
           gw.paytellerConfigured ? (
             <Badge variant="ok">PayTeller keys saved</Badge>
+          ) : (
+            <Badge variant="warn">No keys</Badge>
+          )
+        ) : gw.ghMomoGateway === "alphapay" ? (
+          gw.alphapayConfigured ? (
+            <Badge variant="ok">AlphaPay keys saved</Badge>
           ) : (
             <Badge variant="warn">No keys</Badge>
           )
@@ -197,14 +264,48 @@ export function OwnerGatewaySection() {
         items={[
           { id: "demo", label: "Demo" },
           { id: "payteller", label: "PayTeller" },
+          { id: "alphapay", label: "AlphaPay" },
         ]}
         value={gw.ghMomoGateway}
-        onChange={(id) => flip(id as "demo" | "payteller")}
+        onChange={(id) => flip(id as "demo" | "payteller" | "alphapay")}
       />
       {gw.ghMomoGateway === "demo" ? (
         <div className="st-gw-section">
           <h3 className="st-gw-title">Demo (play money)</h3>
           <p className="st-gw-desc">Deposits credit instantly. No real payment, no keys needed.</p>
+        </div>
+      ) : gw.ghMomoGateway === "alphapay" ? (
+        <div className="st-gw-section">
+          <h3 className="st-gw-title">AlphaPay (direct MoMo push)</h3>
+          <p className="st-gw-desc">The prompt goes straight to the customer&apos;s phone — MTN, Telecel or AirtelTigo. The customer pays exactly the deposit; AlphaPay&apos;s fee is on us. If AlphaPay answers with a hosted page instead, the customer is redirected to it.</p>
+          <Button variant="secondary" size="sm" block loading={apTestBusy} onClick={() => void testAp()}>
+            Test connection
+          </Button>
+          {apTestResult ? <p role="status">{apTestResult}</p> : null}
+          <Segmented
+            label="AlphaPay environment"
+            items={[
+              { id: "test", label: "Test" },
+              { id: "live", label: "Live" },
+            ]}
+            value={apEnvValue}
+            onChange={(id) => setApEnvironment(id as "test" | "live")}
+          />
+          <p className="st-gw-desc">The keys below belong to the {apEnvValue === "live" ? "live" : "test"} environment — test keys start sk_test_, live keys start sk_live_. The environment is decided by the base URL called, not the key prefix — a test key called on live processes real money.</p>
+          <FormField label={`Secret key ${gw.alphapaySecretKey ? `(${gw.alphapaySecretKey})` : "(not set)"}`}>
+            <Input type="password" autoComplete="off" value={apSecretKey} onChange={(e) => setApSecretKey(e.target.value)} placeholder="sk_live_... (or sk_test_...)" aria-label="AlphaPay secret key" />
+          </FormField>
+          <FormField label={`Webhook signing secret ${gw.alphapayWebhookSecret ? `(${gw.alphapayWebhookSecret})` : "(not set)"}`}>
+            <Input type="password" autoComplete="off" value={apWebhookSecret} onChange={(e) => setApWebhookSecret(e.target.value)} placeholder="Signing secret shown once at webhook creation" aria-label="AlphaPay webhook signing secret" />
+          </FormField>
+          <Button variant="primary" size="sm" block loading={busy} onClick={saveApKeys}>
+            Save keys
+          </Button>
+          <div className="st-gw-url">
+            <p className="st-gw-url-label">Webhook URL — register this in the AlphaPay dashboard (Webhooks) before the first payment, and paste the signing secret back here.</p>
+            <code className="st-gw-url-value">{gw.alphapayWebhookUrl}</code>
+            <CopyButton text={gw.alphapayWebhookUrl} label="Copy webhook URL" />
+          </div>
         </div>
       ) : (
         <div className="st-gw-section">

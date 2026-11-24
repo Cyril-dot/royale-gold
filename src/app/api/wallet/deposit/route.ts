@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     // working there as today.
     const me = await prisma.user.findUnique({ where: { id: user.id } });
     const fiat = me?.currency ?? "GHS";
-    let gateway: "demo" | "payteller" | "theteller" | "flutterwave";
+    let gateway: "demo" | "payteller" | "theteller" | "flutterwave" | "alphapay";
     try {
       gateway = fiat === "NGN" ? await getNgGateway() : await getGhMomoGateway();
     } catch (err) {

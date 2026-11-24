@@ -22,23 +22,29 @@
 // time. Two genuine failures is the tripwire — one failure is just
 // bad luck.
 //
-// What counts as a failure (recorded by the PayTeller and Theteller
-// paths):
+// What counts as a failure (recorded by the PayTeller, Theteller,
+// Flutterwave and AlphaPay paths):
 //   - a deposit start the provider rejects (createPayment error —
 //     any status except the 409 resume, which returns the original
 //     checkout URL and is NOT a failure)
 //   - a deposit the provider reports as terminally failed (webhook
-//     payment.failed, status-poll "failed")
+//     payment.failed / charge.failed / transaction.failed,
+//     status-poll "failed")
 //   - a Theteller charge that ends failed (decline, insufficient
 //     funds, invalid voucher, 5-minute timeout, no credentials)
+//   - a Flutterwave payment that ends failed (webhook charge.failed,
+//     status-poll failed/cancelled, or a start the provider rejects)
+//   - an AlphaPay payment that ends failed (webhook
+//     transaction.failed, status-poll failed/cancelled, or a start
+//     the provider rejects)
 // What does NOT count:
 //   - form / validation errors (bad amount, disabled method, below
 //     minimum) — no payment row exists, nothing was charged
 //   - a 429 "prompt already live" resume — the prompt is still live
 //   - an expired checkout — the customer never paid
 //   - demo-cashier deposits — play money, no provider, and the demo
-//     path cannot fail; a block can only ever be earned on PayTeller
-//     or Theteller
+//     path cannot fail; a block can only ever be earned on PayTeller,
+//     Theteller, Flutterwave or AlphaPay
 // Failures age out of the 24-hour window on their own; a completed
 // deposit does not need to reset anything because old failures stop
 // counting.
@@ -56,7 +62,11 @@
 // Account page), the login phone (User.phone) second. A block row
 // carries that number, so a second account using the same number is
 // blocked too. Account-level blocking covers PayTeller fully either
-// way.
+// way. AlphaPay is the same shape: the direct push goes to the saved
+// number (so the number side works there), but AlphaPay never shares
+// the number typed on its hosted page (checkout_url branch) — the
+// number side of the block keys on the account's saved number there
+// too, same honest limit as PayTeller.
 //
 // PROD SAFETY: both tables do not exist in prod Neon until Chuks runs
 // rg-payment-blocks.sql. Every read here catches the missing-table

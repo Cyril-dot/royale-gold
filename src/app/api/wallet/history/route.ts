@@ -19,6 +19,9 @@ import { dec } from "@/lib/money";
  * - FlutterwavePayment rows that are NOT successful — same rule
  *   (Nov 2026, Nigeria only). The credit writes a DepositEvent with
  *   method "Flutterwave", so successful ones are covered by that row.
+ * - AlphaPayPayment rows that are NOT successful — same rule
+ *   (Nov 2026, Ghana only). The credit writes a DepositEvent with
+ *   method "AlphaPay", so successful ones are covered by that row.
  *
  * Reads are P2021/P2022-safe: a table that does not exist yet in prod
  * degrades to "no rows from that source", never a 500.
@@ -60,7 +63,7 @@ export async function GET(req: Request) {
   try {
     const user = await requireAuth();
     const limit = Math.min(Math.max(Number(new URL(req.url).searchParams.get("limit") ?? 50) || 50, 1), 100);
-    const [events, payteller, theteller, flutterwave] = await Promise.all([
+    const [events, payteller, theteller, flutterwave, alphapay] = await Promise.all([
       prisma.depositEvent
         .findMany({
           where: { userId: user.id },
@@ -122,6 +125,19 @@ export async function GET(req: Request) {
           if (isMissingTable(err)) return [];
           throw err;
         }),
+      // Nov 2026 AlphaPay (Ghana only): the same not-successful rule
+      // — a pending / processing / failed push has no DepositEvent yet.
+      prisma.alphaPayPayment
+        .findMany({
+          where: { userId: user.id, status: { not: "successful" } },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          select: { id: true, amount: true, fiatCurrency: true, status: true, createdAt: true },
+        })
+        .catch((err) => {
+          if (isMissingTable(err)) return [];
+          throw err;
+        }),
     ]);
     const rows: DepositRow[] = [
       ...events.map((e) => ({
@@ -166,6 +182,15 @@ export async function GET(req: Request) {
         fiatCurrency: f.fiatCurrency ?? "NGN",
         status: paytellerStatus(f.status),
         createdAt: f.createdAt.toISOString(),
+      })),
+      ...alphapay.map((a) => ({
+        id: `ap-${a.id}`,
+        kind: "deposit" as const,
+        amount: dec(a.amount),
+        method: "AlphaPay",
+        fiatCurrency: a.fiatCurrency ?? "GHS",
+        status: paytellerStatus(a.status),
+        createdAt: a.createdAt.toISOString(),
       })),
     ];
     rows.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));

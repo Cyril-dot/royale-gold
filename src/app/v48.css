@@ -2143,3 +2143,12 @@ table.rg48-t tr.rg48-click:hover td{background:rgba(255,176,0,.05)}
    clipped to the old 8px progress-bar strip). */
 .cr-meta{max-width:680px;margin:10px auto 0;text-align:center}
 .cr-meta .cr-count{position:static;left:auto;bottom:auto;transform:none;width:auto;height:auto;background:none;overflow:visible;font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--gold-2)}
+
+/* Nov 2026 AlphaPay (Ghana only, docs.alphapay.me): the gold
+   spinner for the modal's waiting state — the prompt is out and the
+   modal polls the status endpoint. Self-contained here (not the
+   .pt-spinner in wallet-v31.css — that one is scoped under
+   .pt-return and never matches inside this modal). */
+.rg48-spin{box-sizing:border-box;width:36px;height:36px;margin:16px auto 0;border-radius:50%;border:4px solid rgba(255,217,100,.18);border-top-color:var(--gold-2);animation:rg48-spin .8s linear infinite}
+@keyframes rg48-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.rg48-spin{animation:none}}

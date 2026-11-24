@@ -19,6 +19,16 @@
 // Nov 2026: Theteller direct MoMo push REMOVED (Chuks: PayTeller
 // only) — the modal goes PayTeller checkout or demo, never a direct
 // phone prompt; there is no "Check your phone" screen any more.
+// Nov 2026 AlphaPay (Ghana only, docs.alphapay.me): the direct push
+// is BACK, on AlphaPay — when the owner's Ghana toggle is AlphaPay,
+// the MTN / Telecel / AirtelTigo buttons start an AlphaPay softpay
+// instead (POST /api/wallet/alphapay/create → the prompt goes
+// straight to the phone; the modal waits and polls the status
+// endpoint every 5 s until it succeeds, fails or times out). If
+// AlphaPay answers with a checkout_url instead of a push, the modal
+// redirects there (the return page polls the same way). The fee is
+// GH₵0.00 for the customer — the house absorbs AlphaPay's fee, so
+// the total is exactly the deposit.
 // Deposit MoMo number (Nov 2026): set ONCE on the first gateway
 // deposit, saved to the account, reused after that — the confirm card
 // and the popup show the saved number, and the number is changed only
@@ -59,7 +69,7 @@ function formatBlockedUntil(iso: string): string {
 }
 
 export default function DepositModal() {
-  const { depositOpen, setDepositOpen, setWallet, setUser, toast, user } = useStore();
+  const { depositOpen, setDepositOpen, setWallet, setUser, toast, user, refresh } = useStore();
   // Phase 1 country-based (Nov 2026): the modal shows the player's own
   // fiat symbol, and only that fiat's methods apply (the server
   // enforces it — the method list is the same for both fiats in demo).
@@ -79,7 +89,14 @@ export default function DepositModal() {
   // Yes/No popup — Yes initiates the payment, No goes back to the
   // confirm card and sends nothing. The demo path never enters
   // either — play money, no real MoMo charge to confirm.
-  const [step, setStep] = useState<"form" | "confirm" | "ask">("form");
+  const [step, setStep] = useState<"form" | "confirm" | "ask" | "waiting">("form");
+  // Nov 2026 AlphaPay (Ghana only): the waiting state — the prompt
+  // is out and the modal polls the status endpoint every 5 s until
+  // it succeeds, fails or times out (5 min). waitRef is the RG-
+  // reference the status poll needs; the poll lives in an effect
+  // below so closing the modal (or leaving the step) stops it.
+  const [waitRef, setWaitRef] = useState("");
+  const [waitAmount, setWaitAmount] = useState<number | null>(null);
   // Phase 2 PayTeller (Nov 2026): the live Ghana gateway, read from the
   // public config when the modal opens. null = not loaded yet (treated
   // as demo until it arrives, so the button never flickers gateways).
@@ -166,28 +183,99 @@ export default function DepositModal() {
     return () => window.removeEventListener("keydown", onKey);
   }, [depositOpen, setDepositOpen]);
 
+  // Nov 2026 AlphaPay (Ghana only): the waiting poll — while the
+  // step is "waiting" and a reference is set, poll the status
+  // endpoint every 5 s for up to 5 minutes (60 polls). SUCCESS lands
+  // the wallet: refresh + close + go to /wallet. FAILED goes back to
+  // the form with a plain line — or swaps in the blocked card when
+  // the failure just tripped the payment block (the status call
+  // carries blockedUntil then). TIMEOUT stops with a plain line.
+  // Leaving the step or closing the modal clears the interval.
+  useEffect(() => {
+    if (step !== "waiting" || !waitRef) return;
+    let live = true;
+    let polls = 0;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const poll = async () => {
+      polls += 1;
+      try {
+        const r = await api<{ status: string; credited: boolean; amount: number; blockedUntil?: string }>(
+          `/api/wallet/alphapay/status?reference=${encodeURIComponent(waitRef)}`,
+        );
+        if (!live) return;
+        if (r.status === "successful") {
+          stop();
+          if (r.credited) await refresh();
+          setDepositOpen(false);
+          window.location.href = "/wallet";
+          return;
+        }
+        if (r.status === "failed") {
+          stop();
+          if (r.blockedUntil) {
+            setBlockedUntil(r.blockedUntil);
+          } else {
+            setErr("AlphaPay says this payment did not complete — your wallet was not credited. Try the deposit again.");
+          }
+          setStep("form");
+          return;
+        }
+      } catch (ex) {
+        if (!live) return;
+        if (ex instanceof Error && /not signed in/i.test(ex.message)) {
+          stop();
+          setErr("Your session ended before the payment could be checked — sign in and try again.");
+          setStep("form");
+          return;
+        }
+        // Any other poll failure is transient: keep polling to the cap.
+      }
+      if (polls >= 60) {
+        stop();
+        if (live) {
+          setErr("AlphaPay has not confirmed yet — check your wallet History; it updates automatically once it does.");
+          setStep("form");
+        }
+      }
+    };
+    void poll();
+    timer = setInterval(() => void poll(), 5000);
+    return () => { live = false; stop(); };
+  }, [step, waitRef, refresh, setDepositOpen]);
+
   // Fresh state on every open: the step and the block never carry
   // over from the last time the modal was shown. Adjusted during
   // render (the supported pattern — never in an effect, which the
   // linter flags as a cascading render).
   if (!depositOpen) {
-    if (step !== "form" || blockedUntil !== null || err !== "") {
+    if (step !== "form" || blockedUntil !== null || err !== "" || waitRef !== "") {
       setStep("form");
       setBlockedUntil(null);
       setErr("");
+      setWaitRef("");
     }
     return null;
   }
   const paytellerActive =
     fiat === "GHS" && gateway === "payteller" && (MOMO_METHODS as readonly string[]).includes(method);
+  // Nov 2026 AlphaPay (Ghana only, docs.alphapay.me): GHS + the
+  // owner toggle on AlphaPay + a MoMo method. The prompt goes
+  // straight to the phone — no checkout page in the normal case.
+  const alphapayActive =
+    fiat === "GHS" && gateway === "alphapay" && (MOMO_METHODS as readonly string[]).includes(method);
   // Nov 2026 Flutterwave v3 (Nigeria only): NGN + the owner toggle on
   // Flutterwave. No method applies — the customer picks card, bank
   // transfer, USSD or bank account on Flutterwave's checkout page.
   const flutterwaveActive = fiat === "NGN" && ngGateway === "flutterwave";
-  // Nov 2026: PayTeller is the only live Ghana gateway — the direct-push
-  // Theteller branch was removed, so gatewayActive is PayTeller (GH)
-  // or Flutterwave (NG), never a direct phone prompt.
-  const gatewayActive = paytellerActive || flutterwaveActive;
+  // Nov 2026: the live gateway is PayTeller (GH checkout) or
+  // AlphaPay (GH direct push) or Flutterwave (NG checkout).
+  const gatewayActive = paytellerActive || flutterwaveActive || alphapayActive;
+  // The gateway's name, for the email prompt and error lines.
+  const gatewayName = flutterwaveActive ? "Flutterwave" : alphapayActive ? "AlphaPay" : "PayTeller";
+  // PayTeller and AlphaPay both use the saved MoMo number (set once
+  // on the first deposit); Flutterwave never asks for one.
+  const momoNumberActive = paytellerActive || alphapayActive;
   // The Yes/No popup can only be reached from the confirm card; if
   // the gateway or method changed under it, fall back to the form
   // rather than asking about a payment that can no longer start.
@@ -204,6 +292,9 @@ export default function DepositModal() {
   // the deposit — Flutterwave's ~2% fee is on the house, so the fee
   // row reads ₦0.00 and the total is the deposit.
   const flutterwaveFee = 0;
+  // Nov 2026 AlphaPay (Ghana only): the same house rule — the
+  // customer pays exactly the deposit, AlphaPay's fee is on us.
+  const alphapayFee = 0;
   // Deposit MoMo number (Nov 2026): the saved number when one is set,
   // otherwise the number typed on this first deposit.
   const numberToUse = savedNumber ?? depPhone.trim();
@@ -238,17 +329,18 @@ export default function DepositModal() {
     e.preventDefault();
     setErr("");
     if (gatewayActive) {
-      // Flutterwave and PayTeller both need an email on file — the
-      // receipt goes there.
+      // Flutterwave, AlphaPay and PayTeller all need an email on file
+      // — the receipt goes there.
       if (!user?.email) {
-        setErr(`Add an email below first — ${flutterwaveActive ? "Flutterwave" : "PayTeller"} needs it for your receipt.`);
+        setErr(`Add an email below first — ${gatewayName} needs it for your receipt.`);
         return;
       }
-      // Deposit MoMo number (Nov 2026): first PAYTELLER deposit needs
-      // the number typed once — the server saves it. Later deposits
-      // reuse the saved number and never ask again. Flutterwave never
-      // asks — its checkout collects the payment details itself.
-      if (paytellerActive && !savedNumber && !normalizeDepPhone(depPhone)) {
+      // Deposit MoMo number (Nov 2026): first PAYTELLER / ALPHAPAY
+      // deposit needs the number typed once — the server saves it.
+      // Later deposits reuse the saved number and never ask again.
+      // Flutterwave never asks — its checkout collects the payment
+      // details itself.
+      if (momoNumberActive && !savedNumber && !normalizeDepPhone(depPhone)) {
         setErr("Enter a valid Ghana MoMo number (e.g. 0244 000 000)");
         return;
       }
@@ -286,9 +378,52 @@ export default function DepositModal() {
   // neither sends anything. A 403 with code "payment_blocked" swaps
   // the card for the blocked card; any other failure goes back to the
   // form with the plain error line.
+  // Nov 2026 AlphaPay (Ghana only): the direct push. The create
+  // returns a reference — the prompt is on the customer's phone and
+  // the modal waits (polls the status endpoint). If AlphaPay answers
+  // with a checkout_url instead, there is NO prompt — redirect there
+  // (the return page polls the same way). A failed create goes back
+  // to the form with the plain line.
+  const confirmAlphapay = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await api<{ checkoutUrl?: string; reference?: string }>(`/api/wallet/alphapay/create`, {
+        method: "POST",
+        body: JSON.stringify({ amount, method, phone: savedNumber ? undefined : depPhone }),
+      });
+      if (r.checkoutUrl) {
+        window.location.href = r.checkoutUrl;
+        return;
+      }
+      if (r.reference) {
+        setWaitRef(r.reference);
+        setWaitAmount(amount);
+        setStep("waiting");
+        return;
+      }
+      setErr("AlphaPay did not start this deposit — try again.");
+      setStep("form");
+    } catch (ex) {
+      if (ex instanceof ApiError && ex.code === "payment_blocked" && ex.blockedUntil) {
+        setBlockedUntil(ex.blockedUntil);
+      } else {
+        setErr(ex instanceof Error ? ex.message : "AlphaPay deposit failed");
+      }
+      setStep("form");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // PayTeller / Flutterwave: the create call returns a checkout URL
-  // and the browser leaves for it.
+  // and the browser leaves for it. AlphaPay: the create returns a
+  // reference and the modal waits for the phone prompt instead.
   const confirmGateway = async () => {
+    if (alphapayActive) {
+      void confirmAlphapay();
+      return;
+    }
     setBusy(true);
     try {
       // Nov 2026 Flutterwave v3 (Nigeria only): no MoMo number, no
@@ -337,17 +472,35 @@ export default function DepositModal() {
             </>
           ) : askOpen ? (
             <>
-              <h3>Go to <em>checkout?</em></h3>
-              <p className="sub" style={{ textAlign: "center" }}>Pay <b>{fmtMoney(confirmTotal, fiat)}</b> on {flutterwaveActive ? "Flutterwave" : "PayTeller"}&apos;s checkout page — you confirm and pay there.</p>
+              <h3>{alphapayActive ? "Check your phone" : "Go to checkout?"}</h3>
+              <p className="sub" style={{ textAlign: "center" }}>
+                {alphapayActive ? (
+                  <>AlphaPay will push a prompt to your phone for <b>{fmtMoney(amount, fiat)}</b> — approve it with your MoMo PIN there.</>
+                ) : (
+                  <>Pay <b>{fmtMoney(confirmTotal, fiat)}</b> on {flutterwaveActive ? "Flutterwave" : "PayTeller"}&apos;s checkout page — you confirm and pay there.</>
+                )}
+              </p>
               <div className="rg48-btnrow">
                 <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setStep("confirm")}>No</button>
-                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmGateway()}>{busy ? "Redirecting…" : "Yes"}</button>
+                <button className="btn btn-gold" type="button" disabled={busy} onClick={() => void confirmGateway()}>{busy ? (alphapayActive ? "Sending prompt…" : "Redirecting…") : "Yes"}</button>
+              </div>
+            </>
+          ) : step === "waiting" ? (
+            <>
+              <h3>Prompt <em>sent</em></h3>
+              <p className="sub" style={{ textAlign: "center" }}>
+                Check your phone for the MoMo prompt{waitAmount != null ? <> for <b>{fmtMoney(waitAmount, fiat)}</b></> : null} and approve it with your MoMo PIN. Your wallet updates the moment it goes through.
+              </p>
+              <div className="rg48-spin" role="status" aria-label="Waiting for the MoMo prompt" />
+              <p className="sub" style={{ textAlign: "center" }}>Don&apos;t close this — it checks every few seconds.</p>
+              <div className="rg48-btnrow">
+                <button className="btn btn-ghost" type="button" onClick={() => { setWaitRef(""); setStep("form"); }}>Cancel</button>
               </div>
             </>
           ) : step === "confirm" && gatewayActive ? (
             <>
               <h3>Confirm your <em>deposit</em></h3>
-              <p className="sub">Check this before you go to the checkout page.</p>
+              <p className="sub">{alphapayActive ? "Check this before the prompt is sent to your phone." : "Check this before you go to the checkout page."}</p>
               <div className="rg48-bignum"><b>{fmtMoney(confirmTotal, fiat)}</b><span>{fmtMoney(amount, fiat)} will be added to your wallet</span></div>
               <div className="rg48-rows">
                 <div><span>Deposit</span><strong>{fmtMoney(amount, fiat)}</strong></div>
@@ -356,6 +509,13 @@ export default function DepositModal() {
                     <div><span>Flutterwave fee</span><strong>{fmtMoney(flutterwaveFee, fiat)}</strong></div>
                     <div className="rg48-total"><span>Total you pay</span><strong>{fmtMoney(confirmTotal, fiat)}</strong></div>
                     <div><span>Method</span><strong>Card / bank transfer / USSD — you choose on the checkout page</strong></div>
+                  </>
+                ) : alphapayActive ? (
+                  <>
+                    <div><span>AlphaPay fee</span><strong>{fmtMoney(alphapayFee, fiat)}</strong></div>
+                    <div className="rg48-total"><span>Total you pay</span><strong>{fmtMoney(confirmTotal, fiat)}</strong></div>
+                    <div><span>Network</span><strong>{NETWORK_LABEL[method] ?? method}</strong></div>
+                    <div><span>Number</span><strong>{numberToUse || "—"}</strong></div>
                   </>
                 ) : (
                   <>
@@ -368,6 +528,8 @@ export default function DepositModal() {
               </div>
               {flutterwaveActive ? (
                 <p className="rg48-warn">You pay exactly <b>{fmtMoney(confirmTotal, fiat)}</b> — Flutterwave&apos;s fee is on us.</p>
+              ) : alphapayActive ? (
+                <p className="rg48-warn">You pay exactly <b>{fmtMoney(confirmTotal, fiat)}</b> — AlphaPay&apos;s fee is on us.</p>
               ) : (
                 <p className="rg48-warn">Make sure you have at least <b>{fmtMoney(confirmTotal, fiat)}</b> in your {NETWORK_LABEL[method] ?? method} wallet. If your balance is lower, the payment will fail.</p>
               )}
@@ -398,21 +560,21 @@ export default function DepositModal() {
                 </div>
               </div>
             )}
-            {paytellerActive && savedNumber === null && (
+            {momoNumberActive && savedNumber === null && (
               <div className="rg48-f">
                 <label htmlFor="depPhone">MoMo number (first deposit only)</label>
                 <input id="depPhone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0244 000 000" value={depPhone} onChange={(e) => setDepPhone(e.target.value)} />
-                <p className="sub">You&apos;ll confirm and pay on PayTeller&apos;s checkout page. It is saved to your account — later deposits reuse it, and you change it only on your Account page.</p>
+                <p className="sub">{alphapayActive ? "The prompt goes to this number. It is saved to your account — later deposits reuse it, and you change it only on your Account page." : "You'll confirm and pay on PayTeller's checkout page. It is saved to your account — later deposits reuse it, and you change it only on your Account page."}</p>
               </div>
             )}
-            {paytellerActive && savedNumber !== null && (
+            {momoNumberActive && savedNumber !== null && (
               <p className="rg48-mini" style={{ marginTop: -4, marginBottom: 12 }}>Deposit number: <b>{savedNumber}</b> — change it on your Account page.</p>
             )}
             {gatewayActive && !user?.email && (
               <div className="rg48-f">
-                <label htmlFor="depEmail">Email for your {flutterwaveActive ? "Flutterwave" : "PayTeller"} receipt</label>
+                <label htmlFor="depEmail">Email for your {gatewayName} receipt</label>
                 <input id="depEmail" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} />
-                <p className="sub">{flutterwaveActive ? "Flutterwave" : "PayTeller"} sends your receipt here. Your phone number stays on your account.</p>
+                <p className="sub">{gatewayName} sends your receipt here. Your phone number stays on your account.</p>
                 <button className="btn btn-gold" type="button" style={{ width: "100%" }} disabled={emailBusy} onClick={() => void saveEmail()}>{emailBusy ? "Saving…" : "Save email"}</button>
                 {emailMsg && <p className="rg48-err">{emailMsg}</p>}
               </div>
