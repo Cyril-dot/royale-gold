@@ -14,6 +14,13 @@
 // inactive gateway's fields. The selector is the switcher. Demo gets
 // one honest line instead of an empty gap. No logic changed: same
 // state, same save/test/flip handlers, same confirm dialog.
+// Nov 2026 deadlock fix (Chuks, live): the toggle used to guard the
+// SWITCH on keys-configured while the key fields only rendered for
+// the live gateway — keys could never be saved for a gateway that
+// wasn't live yet. Now the toggle is the FORM switcher first: a tap
+// always opens that gateway's form; a second tap on the open form
+// asks to switch the live gateway, and the key guard still bites
+// there. Same for Nigeria.
 // Nov 2026 Flutterwave v3 (Nigeria only): the same shape again for
 // Nigeria — the 3 Flutterwave fields (public key, secret key, webhook
 // secret hash) + the environment the keys belong to (test/live) +
@@ -104,6 +111,11 @@ export function OwnerGatewaySection() {
   const [flwTestBusy, setFlwTestBusy] = useState(false);
   const [flwTestResult, setFlwTestResult] = useState("");
   const [flwFlipTarget, setFlwFlipTarget] = useState<"demo" | "flutterwave" | null>(null);
+  // Nov 2026 deadlock fix: the tab is the FORM switcher — which
+  // gateway's fields are shown — while gw.*Gateway is the LIVE one.
+  // null = follow the live gateway.
+  const [viewGh, setViewGh] = useState<"demo" | "payteller" | "alphapay" | null>(null);
+  const [viewNg, setViewNg] = useState<"demo" | "flutterwave" | null>(null);
 
   const { data: gw, err, loading, reload } = useOwnerFetch<GatewaySettingsShape>(
     user ? "/api/owner/gateway" : null,
@@ -140,7 +152,21 @@ export function OwnerGatewaySection() {
       paytellerWebhookSecret: webhookSecret,
     });
   const flip = (g: "demo" | "payteller" | "alphapay") => {
-    if (!gw || g === gw.ghMomoGateway) return;
+    if (!gw) return;
+    // Nov 2026 deadlock fix: tapping the LIVE tab just shows its
+    // form again (view follows the live gateway).
+    if (g === gw.ghMomoGateway) {
+      setViewGh(g);
+      return;
+    }
+    // Nov 2026 deadlock fix: the tab is the FORM switcher first —
+    // tapping a gateway always opens its form so its keys can be
+    // saved. The live switch happens only on a second tap, once that
+    // form is already open — and the key guard still bites there.
+    if (viewGh !== g) {
+      setViewGh(g);
+      return;
+    }
     if (g === "payteller" && !gw.paytellerConfigured) {
       toast("Save the 4 PayTeller keys first (or set them as env vars), then test the connection", "lose");
       return;
@@ -197,7 +223,17 @@ export function OwnerGatewaySection() {
       flutterwaveEnvironment: flwEnvironment,
     });
   const flipNg = (g: "demo" | "flutterwave") => {
-    if (!gw || g === gw.ngGateway) return;
+    if (!gw) return;
+    if (g === gw.ngGateway) {
+      setViewNg(g);
+      return;
+    }
+    // Nov 2026 deadlock fix: same two-tap shape as Ghana — the tab
+    // opens the form first, the live switch is the second tap.
+    if (viewNg !== g) {
+      setViewNg(g);
+      return;
+    }
     if (g === "flutterwave" && !gw.flutterwaveConfigured) {
       toast("Save the 3 Flutterwave keys first (or set them as env vars), then test the connection", "lose");
       return;
@@ -219,6 +255,10 @@ export function OwnerGatewaySection() {
   if (loading) return <Skeleton lines={5} title />;
   if (err) return <ErrorState text={err} onRetry={reload} />;
   if (!gw) return null;
+  // Nov 2026 deadlock fix: the panel shows the VIEWED gateway, the
+  // badge line above still shows the LIVE one.
+  const shownGh = viewGh ?? gw.ghMomoGateway;
+  const shownNg = viewNg ?? gw.ngGateway;
   const gatewayLabel = gw.ghMomoGateway === "payteller" ? "PayTeller" : gw.ghMomoGateway === "alphapay" ? "AlphaPay" : "Demo";
   const flipLabel = flipTarget === "payteller" ? "PayTeller" : flipTarget === "alphapay" ? "AlphaPay" : "Demo";
   const flipBody =
@@ -266,18 +306,20 @@ export function OwnerGatewaySection() {
           { id: "payteller", label: "PayTeller" },
           { id: "alphapay", label: "AlphaPay" },
         ]}
-        value={gw.ghMomoGateway}
+        value={shownGh}
         onChange={(id) => flip(id as "demo" | "payteller" | "alphapay")}
       />
-      {gw.ghMomoGateway === "demo" ? (
+      {shownGh === "demo" ? (
         <div className="st-gw-section">
           <h3 className="st-gw-title">Demo (play money)</h3>
           <p className="st-gw-desc">Deposits credit instantly. No real payment, no keys needed.</p>
+          {shownGh !== gw.ghMomoGateway ? <p className="st-gw-desc">Not the live gateway yet — tap Demo above again to switch.</p> : null}
         </div>
-      ) : gw.ghMomoGateway === "alphapay" ? (
+      ) : shownGh === "alphapay" ? (
         <div className="st-gw-section">
           <h3 className="st-gw-title">AlphaPay (direct MoMo push)</h3>
           <p className="st-gw-desc">The prompt goes straight to the customer&apos;s phone — MTN, Telecel or AirtelTigo. The customer pays exactly the deposit; AlphaPay&apos;s fee is on us. If AlphaPay answers with a hosted page instead, the customer is redirected to it.</p>
+          {shownGh !== gw.ghMomoGateway ? <p className="st-gw-desc">Not the live gateway yet — tap AlphaPay above again to switch once the keys are saved.</p> : null}
           <Button variant="secondary" size="sm" block loading={apTestBusy} onClick={() => void testAp()}>
             Test connection
           </Button>
@@ -311,6 +353,7 @@ export function OwnerGatewaySection() {
         <div className="st-gw-section">
           <h3 className="st-gw-title">PayTeller (hosted checkout)</h3>
           <p className="st-gw-desc">The customer confirms and pays on PayTeller&apos;s checkout page.</p>
+          {shownGh !== gw.ghMomoGateway ? <p className="st-gw-desc">Not the live gateway yet — tap PayTeller above again to switch once the keys are saved.</p> : null}
           <Button variant="secondary" size="sm" block loading={testBusy} onClick={() => void test()}>
             Test connection
           </Button>
@@ -376,18 +419,20 @@ export function OwnerGatewaySection() {
           { id: "demo", label: "Demo" },
           { id: "flutterwave", label: "Flutterwave" },
         ]}
-        value={gw.ngGateway}
+        value={shownNg}
         onChange={(id) => flipNg(id as "demo" | "flutterwave")}
       />
-      {gw.ngGateway === "demo" ? (
+      {shownNg === "demo" ? (
         <div className="st-gw-section">
           <h3 className="st-gw-title">Demo (play money)</h3>
           <p className="st-gw-desc">Deposits credit instantly. No real payment, no keys needed.</p>
+          {shownNg !== gw.ngGateway ? <p className="st-gw-desc">Not the live gateway yet — tap Demo above again to switch.</p> : null}
         </div>
       ) : (
         <div className="st-gw-section">
           <h3 className="st-gw-title">Flutterwave (hosted checkout)</h3>
           <p className="st-gw-desc">The customer confirms and pays on Flutterwave&apos;s checkout page — card, bank transfer, USSD or bank account. The customer pays exactly the deposit; Flutterwave&apos;s fee is on us.</p>
+          {shownNg !== gw.ngGateway ? <p className="st-gw-desc">Not the live gateway yet — tap Flutterwave above again to switch once the keys are saved.</p> : null}
           <Button variant="secondary" size="sm" block loading={flwTestBusy} onClick={() => void testFlw()}>
             Test connection
           </Button>
