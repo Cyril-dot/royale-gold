@@ -75,6 +75,31 @@ function providerError(message: string, statusCode = 502): AlphaPayError {
   return new AlphaPayError(typeof message === "string" ? message : JSON.stringify(message), statusCode);
 }
 
+// Nov 2026: AlphaPay answers some provider errors in French. The
+// "no provider available" one is the one a player can actually hit
+// (a network with no provider on the merchant's account — live it
+// 422'd on mtn_gh while Test connection still said Connected). It
+// is translated to plain English here, in the one place every caller
+// reads its error from, so it never reaches a player-facing surface
+// in French. Any message that does not match is returned exactly as
+// AlphaPay sent it — nothing else is rewritten.
+const NO_PROVIDER_RE = /Aucun fournisseur disponible pour le réseau (\w+) pour le moment/i;
+const NO_PROVIDER_NETWORK_NAMES: Record<string, string> = {
+  mtn_gh: "MTN",
+  telecel_gh: "Telecel",
+  airteltigo_gh: "AirtelTigo",
+  vodafone_gh: "Telecel",
+  tigo_gh: "AirtelTigo",
+};
+
+function translateProviderMessage(message: string): string {
+  const match = NO_PROVIDER_RE.exec(message);
+  if (!match) return message;
+  const code = match[1].toLowerCase();
+  const name = NO_PROVIDER_NETWORK_NAMES[code] ?? match[1];
+  return `No payment provider is available for ${name} right now — try another network or try again later.`;
+}
+
 // Credentials are set by the owner in the Gateway panel (encrypted in
 // GatewaySettings) — the env vars remain as a fallback so a key set
 // either way works. A DB failure never breaks the fallback.
@@ -123,14 +148,23 @@ export function unwrapAlphaPayResponse(body: Record<string, unknown>): Record<st
 }
 
 function errorMessage(body: Record<string, unknown>): string {
-  if (typeof body.message === "string" && body.message) return body.message;
-  const err = body.error as Record<string, unknown> | undefined;
-  if (err && typeof err.message === "string" && err.message) return err.message;
-  // Validation errors come back as {field: ["message", ...]}.
-  for (const value of Object.values(body)) {
-    if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+  let message: string | null = null;
+  if (typeof body.message === "string" && body.message) message = body.message;
+  else {
+    const err = body.error as Record<string, unknown> | undefined;
+    if (err && typeof err.message === "string" && err.message) message = err.message;
+    else {
+      // Validation errors come back as {field: ["message", ...]}.
+      for (const value of Object.values(body)) {
+        if (Array.isArray(value) && typeof value[0] === "string") {
+          message = value[0];
+          break;
+        }
+      }
+    }
   }
-  return "AlphaPay request failed";
+  if (!message) return "AlphaPay request failed";
+  return translateProviderMessage(message);
 }
 
 async function readResponse(response: Response): Promise<Record<string, unknown>> {

@@ -83,6 +83,17 @@ interface GatewaySettingsShape {
   updatedAt: string | null;
 }
 
+// Nov 2026 AlphaPay: my-rates network codes → the names the owner
+// sees. Live my-rates uses tigo_gh / vodafone_gh where the docs use
+// airteltigo_gh / telecel_gh — both spellings map to the same name.
+const ALPHAPAY_NETWORK_LABELS: Record<string, string> = {
+  mtn_gh: "MTN",
+  telecel_gh: "Telecel",
+  airteltigo_gh: "AirtelTigo",
+  vodafone_gh: "Telecel",
+  tigo_gh: "AirtelTigo",
+};
+
 export function OwnerGatewaySection() {
   const { user, toast } = useStore();
   const [apiKey, setApiKey] = useState("");
@@ -101,6 +112,11 @@ export function OwnerGatewaySection() {
   const [apEnvironment, setApEnvironment] = useState("");
   const [apTestBusy, setApTestBusy] = useState(false);
   const [apTestResult, setApTestResult] = useState("");
+  // Nov 2026 AlphaPay: the per-network payin availability from the
+  // last Test connection (my-rates) — a network with no payin on the
+  // merchant's account shows "not available" here instead of passing
+  // silently inside the Connected line.
+  const [apTestNetworks, setApTestNetworks] = useState<{ network: string; available: boolean }[]>([]);
   // Nov 2026 Flutterwave v3 (Nigeria only): the Nigeria fields.
   const [flwPublicKey, setFlwPublicKey] = useState("");
   const [flwSecretKey, setFlwSecretKey] = useState("");
@@ -201,15 +217,18 @@ export function OwnerGatewaySection() {
   const testAp = async () => {
     setApTestBusy(true);
     setApTestResult("");
+    setApTestNetworks([]);
     try {
-      const r = await api<{ authenticated: boolean; ghanaNetworks?: string[]; ratesFound?: number }>("/api/owner/gateway/alphapay-test", { method: "POST" });
+      const r = await api<{ authenticated: boolean; ghanaNetworks?: string[]; ratesFound?: number; networks?: { network: string; available: boolean }[] }>("/api/owner/gateway/alphapay-test", { method: "POST" });
       setApTestResult(
         r.authenticated
           ? `Connected — AlphaPay accepted the secret key.${r.ghanaNetworks?.length ? ` Ghana networks: ${r.ghanaNetworks.join(", ")}.` : ""}`
           : "AlphaPay did not confirm these credentials.",
       );
+      setApTestNetworks(r.networks ?? []);
     } catch (ex) {
       setApTestResult(ex instanceof Error ? ex.message : "Connection test failed");
+      setApTestNetworks([]);
     } finally {
       setApTestBusy(false);
     }
@@ -324,6 +343,15 @@ export function OwnerGatewaySection() {
             Test connection
           </Button>
           {apTestResult ? <p role="status">{apTestResult}</p> : null}
+          {apTestNetworks.length ? (
+            <div role="status" aria-label="AlphaPay network availability">
+              {apTestNetworks.map((n) => (
+                <p key={n.network} className="st-gw-desc">
+                  {ALPHAPAY_NETWORK_LABELS[n.network] ?? n.network} — {n.available ? "available" : "not available"}
+                </p>
+              ))}
+            </div>
+          ) : null}
           <Segmented
             label="AlphaPay environment"
             items={[
