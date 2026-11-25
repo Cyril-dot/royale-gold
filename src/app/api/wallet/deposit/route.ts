@@ -116,14 +116,15 @@ export async function POST(req: Request) {
     const sym = symbolFor(fiatCurrency);
 
     // P0 Batch 2 (O12/O13): owner-controlled payment methods + wallet
-    // config. A disabled method is rejected; a per-method min/max (or
-    // the currency's minimum deposit when the method sets none) is
-    // enforced here, server-side.
+    // config. A disabled method is rejected; the general platform
+    // minimum deposit is enforced here, server-side. Nov 2026 (Chuks):
+    // per-method minimums are gone — only the platform minimum
+    // applies. A per-method MAX is still enforced below.
     const pm = await getPaymentMethodConfig(method, fiatCurrency);
     if (!pm.enabled) return fail(`${method} deposits are currently disabled`, 403);
     const settings = await getPlatformSettings();
     const currencyCfg = await getCurrencyConfig(fiatCurrency, settings);
-    const minDeposit = pm.minDeposit ?? currencyCfg.minDeposit;
+    const minDeposit = currencyCfg.minDeposit;
     if (amount < minDeposit) {
       return fail(`Minimum deposit via ${method} is ${sym} ${round2(minDeposit).toFixed(2)}`);
     }

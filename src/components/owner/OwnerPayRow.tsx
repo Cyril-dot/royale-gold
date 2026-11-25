@@ -1,9 +1,11 @@
 // OwnerPayRow (Phase 3 restyle) — one payment method's enable toggle +
-// min/max deposit, staff-ui throughout. The toggle posts immediately
-// (reversible in one tap, same as before); Save only posts fields that
-// changed. No confirm dialog: this is a reversible config toggle, not
-// a money movement — the gateway flip (which reroutes live money) is
-// the one that confirms.
+// max deposit, staff-ui throughout. Nov 2026 (Chuks): the per-method
+// MIN deposit field is gone — only the general platform minimum
+// (Wallet config → CASH MIN DEPOSIT) applies, so nothing per-method
+// can block a deposit. The toggle posts immediately (reversible in one
+// tap, same as before); Save only posts fields that changed. No confirm
+// dialog: this is a reversible config toggle, not a money movement —
+// the gateway flip (which reroutes live money) is the one that confirms.
 import { useState } from "react";
 import { symbolFor } from "../../lib/country";
 import { Card } from "../staff-ui/Card";
@@ -15,14 +17,11 @@ export function OwnerPayRow({ m, onSave }: {
   m: { method: string; enabled: boolean; minDeposit: number | null; maxDeposit: number | null; fiatCurrency: string; gateway?: string | null };
   onSave: (method: string, patch: Record<string, unknown>) => Promise<void>;
 }) {
-  const [minDep, setMinDep] = useState(m.minDeposit == null ? "" : String(m.minDeposit));
   const [maxDep, setMaxDep] = useState(m.maxDeposit == null ? "" : String(m.maxDeposit));
   const [busy, setBusy] = useState(false);
   const save = async () => {
     const patch: Record<string, unknown> = {};
-    const a = minDep.trim() === "" ? null : Number(minDep);
     const b = maxDep.trim() === "" ? null : Number(maxDep);
-    if (a !== m.minDeposit) patch.minDeposit = a;
     if (b !== m.maxDeposit) patch.maxDeposit = b;
     if (Object.keys(patch).length === 0) return;
     setBusy(true);
@@ -41,9 +40,6 @@ export function OwnerPayRow({ m, onSave }: {
       >
         {m.enabled ? "Enabled" : "Disabled"}
       </Button>
-      <FormField label={`Min deposit (${symbolFor(m.fiatCurrency ?? "GHS")})`}>
-        <AmountInput value={minDep} onChange={(e) => setMinDep(e.target.value)} placeholder="Platform min" aria-label={`${m.method} minimum deposit`} />
-      </FormField>
       <FormField label={`Max deposit (${symbolFor(m.fiatCurrency ?? "GHS")})`}>
         <AmountInput value={maxDep} onChange={(e) => setMaxDep(e.target.value)} placeholder="No cap" aria-label={`${m.method} maximum deposit`} />
       </FormField>
